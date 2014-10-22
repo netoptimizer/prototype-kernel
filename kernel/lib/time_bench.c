@@ -221,7 +221,7 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 	rec.loops       = loops;
 	rec.step        = step;
 	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|TIME_BENCH_WALLCLOCK);
-//	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|		\
+//	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|
 //			   TIME_BENCH_WALLCLOCK|TIME_BENCH_PMU);
 	//TODO: Add/copy txt to rec
 
