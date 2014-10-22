@@ -221,6 +221,8 @@ struct ring_queue {
 	 * not volatile so need to be careful
 	 * about compiler re-ordering */
 	void *ring[0] ____cacheline_aligned_in_smp;
+// alternative define ring as volatile like:
+//	void * volatile ring[0] ____cacheline_aligned_in_smp;
 };
 
 #define RING_F_SP_ENQ 0x0001 /**< Flag selects enqueue "single-producer". */
@@ -438,6 +440,7 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 
 	/* write entries in ring */
 	ENQUEUE_PTRS();
+	// wmb(); /* possibly need a Write-Memory-Barrier here on some archs??? */
 	barrier(); /* compiler barrier */
 
 	/* if we exceed the watermark */
@@ -522,7 +525,9 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 
 	/* write entries in ring */
 	ENQUEUE_PTRS();
+	// wmb(); /* possibly need a Write-Memory-Barrier here on some archs??? */
 	barrier(); /* compiler barrier */
+	// wmb especially for SP (Single Producer)
 
 	/* if we exceed the watermark */
 	if (unlikely(((mask + 1) - free_entries + n) > r->prod.watermark)) {
@@ -610,6 +615,10 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	} while (unlikely(success == 0));
 
 	/* copy in table */
+	//rmb() /* possibly need a Read-Memory-Barrier here on some archs??? */
+	/* Why did the barrier() move down under DEQUEUE_PTRS
+	 *  in dpdk commit 286bd05bf70d ("ring: optimisations")
+	 */
 	DEQUEUE_PTRS();
 	barrier(); /* compiler barrier */
 
@@ -684,6 +693,8 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	r->cons.head = cons_next;
 
 	/* copy in table */
+	//rmb() /* possibly need a Read-Memory-Barrier here on some archs??? */
+	// especially for the SC (Single Consumer)
 	DEQUEUE_PTRS();
 	barrier(); /* compiler barrier */
 
