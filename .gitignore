@@ -1,0 +1,15 @@
+# Object files
+*.o
+*.ko
+
+# Kernel generated files
+*.ko.cmd
+*.o.cmd
+*.mod.c
+*.mod.o.cmd
+Module.symvers
+modules.order
+.tmp_versions/
+
+# Emacs backup files
+*~
