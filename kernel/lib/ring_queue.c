@@ -1,5 +1,25 @@
-/*-
- *   BSD LICENSE
+/*
+ * Copyright 2014 Red Hat, Inc. and/or its affiliates.
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA
+ * 02110-1301, USA.
+ *
+ *  Based on code covered by the following legal notices:
+ */
+
+/*   BSD LICENSE
  *
  *   Copyright(c) 2010-2014 Intel Corporation. All rights reserved.
  *   All rights reserved.
@@ -63,120 +83,108 @@
  *
  ***************************************************************************/
 
-#include <stdio.h>
-#include <stdarg.h>
-#include <string.h>
-#include <stdint.h>
-#include <inttypes.h>
-#include <errno.h>
-#include <sys/queue.h>
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <rte_common.h>
-#include <rte_log.h>
-#include <rte_memory.h>
-#include <rte_memzone.h>
-#include <rte_launch.h>
-#include <rte_tailq.h>
-#include <rte_eal.h>
-#include <rte_eal_memconfig.h>
-#include <rte_atomic.h>
-#include <rte_per_lcore.h>
-#include <rte_lcore.h>
-#include <rte_branch_prediction.h>
-#include <rte_errno.h>
-#include <rte_string_fns.h>
-#include <rte_spinlock.h>
+#include <linux/module.h>
+#include <linux/errno.h>
+#include <linux/bug.h>
+#include <linux/list.h>
+#include <linux/mm.h>
+#include <linux/cache.h> /* SMP_CACHE_BYTES */
 
-#include "rte_ring.h"
+#include <linux/ring_queue.h>
 
-TAILQ_HEAD(rte_ring_list, rte_ring);
+// Do we really need a list of all the rings created in kernel???
+//LIST_HEAD(global_ring_queue_list);
 
-/* true if x is a power of 2 */
-#define POWEROF2(x) ((((x)-1) & (x)) == 0)
+/* True if x is a power of 2 */
+#define POWEROF2(x) (((x) & ((x) - 1)) == 0)
+
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE SMP_CACHE_BYTES     /* Cache line size */
+#endif
+#define CACHE_LINE_MASK (CACHE_LINE_SIZE-1) /* Cache line mask */
 
 /* create the ring */
-struct rte_ring *
-rte_ring_create(const char *name, unsigned count, int socket_id,
-		unsigned flags)
+struct ring_queue *
+ring_queue_create(unsigned int count, unsigned int flags)
 {
-	char mz_name[RTE_MEMZONE_NAMESIZE];
-	struct rte_ring *r;
-	const struct rte_memzone *mz;
+	struct ring_queue *r;
 	size_t ring_size;
-	int mz_flags = 0;
-	struct rte_ring_list *ring_list = NULL;
 
 	/* compilation-time checks */
-	RTE_BUILD_BUG_ON((sizeof(struct rte_ring) &
-			  CACHE_LINE_MASK) != 0);
-#ifdef RTE_RING_SPLIT_PROD_CONS
-	RTE_BUILD_BUG_ON((offsetof(struct rte_ring, cons) &
-			  CACHE_LINE_MASK) != 0);
+	BUILD_BUG_ON(!POWEROF2(CACHE_LINE_SIZE));
+//FIXME: Add CONFIG_SMP check due to ____cacheline_aligned_in_smp usage
+// perhaps use ____cacheline_aligned instead?
+	BUILD_BUG_ON((sizeof(struct ring_queue) &
+		      CACHE_LINE_MASK) != 0);
+#ifdef CONFIG_LIB_RING_QUEUE_SPLIT_PROD_CONS
+	BUILD_BUG_ON((offsetof(struct ring_queue, cons) &
+		      CACHE_LINE_MASK) != 0);
 #endif
-	RTE_BUILD_BUG_ON((offsetof(struct rte_ring, prod) &
-			  CACHE_LINE_MASK) != 0);
-#ifdef RTE_LIBRTE_RING_DEBUG
-	RTE_BUILD_BUG_ON((sizeof(struct rte_ring_debug_stats) &
-			  CACHE_LINE_MASK) != 0);
-	RTE_BUILD_BUG_ON((offsetof(struct rte_ring, stats) &
-			  CACHE_LINE_MASK) != 0);
+	BUILD_BUG_ON((offsetof(struct ring_queue, prod) &
+		      CACHE_LINE_MASK) != 0);
+#ifdef LIB_RING_QUEUE_DEBUG
+	BUILD_BUG_ON((sizeof(struct ring_queue_debug_stats) &
+		      CACHE_LINE_MASK) != 0);
+	BUILD_BUG_ON((offsetof(struct ring_queue, stats) &
+		      CACHE_LINE_MASK) != 0);
 #endif
-
-	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
-	/* check that we have an initialised tail queue */
-	if (ring_list == NULL) {
-		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;
-	}
 
 	/* count must be a power of 2 */
-	if ((!POWEROF2(count)) || (count > RTE_RING_SZ_MASK)) {
-		rte_errno = EINVAL;
-		RTE_LOG(ERR, RING, "Requested size is invalid, must be power of 2, and "
-				"do not exceed the size limit %u\n", RTE_RING_SZ_MASK);
+	if ((!POWEROF2(count)) || (count > RING_QUEUE_SZ_MASK)) {
+		pr_err("Requested size is invalid, must be power of 2, and "
+		       "do not exceed the size limit %u\n", RING_QUEUE_SZ_MASK);
 		return NULL;
 	}
 
-	rte_snprintf(mz_name, sizeof(mz_name), "%s%s", RTE_RING_MZ_PREFIX, name);
-	ring_size = count * sizeof(void *) + sizeof(struct rte_ring);
-
-	rte_rwlock_write_lock(RTE_EAL_TAILQ_RWLOCK);
-
-	/* reserve a memory zone for this ring. If we can't get rte_config or
-	 * we are secondary process, the memzone_reserve function will set
-	 * rte_errno for us appropriately - hence no check in this this function */
-	mz = rte_memzone_reserve(mz_name, ring_size, socket_id, mz_flags);
-	if (mz != NULL) {
-		r = mz->addr;
-
-		/* init the ring structure */
-		memset(r, 0, sizeof(*r));
-		rte_snprintf(r->name, sizeof(r->name), "%s", name);
-		r->flags = flags;
-		r->prod.watermark = count;
-		r->prod.sp_enqueue = !!(flags & RING_F_SP_ENQ);
-		r->cons.sc_dequeue = !!(flags & RING_F_SC_DEQ);
-		r->prod.size = r->cons.size = count;
-		r->prod.mask = r->cons.mask = count-1;
-		r->prod.head = r->cons.head = 0;
-		r->prod.tail = r->cons.tail = 0;
-
-		TAILQ_INSERT_TAIL(ring_list, r, next);
-	} else {
-		r = NULL;
-		RTE_LOG(ERR, RING, "Cannot reserve memory\n");
+	ring_size = count * sizeof(void *) + sizeof(struct ring_queue);
+	//ring_size = PAGE_ALIGN(ring_size);
+	// TODO: This might be suboptimal use of pages, look at improving
+	r = alloc_pages_exact(ring_size, GFP_KERNEL|__GFP_ZERO|__GFP_NOWARN);
+	if (r == NULL) {
+		pr_err("%s(): Cannot reserve continous memory for ring\n",
+		       __func__);
+		return NULL;
 	}
-	rte_rwlock_write_unlock(RTE_EAL_TAILQ_RWLOCK);
+
+	/* init the ring structure */
+	memset(r, 0, sizeof(*r));
+	r->flags = flags;
+	r->prod.watermark = count;
+	r->prod.sp_enqueue = !!(flags & RING_F_SP_ENQ);
+	r->cons.sc_dequeue = !!(flags & RING_F_SC_DEQ);
+	r->prod.size = r->cons.size = count;
+	r->prod.mask = r->cons.mask = count-1;
+	r->prod.head = r->cons.head = 0;
+	r->prod.tail = r->cons.tail = 0;
+
+	//TAILQ_INSERT_TAIL(ring_list, r, next);
+	//list_add_rcu(global_ring_queue_list, r->next);
 
 	return r;
 }
+EXPORT_SYMBOL(ring_queue_create);
 
-/*
- * change the high water mark. If *count* is 0, water marking is
+/* free memory allocated to the ring */
+bool ring_queue_free(struct ring_queue *r)
+{
+	size_t ring_size;
+	unsigned int count = r->prod.size;
+	//TODO: Add sanity checks e.g. if queue is empty...
+
+	ring_size = count * sizeof(void *) + sizeof(struct ring_queue);
+	free_pages_exact(r, ring_size);
+	return true;
+}
+EXPORT_SYMBOL(ring_queue_free);
+
+
+/* change the high water mark. If *count* is 0, water marking is
  * disabled
  */
 int
-rte_ring_set_water_mark(struct rte_ring *r, unsigned count)
+ring_queue_set_water_mark(struct ring_queue *r, unsigned count)
 {
 	if (count >= r->prod.size)
 		return -EINVAL;
@@ -191,106 +199,81 @@ rte_ring_set_water_mark(struct rte_ring *r, unsigned count)
 
 /* dump the status of the ring on the console */
 void
-rte_ring_dump(const struct rte_ring *r)
+ring_queue_dump(const struct ring_queue *r)
 {
-#ifdef RTE_LIBRTE_RING_DEBUG
-	struct rte_ring_debug_stats sum;
-	unsigned lcore_id;
+#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
+	struct ring_queue_debug_stats sum;
+	unsigned core_id;
 #endif
 
-	printf("ring <%s>@%p\n", r->name, r);
-	printf("  flags=%x\n", r->flags);
-	printf("  size=%"PRIu32"\n", r->prod.size);
-	printf("  ct=%"PRIu32"\n", r->cons.tail);
-	printf("  ch=%"PRIu32"\n", r->cons.head);
-	printf("  pt=%"PRIu32"\n", r->prod.tail);
-	printf("  ph=%"PRIu32"\n", r->prod.head);
-	printf("  used=%u\n", rte_ring_count(r));
-	printf("  avail=%u\n", rte_ring_free_count(r));
+	pr_info("ring ptr 0x%p\n", r);
+	pr_info("  flags=0x%x\n", r->flags);
+	pr_info("  size=%u\n", r->prod.size);
+	pr_info("  cons.tail=%u\n", r->cons.tail);
+	pr_info("  cons.head=%u\n", r->cons.head);
+	pr_info("  prod.tail=%u\n", r->prod.tail);
+	pr_info("  prod.head=%u\n", r->prod.head);
+	pr_info("  used=%u\n" , ring_queue_count(r));
+	pr_info("  avail=%u\n", ring_queue_free_count(r));
 	if (r->prod.watermark == r->prod.size)
-		printf("  watermark=0\n");
+		pr_info("  watermark=0\n");
 	else
-		printf("  watermark=%"PRIu32"\n", r->prod.watermark);
+		pr_info("  watermark=%u\n", r->prod.watermark);
 
-	/* sum and dump statistics */
-#ifdef RTE_LIBRTE_RING_DEBUG
+	// sum and dump statistics
+#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
 	memset(&sum, 0, sizeof(sum));
-	for (lcore_id = 0; lcore_id < RTE_MAX_LCORE; lcore_id++) {
-		sum.enq_success_bulk += r->stats[lcore_id].enq_success_bulk;
-		sum.enq_success_objs += r->stats[lcore_id].enq_success_objs;
-		sum.enq_quota_bulk += r->stats[lcore_id].enq_quota_bulk;
-		sum.enq_quota_objs += r->stats[lcore_id].enq_quota_objs;
-		sum.enq_fail_bulk += r->stats[lcore_id].enq_fail_bulk;
-		sum.enq_fail_objs += r->stats[lcore_id].enq_fail_objs;
-		sum.deq_success_bulk += r->stats[lcore_id].deq_success_bulk;
-		sum.deq_success_objs += r->stats[lcore_id].deq_success_objs;
-		sum.deq_fail_bulk += r->stats[lcore_id].deq_fail_bulk;
-		sum.deq_fail_objs += r->stats[lcore_id].deq_fail_objs;
+	for (core_id = 0; core_id < NR_CPUS; core_id++) {
+		sum.enq_success_bulk += r->stats[core_id].enq_success_bulk;
+		sum.enq_success_objs += r->stats[core_id].enq_success_objs;
+		sum.enq_quota_bulk += r->stats[core_id].enq_quota_bulk;
+		sum.enq_quota_objs += r->stats[core_id].enq_quota_objs;
+		sum.enq_fail_bulk += r->stats[core_id].enq_fail_bulk;
+		sum.enq_fail_objs += r->stats[core_id].enq_fail_objs;
+		sum.deq_success_bulk += r->stats[core_id].deq_success_bulk;
+		sum.deq_success_objs += r->stats[core_id].deq_success_objs;
+		sum.deq_fail_bulk += r->stats[core_id].deq_fail_bulk;
+		sum.deq_fail_objs += r->stats[core_id].deq_fail_objs;
 	}
-	printf("  size=%"PRIu32"\n", r->prod.size);
-	printf("  enq_success_bulk=%"PRIu64"\n", sum.enq_success_bulk);
-	printf("  enq_success_objs=%"PRIu64"\n", sum.enq_success_objs);
-	printf("  enq_quota_bulk=%"PRIu64"\n", sum.enq_quota_bulk);
-	printf("  enq_quota_objs=%"PRIu64"\n", sum.enq_quota_objs);
-	printf("  enq_fail_bulk=%"PRIu64"\n", sum.enq_fail_bulk);
-	printf("  enq_fail_objs=%"PRIu64"\n", sum.enq_fail_objs);
-	printf("  deq_success_bulk=%"PRIu64"\n", sum.deq_success_bulk);
-	printf("  deq_success_objs=%"PRIu64"\n", sum.deq_success_objs);
-	printf("  deq_fail_bulk=%"PRIu64"\n", sum.deq_fail_bulk);
-	printf("  deq_fail_objs=%"PRIu64"\n", sum.deq_fail_objs);
+	pr_info("  enq_success_bulk=%llu\n", sum.enq_success_bulk);
+	pr_info("  enq_success_objs=%llu\n", sum.enq_success_objs);
+	pr_info("  enq_quota_bulk=%llu\n", sum.enq_quota_bulk);
+	pr_info("  enq_quota_objs=%llu\n", sum.enq_quota_objs);
+	pr_info("  enq_fail_bulk=%llu\n", sum.enq_fail_bulk);
+	pr_info("  enq_fail_objs=%llu\n", sum.enq_fail_objs);
+	pr_info("  deq_success_bulk=%llu\n", sum.deq_success_bulk);
+	pr_info("  deq_success_objs=%llu\n", sum.deq_success_objs);
+	pr_info("  deq_fail_bulk=%llu\n", sum.deq_fail_bulk);
+	pr_info("  deq_fail_objs=%llu\n", sum.deq_fail_objs);
 #else
-	printf("  no statistics available\n");
+	pr_info("  no statistics available\n");
 #endif
 }
+EXPORT_SYMBOL(ring_queue_dump);
 
-/* dump the status of all rings on the console */
-void
-rte_ring_list_dump(void)
+static int __init ring_queue_init(void)
 {
-	const struct rte_ring *mp;
-	struct rte_ring_list *ring_list;
-
-	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
-	/* check that we have an initialised tail queue */
-	if (ring_list == NULL) {
-		rte_errno = E_RTE_NO_TAILQ;
-		return;
-	}
-
-	rte_rwlock_read_lock(RTE_EAL_TAILQ_RWLOCK);
-
-	TAILQ_FOREACH(mp, ring_list, next) {
-		rte_ring_dump(mp);
-	}
-
-	rte_rwlock_read_unlock(RTE_EAL_TAILQ_RWLOCK);
+	pr_warn("Loaded\n"); //TODO: remove
+	// TODO: create /proc dir for reading debug/dump info
+	return 0;
 }
+module_init(ring_queue_init);
 
-/* search a ring from its name */
-struct rte_ring *
-rte_ring_lookup(const char *name)
+static void __exit ring_queue_exit(void)
 {
-	struct rte_ring *r;
-	struct rte_ring_list *ring_list;
-
-	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
-	/* check that we have an initialized tail queue */
-	if (ring_list == NULL) {
-		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;
-	}
-
-	rte_rwlock_read_lock(RTE_EAL_TAILQ_RWLOCK);
-
-	TAILQ_FOREACH(r, ring_list, next) {
-		if (strncmp(name, r->name, RTE_RING_NAMESIZE) == 0)
-			break;
-	}
-
-	rte_rwlock_read_unlock(RTE_EAL_TAILQ_RWLOCK);
-
-	if (r == NULL)
-		rte_errno = ENOENT;
-
-	return r;
+	// TODO: perform sanity checks, and free mem
+	pr_warn("Unloaded\n"); //TODO: remove
 }
+module_exit(ring_queue_exit);
+
+
+// Dummy EXPORT_SYMBOL func for testing overhead of call
+unsigned int ring_queue_fake_test(unsigned int count)
+{
+	return count;
+}
+EXPORT_SYMBOL(ring_queue_fake_test);
+
+MODULE_DESCRIPTION("Producer/Consumer ring based queue");
+MODULE_AUTHOR("Jesper Dangaard Brouer");
+MODULE_LICENSE("Dual BSD/GPL");
