@@ -1,13 +1,13 @@
 /*-
  *   BSD LICENSE
- * 
+ *
  *   Copyright(c) 2010-2014 Intel Corporation. All rights reserved.
  *   All rights reserved.
- * 
+ *
  *   Redistribution and use in source and binary forms, with or without
  *   modification, are permitted provided that the following conditions
  *   are met:
- * 
+ *
  *     * Redistributions of source code must retain the above copyright
  *       notice, this list of conditions and the following disclaimer.
  *     * Redistributions in binary form must reproduce the above copyright
@@ -17,7 +17,7 @@
  *     * Neither the name of Intel Corporation nor the names of its
  *       contributors may be used to endorse or promote products derived
  *       from this software without specific prior written permission.
- * 
+ *
  *   THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
  *   "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
  *   LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -104,7 +104,7 @@ rte_ring_create(const char *name, unsigned count, int socket_id,
 	const struct rte_memzone *mz;
 	size_t ring_size;
 	int mz_flags = 0;
-	struct rte_ring_list* ring_list = NULL;
+	struct rte_ring_list *ring_list = NULL;
 
 	/* compilation-time checks */
 	RTE_BUILD_BUG_ON((sizeof(struct rte_ring) &
@@ -122,15 +122,15 @@ rte_ring_create(const char *name, unsigned count, int socket_id,
 			  CACHE_LINE_MASK) != 0);
 #endif
 
+	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
 	/* check that we have an initialised tail queue */
-	if ((ring_list = 
-	     RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list)) == NULL) {
+	if (ring_list == NULL) {
 		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;	
+		return NULL;
 	}
 
 	/* count must be a power of 2 */
-	if ((!POWEROF2(count)) || (count > RTE_RING_SZ_MASK )) {
+	if ((!POWEROF2(count)) || (count > RTE_RING_SZ_MASK)) {
 		rte_errno = EINVAL;
 		RTE_LOG(ERR, RING, "Requested size is invalid, must be power of 2, and "
 				"do not exceed the size limit %u\n", RTE_RING_SZ_MASK);
@@ -167,7 +167,7 @@ rte_ring_create(const char *name, unsigned count, int socket_id,
 		RTE_LOG(ERR, RING, "Cannot reserve memory\n");
 	}
 	rte_rwlock_write_unlock(RTE_EAL_TAILQ_RWLOCK);
-	
+
 	return r;
 }
 
@@ -250,11 +250,11 @@ rte_ring_list_dump(void)
 	const struct rte_ring *mp;
 	struct rte_ring_list *ring_list;
 
+	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
 	/* check that we have an initialised tail queue */
-	if ((ring_list = 
-	     RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list)) == NULL) {
+	if (ring_list == NULL) {
 		rte_errno = E_RTE_NO_TAILQ;
-		return;	
+		return;
 	}
 
 	rte_rwlock_read_lock(RTE_EAL_TAILQ_RWLOCK);
@@ -273,15 +273,15 @@ rte_ring_lookup(const char *name)
 	struct rte_ring *r;
 	struct rte_ring_list *ring_list;
 
+	ring_list = RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list);
 	/* check that we have an initialized tail queue */
-	if ((ring_list = 
-	     RTE_TAILQ_LOOKUP_BY_IDX(RTE_TAILQ_RING, rte_ring_list)) == NULL) {
+	if (ring_list == NULL) {
 		rte_errno = E_RTE_NO_TAILQ;
-		return NULL;	
+		return NULL;
 	}
 
 	rte_rwlock_read_lock(RTE_EAL_TAILQ_RWLOCK);
-	
+
 	TAILQ_FOREACH(r, ring_list, next) {
 		if (strncmp(name, r->name, RTE_RING_NAMESIZE) == 0)
 			break;
