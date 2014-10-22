@@ -1,3 +1,4 @@
-NOSTDINC_FLAGS += -I$(KDIR)/include
+# Adding include path as desc in Documentation/kbuild/modules.txt
+ccflags-y := -I$(KDIR)/include
 
 obj-m += time_bench.o
