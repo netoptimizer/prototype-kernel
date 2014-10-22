@@ -48,6 +48,8 @@ struct raw_perf_event perf_events[] = {
 
 #define NUM_EVTS (sizeof(perf_events)/sizeof(struct raw_perf_event))
 
+/* WARNING: PMU config is currently broken!
+ */
 bool time_bench_PMU_config(bool enable)
 {
 	int i;
@@ -218,9 +220,9 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 	rec.version_abi = 1;
 	rec.loops       = loops;
 	rec.step        = step;
-	//rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|TIME_BENCH_WALLCLOCK);
-	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|\
-			   TIME_BENCH_WALLCLOCK|TIME_BENCH_PMU);
+	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|TIME_BENCH_WALLCLOCK);
+//	rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|		\
+//			   TIME_BENCH_WALLCLOCK|TIME_BENCH_PMU);
 	//TODO: Add/copy txt to rec
 
 	/*** Loop function being timed ***/
