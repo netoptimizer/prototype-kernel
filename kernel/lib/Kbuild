@@ -1,0 +1,3 @@
+NOSTDINC_FLAGS += -I$(KDIR)/include
+
+obj-m += time_bench.o

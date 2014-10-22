@@ -1,0 +1,6 @@
+NOSTDINC_FLAGS += -I$(KDIR)/include
+
+obj-m += lib/
+
+incdirs := $(M) $(KDIR)/include/linux $(KDIR)/lib
+clean-files := $(foreach dir,$(incdirs),$(wildcard $(dir)/*~))
