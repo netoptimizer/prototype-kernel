@@ -5,3 +5,13 @@ changes upstream.
 
 Notice the "Kbuild" files, they define and control which modules are
 compiled.
+
+The kernel compiled against is detected by following running kernels
+build symlink in::
+
+ /lib/modules/`uname -r`/build/
+
+To compile against another kernel use::
+
+ make kbuilddir=~/git/kernel/net-next/
+
