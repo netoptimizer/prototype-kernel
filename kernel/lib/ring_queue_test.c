@@ -193,88 +193,6 @@ int run_basic_tests(void)
 
 /*** Benchmark code execution time tests ***/
 
-/* Function for timing ring_queue call overhead, the function
- * being called/timed is assumed to perform a tight loop, and update
- * the tsc_{begin,end} and ts_{begin,end} markers.
- */
-//FIXME: remove function
-bool time_func(uint32_t loops, int bulk, char *txt, struct ring_queue *queue,
-	       int (*func)(uint32_t loops, int bulk, struct ring_queue *queue,
-			   uint64_t* tsc_begin, uint64_t* tsc_end,
-			   struct timespec* ts_begin, struct timespec* ts_end)
-	)
-{
-#define NANOSEC_PER_SEC 1000000000 /* 10^9 */
-	uint64_t tsc_begin, tsc_end, tsc_interval;
-	uint64_t time_begin, time_end, time_interval;
-	struct timespec ts_begin, ts_end;
-
-	uint64_t timesec;	uint32_t timesec_remainder;
-	uint64_t ns_per_call;	uint32_t ns_per_call_remainder;
-	uint64_t ns_per_call_tmp_rem = 0;
-	uint64_t ns_per_call_decimal = 0;
-
-	uint64_t tsc_cycles;
-	uint32_t loops_cnt;
-
-	/*** Loop function being timed ***/
-	loops_cnt = func(loops, bulk, queue,
-			 &tsc_begin, &tsc_end, &ts_begin, &ts_end);
-
-	if (loops_cnt == 0) {
-		pr_err("ABORT: function being timed failed\n");
-		return false;
-	}
-	if (loops > loops_cnt)
-		pr_warn("WARNING: Loop count(%d) not equal to loops(%d)\n",
-			loops_cnt, loops);
-
-	tsc_interval  = tsc_end - tsc_begin;
-	time_begin    = ts_begin.tv_nsec + NANOSEC_PER_SEC * ts_begin.tv_sec;
-	time_end      = ts_end.tv_nsec   + NANOSEC_PER_SEC * ts_end.tv_sec;
-	time_interval = time_end - time_begin;
-
-	if ((tsc_interval == 0) || (time_interval == 0)) {
-		pr_err("ABORT: function being timed took ZERO time!?!\n");
-		return false;
-	}
-	if (loops_cnt < 1000) {
-		pr_err("ABORT: need more loops (>1000) for timing\n");
-		return false;
-	}
-
-	/* Calculate stats */
-	tsc_cycles    = tsc_interval / loops_cnt;
-
-	/*** Division in kernel it tricky ***/
-	/* Orig float ver: timesec = (time_interval / NANOSEC_PER_SEC); */
-	/* remainder only correct because NANOSEC_PER_SEC is 10^9 */
-	timesec = div_u64_rem(time_interval, NANOSEC_PER_SEC,
-			      &timesec_remainder);
-
-	/* Orig float ver: ns_per_call = ((double)time_interval / loops_cnt); */
-	/* First get quotient */
-	ns_per_call = div_u64_rem(time_interval, loops_cnt,
-				  &ns_per_call_remainder);
-	/* Now get decimals .xxx precision */
-	ns_per_call_tmp_rem = ns_per_call_remainder;
-	ns_per_call_decimal = div_u64_rem(ns_per_call_tmp_rem, (loops_cnt/1000),
-					  &ns_per_call_remainder);
-	/* do we need to check loops_cnt is dividable by 1000? */
-
-	pr_info("Type:%s Per elem: %llu cycles(tsc) %llu.%03llu ns (bulk:%d)"
-		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
-		" - (loop count:%u tsc_interval:%llu)\n",
-		txt, tsc_cycles, ns_per_call, ns_per_call_decimal, bulk,
-		timesec, timesec_remainder, time_interval,
-		loops_cnt, tsc_interval);
-/*	pr_info("DEBUG check is %llu/%u == %llu.%03llu ?\n",
-		time_interval, loops_cnt,
-		ns_per_call, ns_per_call_decimal);
-*/
-	return true;
-}
-
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
 static int time_bench_for_loop(
@@ -293,7 +211,6 @@ static int time_bench_for_loop(
 	return loops_cnt;
 }
 
-
 static int time_export_call_simple(
 	struct time_bench_record *rec, void *data)
 {
@@ -310,7 +227,6 @@ static int time_export_call_simple(
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
 }
-
 
 static int time_export_call(
 	struct time_bench_record *rec, void *data)
@@ -906,11 +822,9 @@ int run_timing_tests(void)
 
 	time_bench_loop(loops*1000, 0, "for_loop", NULL, time_bench_for_loop);
 
-//	time_func(loops*1000, 0, "for_loop", NULL, time_for_loop);
 //	time_bench_for_loop(loops*100, 0, "export_call_overhead", NULL,
 //			    time_export_call);
 
-//	time_func(loops*10, 1, "export_call_overhead", NULL, time_export_call);
 	time_bench_loop(loops*10, 0, "export_call_overhead_simple", NULL,
 			time_export_call_simple);
 //	time_bench_loop(loops, 8, "export_call_overhead", NULL,
@@ -929,14 +843,8 @@ int run_timing_tests(void)
 	time_bench_loop(loops*20, 0, "time_ndo_func_ptr_null_tst", NULL,
 			time_ndo_func_ptr_null_tst);
 
-//	return 0;
-//	time_func(loops, 0, "linked_list", NULL, time_list_head);
-//	time_func(loops, 0, "LOCKED_linked_list", NULL, time_list_locked);
-
 	time_bench_loop(loops*10, 0, "kmem_simple_reuse", NULL,
 			time_bench_kmem_cache_reuse);
-
-//	return 0;
 
 	time_bench_loop(loops/100, 0, "kmem_simple_test2", NULL,
 			time_bench_kmem_cache_test2);
@@ -945,8 +853,6 @@ int run_timing_tests(void)
 			time_bench_kmalloc_test1);
 	time_bench_loop(loops/10, 0, "kmalloc_test2", NULL,
 			time_bench_kmalloc_test2);
-
-//	return 0;
 
 	MPMC = ring_queue_create(ring_size, 0);
 	SPSC = ring_queue_create(ring_size, RING_F_SP_ENQ|RING_F_SC_DEQ);
@@ -980,10 +886,10 @@ int run_timing_tests(void)
 
 static int __init ring_queue_module_init(void)
 {
-	u64 pcm_inst_begin = pmc_inst();
-	u64 pcm_inst_end;
-	u64 clk_begin = pmc_clk();
-	u64 clk_end;
+//	u64 pcm_inst_begin = pmc_inst();
+//	u64 pcm_inst_end;
+//	u64 clk_begin = pmc_clk();
+//	u64 clk_end;
 
 	preempt_disable();
 	pr_info("DEBUG: cpu:%d\n", smp_processor_id());
