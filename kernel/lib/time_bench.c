@@ -15,6 +15,8 @@
 static int verbose=1;
 
 /** TSC (Time-Stamp Counter) based **
+ * See: linux/time_bench.h
+ *  tsc_start_clock() and tsc_stop_clock()
  */
 
 /** Wall-clock based **
@@ -95,8 +97,6 @@ bool time_bench_PMU_config(bool enable)
 	return true;
 }
 EXPORT_SYMBOL_GPL(time_bench_PMU_config);
-
-//perf_event_create_kernel_counter()
 
 /** Generic functions **
  */
@@ -238,7 +238,6 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 	/* Calculate stats */
 	time_bench_calc_stats(&rec);
 
-	//TODO: Add flags test?? hardcoded above...
 	pr_info("Type:%s Per elem: %llu cycles(tsc) %llu.%03llu ns (step:%d)"
 		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
 		" - (invoke count:%llu tsc_interval:%llu)\n",
@@ -264,7 +263,6 @@ static int __init time_bench_module_init(void)
 {
 	if (verbose)
 		pr_info("Loaded\n");
-	//time_bench_PMU_config(true);
 	return 0;
 }
 module_init(time_bench_module_init);
