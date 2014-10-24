@@ -107,17 +107,18 @@ alf_mp_enqueue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)
 {
 	u32 p_head, p_next, c_tail, space;
+	u32 mask = q->mask;
 
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	do {
 		p_head = ACCESS_ONCE(q->producer.head);
 		c_tail = ACCESS_ONCE(q->consumer.tail);
 
-		space = (q->mask - p_head + c_tail) & q->mask;
+		space = (mask - p_head + c_tail) & mask;
 		if (n > space)
 			return -ENOBUFS;
 
-		p_next = (p_head + n) & q->mask;
+		p_next = (p_head + n) & mask;
 	}
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
 
@@ -147,13 +148,14 @@ alf_mc_dequeue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)
 {
 	u32 c_head, c_next, p_tail, elems;
+	u32 mask = q->mask;
 
 	/* Reserve part of the array for dequeue LOAD/READ */
 	do {
 		c_head = ACCESS_ONCE(q->consumer.head);
 		p_tail = ACCESS_ONCE(q->producer.tail);
 
-		elems = (p_tail - c_head) & q->mask;
+		elems = (p_tail - c_head) & mask;
 
 //		pr_info("%s(): DEQ c_head:%d p_tail:%d elems:%u p:0x%p sz:%d\n",
 //			__func__, c_head, p_tail, elems, q, q->size);
@@ -163,7 +165,7 @@ alf_mc_dequeue(const u32 n;
 		else
 			elems = min(elems, n);
 
-		c_next = (c_head + elems) & q->mask;
+		c_next = (c_head + elems) & mask;
 	}
 	while (unlikely(cmpxchg(&q->consumer.head, c_head, c_next) != c_head));
 
