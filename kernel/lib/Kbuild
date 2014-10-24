@@ -7,3 +7,5 @@ obj-m += time_bench_sample.o
 obj-m += ring_queue.o
 obj-m += ring_queue_test.o
 
+obj-m += alf_queue.o
+obj-m += alf_queue_test.o
