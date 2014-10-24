@@ -176,7 +176,7 @@ alf_mc_dequeue(const u32 n;
 	/* Wait for other concurrent preceeding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
-	q->consumer.tail = c_next; /* Mark this deq done */
+	ACCESS_ONCE(q->consumer.tail) = c_next; /* Mark this deq done */
 
 	return elems;
 }
