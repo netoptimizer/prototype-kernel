@@ -11,6 +11,24 @@
 
 static int verbose=1;
 
+/* Timing at the nanosec level, we need to know the overhead
+ * introduced by the for loop itself */
+static int time_bench_for_loop(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier(); /* avoid compiler to optimize this loop */
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 static DEFINE_SPINLOCK(my_lock);
 static int time_lock_unlock(
 	struct time_bench_record *rec, void *data)
@@ -157,6 +175,7 @@ int run_timing_tests(void)
 {
 	uint32_t loops = 100000000;
 
+	time_bench_loop(loops*10, 0, "for_loop", NULL, time_bench_for_loop);
 	time_bench_loop(loops, 0, "lock_unlock", NULL, time_lock_unlock);
 	time_bench_loop(loops, 0, "local_bh", NULL, time_local_bh);
 	time_bench_loop(loops, 0, "local_irq", NULL, time_local_irq);
