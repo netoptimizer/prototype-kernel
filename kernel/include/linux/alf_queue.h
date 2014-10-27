@@ -144,7 +144,12 @@ alf_queue_avail_space(struct alf_queue *q)
 	return space;
 }
 
-/* Main Multi-Producer ENQUEUE */
+/* Main Multi-Producer ENQUEUE
+ *
+ * Discussion: What should the semantics be, when a bulk enqueue could
+ * take part of the bulk, but not the entire bulk?  Current semantics
+ * is to abort with -ENOBUFS.
+ */
 static inline int
 alf_mp_enqueue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)

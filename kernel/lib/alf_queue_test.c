@@ -1,5 +1,5 @@
 /*
- * Sample module for linux/alf_queue.h usage
+ * Test module for linux/alf_queue.h usage
  *  a Producer/Consumer Array-based Lock-Free pointer queue
  */
 
@@ -134,9 +134,89 @@ static bool test_add_and_remove_elems_BULK(void)
 fail:
 	alf_queue_free(queue);
 	return false;
+#undef BULK
+#undef LOOPS
+#undef SIZE
 }
 
+/* Testing: enqueue until full and dequeue until empty.  Also
+ * demonstrate effect of increasing bulk enqueue.  As current enqueue
+ * semantics is to abort if the entire bulk does not fit.  The bulk
+ * dequeue will return the number of elements it was able to bulk
+ * dequeue.
+ */
+static bool test_add_until_full(void)
+{
+#define BULK 15
+#define SIZE 16
+	struct alf_queue *q;
+	void *objs[BULK];
+	void *deq_objs[BULK];
+	int i, j, n = 20;
+	int enq_cnt = 0;
+	int enq_cnt_total;
+	int deq_cnt = 0;
+	int deq_cnt_total;
 
+	q = alf_queue_alloc(SIZE, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(q))
+		return false;
+	/* The max queue size it SIZE-1 */
+	if (alf_queue_avail_space(q) != (SIZE-1))
+		goto fail;
+	/* fake init pointers to a number */
+	for (i = 0; i < BULK; i++, n++)
+		objs[i] = (void *)(unsigned long)(n);
+
+	/* Repeat the enqueue/dequeue cycle with larger BULK enqueues*/
+	for (j = 1; j <= BULK; j++) {
+		enq_cnt_total = 0;
+		deq_cnt_total = 0;
+
+		/* enqueue until full */
+		do {
+			enq_cnt = alf_mp_enqueue(q, objs, j); /* notice "j" */
+			if (enq_cnt > 0)
+				enq_cnt_total += enq_cnt;
+		} while (enq_cnt > 0);
+
+		/* count */
+		if (verbose)
+			pr_info("%s(bulk:%d): enq before full %d(%d)\n",
+				__func__, j, enq_cnt_total, alf_queue_count(q));
+		if (alf_queue_count(q) != enq_cnt_total)
+			goto fail;
+		/* dequeue until empty */
+		do {
+			deq_cnt = alf_mc_dequeue(q, deq_objs, BULK);
+			if (deq_cnt > 0) {
+				deq_cnt_total += deq_cnt;
+				if (deq_cnt != BULK)
+					pr_info("%s(j:%d): deq:%d < bulk:%d\n",
+						__func__, j, deq_cnt, BULK);
+			}
+		} while (deq_cnt > 0);
+
+		if (verbose)
+			pr_info("%s(%d): total:%d deq before empty=%d\n",
+				__func__, j, deq_cnt_total, alf_queue_count(q));
+		/* queue must be empty here */
+		if (alf_queue_count(q) != 0)
+			goto fail;
+		if (deq_cnt_total != enq_cnt_total)
+			goto fail;
+	}
+	/* empty */
+	if (!alf_queue_empty(q))
+		goto fail;
+	alf_queue_free(q);
+	return true;
+fail:
+	alf_queue_free(q);
+	return false;
+#undef BULK
+#undef SIZE
+}
 
 #define TEST_FUNC(func) 					\
 do {								\
@@ -157,6 +237,7 @@ int run_basic_tests(void)
 	TEST_FUNC(test_alloc_and_free());
 	TEST_FUNC(test_add_and_remove_elem());
 	TEST_FUNC(test_add_and_remove_elems_BULK());
+	TEST_FUNC(test_add_until_full());
 	return passed_count;
 }
 
