@@ -50,18 +50,16 @@ static noinline bool test_add_and_remove_elem(void)
 	int *obj = &on_stack;
 	int *deq_obj = NULL;
 
-	pr_info("%s(): argh1\n", __func__);
 	queue = alf_queue_alloc(8, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(queue))
 		return false;
-	pr_info("%s(): argh2\n", __func__);
 
 	/* enqueue */
 	if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
 		goto fail;
 	/* count */
-//	if (alf_queue_count(queue) != 1)
-//		goto fail;
+	if (alf_queue_count(queue) != 1)
+		goto fail;
 	/* dequeue */
 	if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
 		goto fail;
@@ -78,8 +76,8 @@ static noinline bool test_add_and_remove_elem(void)
 	if (*deq_obj != *obj)
 		goto fail;
 	/* empty */
-//	if (!alf_queue_empty(queue))
-//		goto fail;
+	if (!alf_queue_empty(queue))
+		goto fail;
 	alf_queue_free(queue);
 	return true;
 fail:
@@ -91,14 +89,18 @@ static bool test_add_and_remove_elems_BULK(void)
 {
 #define BULK  10
 #define LOOPS 6
+#define SIZE 32
 	struct alf_queue *queue;
 	void *objs[BULK];
 	void *deq_objs[BULK];
 	int i, j, n = 20;
 
-	queue = alf_queue_alloc(32, GFP_KERNEL);
-	if (queue == NULL)
+	queue = alf_queue_alloc(SIZE, GFP_KERNEL);
+	if (IS_ERR_OR_NULL(queue))
 		return false;
+	/* The max queue size it SIZE-1 */
+	if (alf_queue_avail_space(queue) != (SIZE-1))
+		goto fail;
 	/* Repeat the enqueue/dequeue cycle */
 	for (j = 0; j < LOOPS; j++) {
 		/* fake init pointers to a number */
@@ -108,8 +110,8 @@ static bool test_add_and_remove_elems_BULK(void)
 		if (alf_mp_enqueue(queue, objs, BULK) < 0)
 			goto fail;
 		/* count */
-//		if (alf_queue_count(queue) != BULK)
-//			goto fail;
+		if (alf_queue_count(queue) != BULK)
+			goto fail;
 		/* dequeue */
 		if (alf_mc_dequeue(queue, deq_objs, BULK) < 0)
 			goto fail;
@@ -125,8 +127,8 @@ static bool test_add_and_remove_elems_BULK(void)
 		}
 	}
 	/* empty */
-//	if (!alf_queue_empty(queue))
-//		goto fail;
+	if (!alf_queue_empty(queue))
+		goto fail;
 	alf_queue_free(queue);
 	return true;
 fail:

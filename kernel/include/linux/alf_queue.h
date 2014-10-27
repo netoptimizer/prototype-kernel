@@ -101,6 +101,49 @@ __helper_alf_dequeue_load_memcpy(u32 c_head, u32 p_tail,
 	}
 }
 
+
+static inline bool
+alf_queue_empty(struct alf_queue *q)
+{
+	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
+	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+
+	/* The empty (and initial state) is when consumer have reached
+	 * up with producer.
+	 *
+	 * DOUBLE-CHECK: Should we use producer.head, as this indicate
+	 * a producer is in-progress(?)
+	 */
+	return c_tail == p_tail;
+}
+
+static inline int
+alf_queue_count(struct alf_queue *q)
+{
+	u32 c_head = ACCESS_ONCE(q->consumer.head);
+	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+	u32 elems;
+
+	elems = (p_tail - c_head) & q->mask;
+	return elems;
+}
+
+static inline int
+alf_queue_avail_space(struct alf_queue *q)
+{
+	u32 p_head = ACCESS_ONCE(q->producer.head);
+	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
+	u32 space;
+
+	/* The max avail space is (q->size-1) because the empty state
+	 * is when (consumer == producer)
+	 */
+	space = (c_tail - p_head - 1) & q->mask;
+	/* Same as: */
+	// space = (q->mask + c_tail - p_head) & q->mask;
+	return space;
+}
+
 /* Main Multi-Producer ENQUEUE */
 static inline int
 alf_mp_enqueue(const u32 n;
@@ -114,7 +157,7 @@ alf_mp_enqueue(const u32 n;
 		p_head = ACCESS_ONCE(q->producer.head);
 		c_tail = ACCESS_ONCE(q->consumer.tail);
 
-		space = (mask - p_head + c_tail) & mask;
+		space = (c_tail - p_head - 1) & mask;
 		if (n > space)
 			return -ENOBUFS;
 
@@ -124,6 +167,8 @@ alf_mp_enqueue(const u32 n;
 
 //	pr_info("%s(): DEBUG p_head:%d c_tail:%d space:%u p:0x%p\n",
 //		__func__, p_head, c_tail, space, q);
+//	pr_info("%s(): space_before:%d space_after:%u\n",
+//		__func__, space, alf_queue_avail_space(q));
 //	pr_info("%s(): DZZZZ ring[0]:0x%p\n",
 //		__func__, &q->ring[0]);
 
@@ -137,7 +182,8 @@ alf_mp_enqueue(const u32 n;
 	 */
 	while (unlikely(ACCESS_ONCE(q->producer.tail) != p_head))
 		cpu_relax();
-	ACCESS_ONCE(q->producer.tail) = p_next; /* Mark this enq done */
+	/* Mark this enq done and avail for consumption */
+	ACCESS_ONCE(q->producer.tail) = p_next;
 
 	return n;
 }
@@ -178,7 +224,8 @@ alf_mc_dequeue(const u32 n;
 	/* Wait for other concurrent preceeding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
-	ACCESS_ONCE(q->consumer.tail) = c_next; /* Mark this deq done */
+	/* Mark this deq done and avail for producers */
+	ACCESS_ONCE(q->consumer.tail) = c_next;
 
 	return elems;
 }
