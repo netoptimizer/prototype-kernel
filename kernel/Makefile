@@ -30,6 +30,16 @@ modules:
 install:
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD modules_install
 
+# Example usage:
+#  make push_remote kbuilddir=~/git/kernel/net-next/ HOST=192.168.122.49
+push_remote: modules
+	@if [ -z $(HOST) ]; then \
+		echo -e "\n ***ERROR***: need remote \"HOST\" variable, use:"; \
+		echo -e "  make push_remote HOST=192.168.122.49\n"; \
+		exit 2; \
+	fi
+	scripts/push_remote.sh $(HOST)
+
 clean:
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD clean
 	@rm -f *~
