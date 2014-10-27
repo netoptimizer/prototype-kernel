@@ -43,7 +43,6 @@ static int time_lock_unlock(
 		loops_cnt++;
 		barrier();
 		spin_unlock(&my_lock);
-		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
@@ -62,7 +61,6 @@ static int time_local_bh(
 		loops_cnt++;
 		barrier();
 		local_bh_enable();
-		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
@@ -81,7 +79,6 @@ static int time_local_irq(
 		loops_cnt++;
 		barrier();
 		local_irq_enable();
-		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
@@ -101,7 +98,6 @@ static int time_local_irq_save(
 		loops_cnt++;
 		barrier();
 		local_irq_restore(flags);
-		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
@@ -120,7 +116,6 @@ static int time_preempt(
 		loops_cnt++;
 		barrier();
 		preempt_enable();
-		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
@@ -175,14 +170,39 @@ int run_timing_tests(void)
 {
 	uint32_t loops = 100000000;
 
-	time_bench_loop(loops*10, 0, "for_loop", NULL, time_bench_for_loop);
-	time_bench_loop(loops, 0, "lock_unlock", NULL, time_lock_unlock);
-	time_bench_loop(loops, 0, "local_bh", NULL, time_local_bh);
-	time_bench_loop(loops, 0, "local_irq", NULL, time_local_irq);
-	time_bench_loop(loops, 0, "local_irq_save", NULL, time_local_irq_save);
-	time_bench_loop(loops, 0, "preempt", NULL, time_preempt);
-	time_bench_loop(loops, 0, "call_func", NULL, time_func);
-	time_bench_loop(loops, 0, "call_func_ptr", NULL, time_func_ptr);
+	/* Results listed below for a E5-2695 CPU */
+
+	/*  0.360 ns cost overhead of the for loop */
+	time_bench_loop(loops*10, 0, "for_loop", /*  0.360 ns */
+			NULL, time_bench_for_loop);
+
+	/* 16.449 ns cost for spin_lock+spin_unlock */
+	time_bench_loop(loops, 0, "spin_lock_unlock",
+			NULL, time_lock_unlock);
+
+	/*  7.459 ns cost for local_bh_{disable,enable} */
+	time_bench_loop(loops, 0, "local_BH_disable_enable",
+			NULL, time_local_bh);
+
+	/*  2.860 ns cost for local_irq_{disable,enable} */
+	time_bench_loop(loops, 0, "local_IRQ_disable_enable",
+			NULL, time_local_irq);
+
+	/* 14.840 ns cost for local_irq_save()+local_irq_restore() */
+	time_bench_loop(loops, 0, "local_irq_save_restore",
+			NULL, time_local_irq_save);
+
+	/*  4.291 ns cost for preempt_{disable,enable} */
+	time_bench_loop(loops, 0, "preempt_disable_enable",
+			NULL, time_preempt);
+
+	/*  2.145 ns cost for a local function call */
+	time_bench_loop(loops, 0, "funcion_call_cost",
+			NULL, time_func);
+
+	/*  2.503 ns cost for a function pointer invocation */
+	time_bench_loop(loops, 0, "func_ptr_call_cost",
+			NULL, time_func_ptr);
 	return 0;
 }
 
