@@ -8,14 +8,6 @@
 #include <linux/module.h>
 #include <linux/alf_queue.h>
 
-#include <linux/list.h>
-#include <linux/spinlock.h>
-#include <linux/slab.h>
-#include <linux/skbuff.h>
-#include <linux/errno.h>
-
-//#include <linux/time_bench.h>
-
 static int verbose=1;
 
 /*** Basic functionality true/false test functions ***/
