@@ -41,6 +41,8 @@ void               alf_queue_free(struct alf_queue *q);
  *  1. They can be reused for both "Single" and "Multi" variants
  *  2. Allow us to experiment with (pipeline) optimizations in this area.
  */
+#define __helper_alf_enqueue_store __helper_alf_enqueue_store_mask
+#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask
 
 static inline void
 __helper_alf_enqueue_store_simple(u32 p_head, u32 c_tail,
@@ -52,6 +54,17 @@ __helper_alf_enqueue_store_simple(u32 p_head, u32 c_tail,
 		q->ring[index] = ptr[i];
 		if (index == q->size) /* handle array wrap */
 			index = 0;
+	}
+}
+
+static inline void
+__helper_alf_enqueue_store_mask(u32 p_head, u32 c_tail,
+				struct alf_queue *q, void **ptr, const u32 n)
+{
+	int i, index = p_head;
+
+	for (i = 0; i < n; i++, index++) {
+		q->ring[index & q->mask] = ptr[i];
 	}
 }
 
@@ -84,6 +97,16 @@ __helper_alf_dequeue_load_simple(u32 c_head, u32 p_tail,
 	}
 }
 
+static inline void
+__helper_alf_dequeue_load_mask(u32 c_head, u32 p_tail,
+			       struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i, index = c_head;
+
+	for (i = 0; i < elems; i++, index++) {
+		ptr[i] = q->ring[index & q->mask];
+	}
+}
 
 static inline void
 __helper_alf_dequeue_load_memcpy(u32 c_head, u32 p_tail,
@@ -178,7 +201,7 @@ alf_mp_enqueue(const u32 n;
 //		__func__, &q->ring[0]);
 
 	/* STORE the elems into the queue array */
-	__helper_alf_enqueue_store_simple(p_head, c_tail, q, ptr, n);
+	__helper_alf_enqueue_store(p_head, c_tail, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
 	/* Wait for other concurrent preceeding enqueues not yet done,
@@ -224,7 +247,7 @@ alf_mc_dequeue(const u32 n;
 	 *   We don't need a smb_rmb() Read-Memory-Barrier here because
 	 *   the above cmpxchg is an implied full Memory-Barrier.
 	 */
-	__helper_alf_dequeue_load_simple(c_head, p_tail,  q, ptr, elems);
+	__helper_alf_dequeue_load(c_head, p_tail,  q, ptr, elems);
 
 	/* Wait for other concurrent preceeding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
