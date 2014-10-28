@@ -46,7 +46,7 @@ static int time_bench_single_enqueue_dequeue(
 	struct alf_queue *queue = (struct alf_queue*)data;
 
 	if (queue == NULL) {
-		pr_err("Need ring_queue as input\n");
+		pr_err("Need queue struct ptr as input\n");
 		return -1;
 	}
 	/* loop count is limited to 32-bit due to div_u64_rem() use */
@@ -73,6 +73,56 @@ fail:
 	return 0;
 }
 
+/* Multi enqueue before dequeue
+ * - strange test as bulk is normal solution, but want to see
+ *   if we didn't have/use bulk, and touch more of array
+ */
+static int time_multi_enqueue_dequeue(
+	struct time_bench_record *rec, void *data)
+{
+	int on_stack = 123;
+	int *obj = &on_stack;
+	int *deq_obj = NULL;
+	int i, n;
+	uint64_t loops_cnt = 0;
+	int elems = rec->step;
+	struct alf_queue* queue = (struct alf_queue*)data;
+
+	if (queue == NULL) {
+		pr_err("Need queue struct ptr as input\n");
+		return -1;
+	}
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * 2 * elems) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+
+	time_bench_start(rec);
+
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		for (n = 0; n < elems; n++) {
+			if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+				goto fail;
+			loops_cnt++;
+		}
+		barrier(); /* compiler barrier */
+		for (n = 0; n < elems; n++) {
+			if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+				goto fail;
+			loops_cnt++;
+		}
+	}
+
+	time_bench_stop(rec, loops_cnt);
+
+	return loops_cnt;
+fail:
+	return -1;
+}
+
+
 
 int run_benchmark_tests(void)
 {
@@ -81,12 +131,21 @@ int run_benchmark_tests(void)
 	int passed_count = 0;
 	struct alf_queue *MPMC;
 
+	/* Results listed below for a E5-2695 CPU */
+
+	/*  0.360 ns cost overhead of the for loop */
 	time_bench_loop(loops*1000, 0,
 			"for_loop", NULL, time_bench_for_loop);
 
 	MPMC = alf_queue_alloc(ring_size, GFP_KERNEL);
+
+	/* 10.910 ns cost for single enqueue or dequeue */
 	time_bench_loop(loops, 0,
 			"ALF-simple", MPMC, time_bench_single_enqueue_dequeue);
+
+	/* 13.576 ns cost when touching more of the array  */
+	time_bench_loop(loops/100, 128, "ALF-multi", MPMC,
+			time_multi_enqueue_dequeue);
 
 	alf_queue_free(MPMC);
 	return passed_count;
