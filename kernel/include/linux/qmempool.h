@@ -111,7 +111,7 @@ static inline void __qmempool_preempt_disable(void)
 	/* 4.291 ns cost for preempt_{disable,enable} with
 	 *  CONFIG_PREEMPT is not set, but CONFIG_PREEMPT_COUNT=y
 	 */
-	 preempt_disable();
+	preempt_disable();
 //	if (!in_serving_softirq())
 //		local_bh_disable(); //7.459 ns cost local_bh_{disable,enable}
 
@@ -250,18 +250,12 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	 */
 	used_sharedq = __qmempool_free_to_sharedq(pool, cpu->localq);
 	if (!used_sharedq) {
-		pr_err("%s() used free_to_slab localq:%d sharedq:%d"
-		       " irqs_disabled:%d in_softirq:%lu cpu:%d\n",
-		       __func__, ring_queue_count(cpu->localq),
-		       ring_queue_count(pool->sharedq), irqs_disabled(),
-		       in_softirq(), smp_processor_id());
+		/* preempt got enabled when using real SLAB */
 		__qmempool_preempt_disable();
-		//cpu = this_cpu_ptr(pool->percpu); // have to reload "cpu" ptr
+		cpu = this_cpu_ptr(pool->percpu); /* have to reload "cpu" ptr */
 	}
 
 	/* 3. this elem is more cache hot, keep it in localq */
-	debug_percpu(cpu);
-	cpu = this_cpu_ptr(pool->percpu); // have to reload "cpu" ptr
 	debug_percpu(cpu);
 	res = ring_queue_sp_enqueue(cpu->localq, elem);
 	if (unlikely(res < 0)) { /* should have been be room in localq!?! */

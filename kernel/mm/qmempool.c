@@ -158,13 +158,12 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		cpu->full_cnt = 0;
 		cpu->owner_cpu = -1;
 	}
-//	pool->localq_sz = localq_sz; // redundant
 
 	return pool;
 }
 EXPORT_SYMBOL(qmempool_create);
 
-/* element handling
+/* Element handling
  */
 
 /* Debug hack to ease profiling functions when not inlined */
@@ -264,9 +263,10 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 		}
 		res = ring_queue_mp_enqueue_bulk(
 			pool->sharedq, elems, QMEMPOOL_BULK);
-		/* There is a theoretical chance that multiple
-		 * CPU enter here, refilling sharedq at the
-		 * same time, thus we must handle "full" situation
+		/* FIXME: There is a theoretical chance that multiple
+		 * CPU enter here, refilling sharedq at the same time,
+		 * thus we must handle "full" situation, for now die
+		 * hard so some will need to fix this.
 		 */
 		BUG_ON(res < 0); /* sharedq should have room */
 	}
@@ -307,7 +307,6 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems)
 	return true;
 }
 EXPORT_SYMBOL(__qmempool_free_to_slab);
-
 
 MODULE_DESCRIPTION("Quick queue based mempool (qmempool)");
 MODULE_AUTHOR("Jesper Dangaard Brouer <netoptimizer@brouer.com>");
