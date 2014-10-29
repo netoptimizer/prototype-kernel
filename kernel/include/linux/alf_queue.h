@@ -239,6 +239,14 @@ alf_mc_dequeue(const u32 n;
 	 */
 	__helper_alf_dequeue_load(c_head, p_tail,  q, ptr, elems);
 
+	/* Archs with weak Memory Ordering need a memory barrier here.
+	 * As the STORE to q->consumer.tail, must happen after the
+	 * dequeue LOADs. Dequeue LOADs have a dependent STORE into
+	 * ptr, thus a smp_wmb() is enough. Paired with enqueue
+	 * implicit full-MB in cmpxchg.
+	 */
+	smp_wmb();
+
 	/* Wait for other concurrent preceeding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
