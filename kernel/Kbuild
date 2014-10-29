@@ -2,6 +2,7 @@
 ccflags-y := -I$(KDIR)/include
 
 obj-m += lib/
+obj-m += mm/
 
 incdirs := $(M) $(KDIR)/include/linux $(KDIR)/lib
 clean-files := $(foreach dir,$(incdirs),$(wildcard $(dir)/*~))
