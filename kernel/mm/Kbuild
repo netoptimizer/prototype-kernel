@@ -3,3 +3,4 @@ ccflags-y := -I$(KDIR)/include
 
 obj-m += qmempool.o
 obj-m += qmempool_test.o
+obj-m += qmempool_bench.o
