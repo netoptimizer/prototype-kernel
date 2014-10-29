@@ -193,13 +193,6 @@ alf_mp_enqueue(const u32 n;
 	}
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
 
-//	pr_info("%s(): DEBUG p_head:%d c_tail:%d space:%u p:0x%p\n",
-//		__func__, p_head, c_tail, space, q);
-//	pr_info("%s(): space_before:%d space_after:%u\n",
-//		__func__, space, alf_queue_avail_space(q));
-//	pr_info("%s(): DZZZZ ring[0]:0x%p\n",
-//		__func__, &q->ring[0]);
-
 	/* STORE the elems into the queue array */
 	__helper_alf_enqueue_store(p_head, c_tail, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
@@ -230,9 +223,6 @@ alf_mc_dequeue(const u32 n;
 		p_tail = ACCESS_ONCE(q->producer.tail);
 
 		elems = (p_tail - c_head) & mask;
-
-//		pr_info("%s(): DEQ c_head:%d p_tail:%d elems:%u p:0x%p sz:%d\n",
-//			__func__, c_head, p_tail, elems, q, q->size);
 
 		if (elems == 0)
 			return 0;
