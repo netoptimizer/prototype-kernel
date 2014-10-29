@@ -50,21 +50,12 @@ struct qmempool {
 	 * The local queues (localq) are Single-Producer-Single-Consumer
 	 * queues as they are per CPU.
 	 */
-	//struct ring_queue __percpu *localq[NR_CPUS];
-	//FIXME: do dynamic percpu alloc
-	// Example see: commit b7779d06f995
-	// functions: alloc_percpu() per_cpu_ptr()
 	struct qmempool_percpu __percpu *percpu;
 
 	/* Backed by some SLAB kmem_cache */
 	struct kmem_cache	*kmem;
 
 	/* Setup */
-// Size settings are redundant as this is recorded in the ring_queue
-//	uint32_t	localq_sz; /* Size of local (per CPU) queue */
-//	uint32_t	sharedq_sz;/* Size of shared queue */
-	// some thresh for when to refill
-	// param/flag for requesting prefetching
 	uint32_t prealloc;
 	gfp_t gfp_mask;
 };
