@@ -827,10 +827,10 @@ int run_timing_tests(void)
 
 	time_bench_loop(loops*10, 0, "export_call_overhead_simple", NULL,
 			time_export_call_simple);
-//	time_bench_loop(loops, 8, "export_call_overhead", NULL,
-//			time_export_call);
-//	time_bench_loop(loops/10, 0, "export_call_overhead2", NULL,
-//			time_export_call2);
+	time_bench_loop(loops, 8, "export_call_overhead", NULL,
+			time_export_call);
+	time_bench_loop(loops/10, 0, "export_call_overhead2", NULL,
+			time_export_call2);
 	time_bench_loop(loops/10, 0, "export_call_overhead3", NULL,
 			time_export_call3);
 
@@ -842,6 +842,11 @@ int run_timing_tests(void)
 
 	time_bench_loop(loops*20, 0, "time_ndo_func_ptr_null_tst", NULL,
 			time_ndo_func_ptr_null_tst);
+
+	time_bench_loop(loops/10, 0, "list_unlocked", NULL,
+			time_list_head);
+	time_bench_loop(loops/10, 0, "list_locked", NULL,
+			time_list_locked);
 
 	time_bench_loop(loops*10, 0, "kmem_simple_reuse", NULL,
 			time_bench_kmem_cache_reuse);
