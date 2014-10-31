@@ -11,7 +11,7 @@
  * increasing serial number into the queue.  The single consumer will
  * dequeue and keep track of all producers serial number, and validate
  * that this number is strictly increasing by one.  This validates no
- * elements gets lost.
+ * elements gets lost, due to incorrect concurrency handling.
  *
  * Copyright (C) 2014, Red Hat, Inc. Jesper Dangaard Brouer
  *  for licensing details see kernel-base/COPYING
