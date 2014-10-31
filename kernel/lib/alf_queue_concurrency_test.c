@@ -22,6 +22,7 @@
 #include <linux/alf_queue.h>
 #include <linux/completion.h>
 #include <linux/kthread.h>
+#include <linux/time_bench.h>
 
 static int verbose=1;
 
@@ -60,17 +61,18 @@ static struct alf_queue *mpmc;
 
 #define SLEEP_TIME_ENQ	0
 #define SLEEP_TIME_DEQ	1
-#define QUEUE_SIZE	4096
-#define PRODUCER_BULK	3
-#define CONSUMER_BULK	2
+#define QUEUE_SIZE	2048
+#define PRODUCER_BULK	8
+#define CONSUMER_BULK	8
 
-static unsigned int
+static noinline unsigned int
 alf_run_producer(struct alf_queue *q, struct my_producer *me)
 {
 	int i, j, n, total = 0;
 	void *objs[PRODUCER_BULK];
-	int32_t loops = 1000;
 	int retries = 0, retries_max = U32_MAX;
+	int elements = 1000;
+	int32_t loops = elements / PRODUCER_BULK;
 
 	for (j = 0; j < loops; j++) {
 
@@ -103,7 +105,7 @@ alf_run_producer(struct alf_queue *q, struct my_producer *me)
 	return total;
 }
 
-static int alf_producer_thread(void *arg)
+static noinline int alf_producer_thread(void *arg)
 {
 	struct my_producer *me = arg;
 	unsigned int cnt;
@@ -128,8 +130,20 @@ static int alf_producer_thread(void *arg)
 	return 0;
 }
 
+static void bench_reset_record(struct time_bench_record *rec,
+			       uint32_t loops, int step)
+{
+	/* Setup time_bench record */
+	memset(rec, 0, sizeof(*rec)); /* zero func might not update all */
+	rec->version_abi = 1;
+	rec->loops = loops;
+	rec->step  = step;
+	rec->flags = (TIME_BENCH_LOOP|TIME_BENCH_TSC|TIME_BENCH_WALLCLOCK);
+}
+
 static unsigned int
-alf_run_consumer(struct alf_queue *q, struct my_consumer *me)
+alf_run_consumer(struct alf_queue *q, struct my_consumer *me,
+		 struct time_bench_record *rec)
 {
 	int i, j, n, total = 0;
 	void *deq_objs[CONSUMER_BULK];
@@ -138,14 +152,17 @@ alf_run_consumer(struct alf_queue *q, struct my_consumer *me)
 	int elements = 100000;
 	int32_t loops = elements / CONSUMER_BULK;
 
+	bench_reset_record(rec, loops, CONSUMER_BULK);
+
 	/* Signals all threads waiting on this completion */
 	complete_all(&dequeue_start); /* enqueues raceing with dequeue */
 
+	time_bench_start(rec);
 	for (j = 0; j < loops; j++) {
 
 		n = alf_mc_dequeue(q, deq_objs, CONSUMER_BULK);
 		if (n < 0)
-			goto empty;
+			break; /* empty queue */
 		total += n;
 
 		for (i = 0; i < n; i++) {
@@ -163,27 +180,47 @@ alf_run_consumer(struct alf_queue *q, struct my_consumer *me)
 		}
 
 	}
+	time_bench_stop(rec, total);
+
 	// complete_all(&dequeue_start); /* should give more enqueue race */
 
-
-empty:
 	return total;
+}
+
+static void bench_calc(struct time_bench_record *rec)
+{
+	/* Calculate stats */
+	time_bench_calc_stats(rec);
+
+	pr_info("Cost_Per_Dequeue: %llu cycles(tsc) %llu.%03llu ns (step:%d)"
+		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
+		" - (invoke count:%llu tsc_interval:%llu)\n",
+		rec->tsc_cycles,
+		rec->ns_per_call_quotient, rec->ns_per_call_decimal, rec->step,
+		rec->time_sec, rec->time_sec_remainder, rec->time_interval,
+		rec->invoked_cnt, rec->tsc_interval);
 }
 
 static int alf_consumer_thread(void *arg)
 {
 	struct my_consumer *me = arg;
 	unsigned int cnt;
-	int min_bench_cnt = 10000;
+	int min_bench_cnt = 5000; /* Shold be > QUEUE_SIZE */
+	struct time_bench_record rec;
 
 	while (!kthread_should_stop()) {
 
-		cnt = alf_run_consumer(mpmc, me);
+		cnt = alf_run_consumer(mpmc, me, &rec);
 
+		/* In case cnt is larger than queue size, congestion
+		 * occured and concurrent enqueuers and deqeue have
+		 * been running.
+		 */
 		if (cnt > min_bench_cnt) {
 			if (verbose >= 1)
 				pr_info("High dequeue cnt:%u cpu:%d\n",
 					cnt, smp_processor_id());
+			bench_calc(&rec);
 		}
 		if (verbose >= 2)
 			pr_info("Consumer(%u) deq:%u cpu:%d sleep %d secs"

@@ -204,6 +204,7 @@ bool time_bench_calc_stats(struct time_bench_record *rec)
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(time_bench_calc_stats);
 
 /* Generic function for invoking a loop function and calculating
  * execution time stats.  The function being called/timed is assumed
