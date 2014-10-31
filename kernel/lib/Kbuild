@@ -10,3 +10,4 @@ obj-m += ring_queue_test.o
 obj-m += alf_queue.o
 obj-m += alf_queue_test.o
 obj-m += alf_queue_bench.o
+obj-m += alf_queue_concurrency_test.o
