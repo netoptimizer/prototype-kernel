@@ -45,7 +45,7 @@ void               alf_queue_free(struct alf_queue *q);
 #define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask
 
 static inline void
-__helper_alf_enqueue_store_simple(u32 p_head, u32 c_tail,
+__helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
 	int i, index = p_head;
@@ -58,7 +58,7 @@ __helper_alf_enqueue_store_simple(u32 p_head, u32 c_tail,
 }
 
 static inline void
-__helper_alf_enqueue_store_mask(u32 p_head, u32 c_tail,
+__helper_alf_enqueue_store_mask(u32 p_head, u32 p_next,
 				struct alf_queue *q, void **ptr, const u32 n)
 {
 	int i, index = p_head;
@@ -69,23 +69,19 @@ __helper_alf_enqueue_store_mask(u32 p_head, u32 c_tail,
 }
 
 static inline void
-__helper_alf_enqueue_store_memcpy(u32 p_head, u32 c_tail,
+__helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
-	// CONTAINS SOME BUG
-	if (p_head >= c_tail) {
-		memcpy(&q->ring[p_head], ptr, n * sizeof(ptr[0]));
+	if (p_next >= p_head) {
+		memcpy(&q->ring[p_head], ptr, (p_next-p_head) * sizeof(ptr[0]));
 	} else {
-		unsigned int dif = q->size - c_tail;
-
-		if (dif)
-			memcpy(&q->ring[p_head], ptr, dif * sizeof(ptr[0]));
-		memcpy(&q->ring[0], ptr + dif, (c_tail - dif) * sizeof(ptr[0]));
+		memcpy(&q->ring[p_head], &ptr[0], (q->size-p_head) * sizeof(ptr[0]));
+		memcpy(&q->ring[0], &ptr[q->size-p_head], p_next * sizeof(ptr[0]));
 	}
 }
 
 static inline void
-__helper_alf_dequeue_load_simple(u32 c_head, u32 p_tail,
+__helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
 				 struct alf_queue *q, void **ptr, const u32 elems)
 {
 	int i, index = c_head;
@@ -98,7 +94,7 @@ __helper_alf_dequeue_load_simple(u32 c_head, u32 p_tail,
 }
 
 static inline void
-__helper_alf_dequeue_load_mask(u32 c_head, u32 p_tail,
+__helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
 			       struct alf_queue *q, void **ptr, const u32 elems)
 {
 	int i, index = c_head;
@@ -109,18 +105,14 @@ __helper_alf_dequeue_load_mask(u32 c_head, u32 p_tail,
 }
 
 static inline void
-__helper_alf_dequeue_load_memcpy(u32 c_head, u32 p_tail,
+__helper_alf_dequeue_load_memcpy(u32 c_head, u32 c_next,
 				 struct alf_queue *q, void **ptr, const u32 elems)
 {
-	// CONTAINS SOME BUG
-	if (p_tail > c_head) {
-		memcpy(ptr, &q->ring[c_head], elems * sizeof(ptr[0]));
+	if (c_next >= c_head) {
+		memcpy(ptr, &q->ring[c_head], (c_next-c_head) * sizeof(ptr[0]));
 	} else {
-		unsigned int dif = min(q->size - c_head, elems);
-
-		if (dif)
-			memcpy(ptr, &q->ring[c_head], dif * sizeof(ptr[0]));
-		memcpy(ptr + dif, &q->ring[0], (p_tail - dif) * sizeof(ptr[0]));
+		memcpy(&ptr[0], &q->ring[c_head], (q->size - c_head) * sizeof(ptr[0]));
+		memcpy(&ptr[q->size-c_head], &q->ring[0], c_next * sizeof(ptr[0]));
 	}
 }
 
@@ -194,7 +186,7 @@ alf_mp_enqueue(const u32 n;
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
 
 	/* STORE the elems into the queue array */
-	__helper_alf_enqueue_store(p_head, c_tail, q, ptr, n);
+	__helper_alf_enqueue_store(p_head, p_next, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
 	/* Wait for other concurrent preceeding enqueues not yet done,
@@ -237,7 +229,7 @@ alf_mc_dequeue(const u32 n;
 	 *   We don't need a smb_rmb() Read-Memory-Barrier here because
 	 *   the above cmpxchg is an implied full Memory-Barrier.
 	 */
-	__helper_alf_dequeue_load(c_head, p_tail,  q, ptr, elems);
+	__helper_alf_dequeue_load(c_head, c_next,  q, ptr, elems);
 
 	/* Archs with weak Memory Ordering need a memory barrier here.
 	 * As the STORE to q->consumer.tail, must happen after the
