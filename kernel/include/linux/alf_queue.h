@@ -41,8 +41,8 @@ void               alf_queue_free(struct alf_queue *q);
  *  1. They can be reused for both "Single" and "Multi" variants
  *  2. Allow us to experiment with (pipeline) optimizations in this area.
  */
-#define __helper_alf_enqueue_store __helper_alf_enqueue_store_unroll
-#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_unroll
+#define __helper_alf_enqueue_store __helper_alf_enqueue_store_mask_less
+#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask_less
 
 /* Only a single of these helpers will survive upstream submission
  */
@@ -93,6 +93,41 @@ __helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
 
 	for (i = 0; i < elems; i++, index++) {
 		ptr[i] = q->ring[index & q->mask];
+	}
+}
+
+static inline void
+__helper_alf_enqueue_store_mask_less(u32 p_head, u32 p_next,
+				struct alf_queue *q, void **ptr, const u32 n)
+{
+	int i, index = p_head & q->mask;
+
+	if (likely((index + n) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		for (i = 0; i < n; i++, index++) {
+			q->ring[index] = ptr[i];
+		}
+	} else {
+		for (i = 0; i < n; i++, index++) {
+			q->ring[index & q->mask] = ptr[i];
+		}
+	}
+}
+static inline void
+__helper_alf_dequeue_load_mask_less(u32 c_head, u32 c_next,
+			       struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i, index = c_head & q->mask;
+
+	if (likely((index + elems) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		for (i = 0; i < elems; i++, index++) {
+			ptr[i] = q->ring[index];
+		}
+	} else {
+		for (i = 0; i < elems; i++, index++) {
+			ptr[i] = q->ring[index & q->mask];
+		}
 	}
 }
 
