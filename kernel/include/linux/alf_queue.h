@@ -41,8 +41,8 @@ void               alf_queue_free(struct alf_queue *q);
  *  1. They can be reused for both "Single" and "Multi" variants
  *  2. Allow us to experiment with (pipeline) optimizations in this area.
  */
-#define __helper_alf_enqueue_store __helper_alf_enqueue_store_mask_less
-#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask_less
+#define __helper_alf_enqueue_store __helper_alf_enqueue_store_unroll
+#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_unroll
 
 /* Only a single of these helpers will survive upstream submission
  */
@@ -135,48 +135,64 @@ static inline void
 __helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
-	int i, index = p_head;
+	int i, index = p_head & q->mask;
 	int iterations = n & ~3UL;
 
-	/* Loop unroll */
-	for (i = 0; i < iterations; i+=4, index+=4) {
-		q->ring[index     & q->mask] = ptr[i];
-		q->ring[(index+1) & q->mask] = ptr[i+1];
-		q->ring[(index+2) & q->mask] = ptr[i+2];
-		q->ring[(index+3) & q->mask] = ptr[i+3];
-	}
-	/* Remainder handled via duff's device fall-through */
-	switch(n & 0x3) {
-	case 3:
-		q->ring[index++ & q->mask] = ptr[i++];
-	case 2:
-		q->ring[index++ & q->mask] = ptr[i++];
-	case 1:
-		q->ring[index++ & q->mask] = ptr[i++];
+	if (likely((index + n) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		/* Loop unroll */
+		for (i = 0; i < iterations; i+=4, index+=4) {
+			q->ring[index  ] = ptr[i];
+			q->ring[index+1] = ptr[i+1];
+			q->ring[index+2] = ptr[i+2];
+			q->ring[index+3] = ptr[i+3];
+		}
+		/* Remainder handled via duff's device fall-through */
+		switch(n & 0x3) {
+		case 3:
+			q->ring[index++] = ptr[i++];
+		case 2:
+			q->ring[index++] = ptr[i++];
+		case 1:
+			q->ring[index++] = ptr[i++];
+		}
+	} else {
+		/* Fall-back to "mask" version */
+		for (i = 0; i < n; i++, index++) {
+			q->ring[index & q->mask] = ptr[i];
+		}
 	}
 }
 static inline void
 __helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
 			       struct alf_queue *q, void **ptr, const u32 elems)
 {
-	int i, index = c_head;
+	int i, index = c_head & q->mask;
 	int iterations = elems & ~3UL;
 
-	/* Loop unroll */
-	for (i = 0; i < iterations; i+=4, index+=4) {
-		ptr[i]   = q->ring[index     & q->mask];
-		ptr[i+1] = q->ring[(index+1) & q->mask];
-		ptr[i+2] = q->ring[(index+2) & q->mask];
-		ptr[i+3] = q->ring[(index+3) & q->mask];
-	}
-	/* Remainder handled via duff's device fall-through */
-	switch(elems & 0x3) {
-	case 3:
-		ptr[i++] = q->ring[index++ & q->mask];
-	case 2:
-		ptr[i++] = q->ring[index++ & q->mask];
-	case 1:
-		ptr[i++] = q->ring[index++ & q->mask];
+	if (likely((index + elems) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		/* Loop unroll */
+		for (i = 0; i < iterations; i+=4, index+=4) {
+			ptr[i]   = q->ring[index  ];
+			ptr[i+1] = q->ring[index+1];
+			ptr[i+2] = q->ring[index+2];
+			ptr[i+3] = q->ring[index+3];
+		}
+		/* Remainder handled via duff's device fall-through */
+		switch(elems & 0x3) {
+		case 3:
+			ptr[i++] = q->ring[index++];
+		case 2:
+			ptr[i++] = q->ring[index++];
+		case 1:
+			ptr[i++] = q->ring[index++];
+		}
+	} else {
+		/* Fall-back to "mask" version */
+		for (i = 0; i < elems; i++, index++) {
+			ptr[i] = q->ring[index & q->mask];
+		}
 	}
 }
 
