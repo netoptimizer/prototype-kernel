@@ -122,6 +122,55 @@ fail:
 	return -1;
 }
 
+static int time_BULK_enqueue_dequeue(
+	struct time_bench_record *rec, void *data)
+{
+#define MAX_BULK 32
+	int *objs[MAX_BULK];
+	int *deq_objs[MAX_BULK];
+	int i;
+	uint64_t loops_cnt = 0;
+	int bulk = rec->step;
+	struct alf_queue* queue = (struct alf_queue*)data;
+
+	if (queue == NULL) {
+		pr_err("Need alf_queue as input\n");
+		return -1;
+	}
+	if (bulk > MAX_BULK) {
+		pr_warn("%s() bulk(%d) request too big cap at %d\n",
+			__func__, bulk, MAX_BULK);
+		bulk = MAX_BULK;
+	}
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * bulk *2) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+	/* fake init pointers to a number */
+	for (i = 0; i < MAX_BULK; i++)
+		objs[i] = (void *)(unsigned long)(i+20);
+
+	time_bench_start(rec);
+
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		if (alf_mp_enqueue(queue, (void**)objs, bulk) < 0)
+			goto fail;
+		loops_cnt += bulk;
+		barrier(); /* compiler barrier */
+		if (alf_mc_dequeue(queue, (void **)deq_objs, bulk) < 0)
+			goto fail;
+		loops_cnt +=bulk;
+	}
+
+	time_bench_stop(rec, loops_cnt);
+
+	return loops_cnt;
+fail:
+	return -1;
+}
+
 
 
 int run_benchmark_tests(void)
@@ -146,6 +195,18 @@ int run_benchmark_tests(void)
 	/* 13.576 ns cost when touching more of the array  */
 	time_bench_loop(loops/100, 128, "ALF-multi", MPMC,
 			time_multi_enqueue_dequeue);
+
+	time_bench_loop(loops,  2, "ALF-bulk2", MPMC,
+			time_BULK_enqueue_dequeue);
+	time_bench_loop(loops,  4, "ALF-bulk4", MPMC,
+			time_BULK_enqueue_dequeue);
+	time_bench_loop(loops,  6, "ALF-bulk6", MPMC,
+			time_BULK_enqueue_dequeue);
+	time_bench_loop(loops,  8, "ALF-bulk8", MPMC,
+			time_BULK_enqueue_dequeue);
+	time_bench_loop(loops, 16, "ALF-bulk16", MPMC,
+			time_BULK_enqueue_dequeue);
+
 
 	alf_queue_free(MPMC);
 	return passed_count;
