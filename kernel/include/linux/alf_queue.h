@@ -44,14 +44,32 @@ void               alf_queue_free(struct alf_queue *q);
 #define __helper_alf_enqueue_store __helper_alf_enqueue_store_mask
 #define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask
 
+/* Only a single of these helpers will survive upstream submission
+ */
+
 static inline void
 __helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
 	int i, index = p_head;
 
+	/* Basic idea is to save masked "AND-op" in exchange with
+	 * branch-op for checking explicit for wrap
+	 */
 	for (i = 0; i < n; i++, index++) {
 		q->ring[index] = ptr[i];
+		if (index == q->size) /* handle array wrap */
+			index = 0;
+	}
+}
+static inline void
+__helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
+				 struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i, index = c_head;
+
+	for (i = 0; i < elems; i++, index++) {
+		ptr[i] = q->ring[index];
 		if (index == q->size) /* handle array wrap */
 			index = 0;
 	}
@@ -67,6 +85,16 @@ __helper_alf_enqueue_store_mask(u32 p_head, u32 p_next,
 		q->ring[index & q->mask] = ptr[i];
 	}
 }
+static inline void
+__helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
+			       struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i, index = c_head;
+
+	for (i = 0; i < elems; i++, index++) {
+		ptr[i] = q->ring[index & q->mask];
+	}
+}
 
 static inline void
 __helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
@@ -79,31 +107,6 @@ __helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
 		memcpy(&q->ring[0], &ptr[q->size-p_head], p_next * sizeof(ptr[0]));
 	}
 }
-
-static inline void
-__helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
-				 struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, index = c_head;
-
-	for (i = 0; i < elems; i++, index++) {
-		ptr[i] = q->ring[index];
-		if (index == q->size) /* handle array wrap */
-			index = 0;
-	}
-}
-
-static inline void
-__helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, index = c_head;
-
-	for (i = 0; i < elems; i++, index++) {
-		ptr[i] = q->ring[index & q->mask];
-	}
-}
-
 static inline void
 __helper_alf_dequeue_load_memcpy(u32 c_head, u32 c_next,
 				 struct alf_queue *q, void **ptr, const u32 elems)
