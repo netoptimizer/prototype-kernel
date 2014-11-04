@@ -147,14 +147,19 @@ __helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
 			q->ring[index+2] = ptr[i+2];
 			q->ring[index+3] = ptr[i+3];
 		}
-		/* Remainder handled via duff's device fall-through */
+		/* Remainder handling */
 		switch(n & 0x3) {
 		case 3:
-			q->ring[index++] = ptr[i++];
+			q->ring[index  ] = ptr[i];
+			q->ring[index+1] = ptr[i+1];
+			q->ring[index+2] = ptr[i+2];
+			break;
 		case 2:
-			q->ring[index++] = ptr[i++];
+			q->ring[index  ] = ptr[i];
+			q->ring[index+1] = ptr[i+1];
+			break;
 		case 1:
-			q->ring[index++] = ptr[i++];
+			q->ring[index  ] = ptr[i];
 		}
 	} else {
 		/* Fall-back to "mask" version */
@@ -179,14 +184,19 @@ __helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
 			ptr[i+2] = q->ring[index+2];
 			ptr[i+3] = q->ring[index+3];
 		}
-		/* Remainder handled via duff's device fall-through */
+		/* Remainder handling */
 		switch(elems & 0x3) {
 		case 3:
-			ptr[i++] = q->ring[index++];
+			ptr[i]   = q->ring[index  ];
+			ptr[i+1] = q->ring[index+1];
+			ptr[i+2] = q->ring[index+2];
+			break;
 		case 2:
-			ptr[i++] = q->ring[index++];
+			ptr[i]   = q->ring[index  ];
+			ptr[i+1] = q->ring[index+1];
+			break;
 		case 1:
-			ptr[i++] = q->ring[index++];
+			ptr[i]   = q->ring[index];
 		}
 	} else {
 		/* Fall-back to "mask" version */
