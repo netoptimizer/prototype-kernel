@@ -41,8 +41,8 @@ void               alf_queue_free(struct alf_queue *q);
  *  1. They can be reused for both "Single" and "Multi" variants
  *  2. Allow us to experiment with (pipeline) optimizations in this area.
  */
-#define __helper_alf_enqueue_store __helper_alf_enqueue_store_mask
-#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_mask
+#define __helper_alf_enqueue_store __helper_alf_enqueue_store_simple
+#define __helper_alf_dequeue_load  __helper_alf_dequeue_load_simple
 
 /* Only a single of these helpers will survive upstream submission
  */
@@ -58,7 +58,7 @@ __helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
 	 */
 	for (i = 0; i < n; i++, index++) {
 		q->ring[index] = ptr[i];
-		if (index == q->size) /* handle array wrap */
+		if (unlikely(index == q->size)) /* handle array wrap */
 			index = 0;
 	}
 }
@@ -70,7 +70,7 @@ __helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
 
 	for (i = 0; i < elems; i++, index++) {
 		ptr[i] = q->ring[index];
-		if (index == q->size) /* handle array wrap */
+		if (unlikely(index == q->size)) /* handle array wrap */
 			index = 0;
 	}
 }
