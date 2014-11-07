@@ -8,6 +8,7 @@
 #include <linux/time.h>
 #include <linux/time_bench.h>
 #include <linux/spinlock.h>
+#include <linux/mm.h>
 
 static int verbose=1;
 
@@ -165,6 +166,24 @@ static int time_func_ptr(
 	return loops_cnt;
 }
 
+static int time_page_alloc(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	struct page *my_page;
+	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		my_page = alloc_page(gfp_mask);
+		if (unlikely(my_page == NULL))
+			return 0;
+		put_page(my_page);
+	}
+	time_bench_stop(rec, i);
+	return i;
+}
 
 int run_timing_tests(void)
 {
@@ -203,6 +222,10 @@ int run_timing_tests(void)
 	/*  2.503 ns cost for a function pointer invocation */
 	time_bench_loop(loops, 0, "func_ptr_call_cost",
 			NULL, time_func_ptr);
+
+	/*  Approx 150 ns cost for alloc_page()+put_page() */
+	time_bench_loop(loops/100, 0, "page_alloc_put",
+			NULL, time_page_alloc);
 	return 0;
 }
 
