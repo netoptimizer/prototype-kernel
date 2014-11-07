@@ -118,10 +118,13 @@ static noinline int alf_producer_thread(void *arg)
 
 		cnt = alf_run_producer(mpmc, me);
 
-		if (verbose >= 2)
+		if (verbose >= 2) {
+			preempt_disable();
 			pr_info("Producer(%u) enq:%u cpu:%d sleep %d secs\n",
-				me->data.id, cnt,  smp_processor_id(),
+				me->data.id, cnt, smp_processor_id(),
 				SLEEP_TIME_ENQ);
+			preempt_enable();
+		}
 
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(HZ * SLEEP_TIME_ENQ);
@@ -207,11 +210,15 @@ static int alf_consumer_thread(void *arg)
 	unsigned int cnt;
 	int min_bench_cnt = 5000; /* Shold be > QUEUE_SIZE */
 	struct time_bench_record rec;
+	int cpu;
 
 	while (!kthread_should_stop()) {
 
 		cnt = alf_run_consumer(mpmc, me, &rec);
 
+		preempt_disable();
+		cpu = smp_processor_id();
+		preempt_enable();
 		/* In case cnt is larger than queue size, congestion
 		 * occured and concurrent enqueuers and deqeue have
 		 * been running.
@@ -219,13 +226,13 @@ static int alf_consumer_thread(void *arg)
 		if (cnt > min_bench_cnt) {
 			if (verbose >= 1)
 				pr_info("High dequeue cnt:%u cpu:%d\n",
-					cnt, smp_processor_id());
+					cnt, cpu);
 			bench_calc(&rec);
 		}
 		if (verbose >= 2)
 			pr_info("Consumer(%u) deq:%u cpu:%d sleep %d secs"
 				" qsz:%d\n" ,
-				me->id, cnt, smp_processor_id(), SLEEP_TIME_DEQ,
+				me->id, cnt, cpu, SLEEP_TIME_DEQ,
 				alf_queue_count(mpmc));
 		set_current_state(TASK_INTERRUPTIBLE);
 		schedule_timeout(HZ * SLEEP_TIME_DEQ);
