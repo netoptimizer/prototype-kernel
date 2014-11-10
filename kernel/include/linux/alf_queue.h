@@ -266,9 +266,9 @@ alf_queue_avail_space(struct alf_queue *q)
 	/* The max avail space is (q->size-1) because the empty state
 	 * is when (consumer == producer)
 	 */
-	space = (c_tail - p_head - 1) & q->mask;
+	space = (q->mask + c_tail - p_head) & q->mask;
 	/* Same as: */
-	// space = (q->mask + c_tail - p_head) & q->mask;
+	// space = (c_tail - p_head - 1) & q->mask;
 	return space;
 }
 
@@ -290,7 +290,7 @@ alf_mp_enqueue(const u32 n;
 		p_head = ACCESS_ONCE(q->producer.head);
 		c_tail = ACCESS_ONCE(q->consumer.tail);
 
-		space = (c_tail - p_head - 1) & mask;
+		space = (q->mask + c_tail - p_head) & mask;
 		if (n > space)
 			return -ENOBUFS;
 
