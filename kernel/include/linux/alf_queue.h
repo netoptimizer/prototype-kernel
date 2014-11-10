@@ -135,8 +135,8 @@ static inline void
 __helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
-	int i, index = p_head & q->mask;
-	int iterations = n & ~3UL;
+	int i, iterations = n & ~3UL;
+	u32 index = p_head & q->mask;
 
 	if (likely((index + n) <= q->mask)) {
 		/* Can save masked-AND knowing we cannot wrap */
@@ -172,8 +172,8 @@ static inline void
 __helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
 			       struct alf_queue *q, void **ptr, const u32 elems)
 {
-	int i, index = c_head & q->mask;
-	int iterations = elems & ~3UL;
+	int i, iterations = elems & ~3UL;
+	u32 index = c_head & q->mask;
 
 	if (likely((index + elems) <= q->mask)) {
 		/* Can save masked-AND knowing we cannot wrap */
