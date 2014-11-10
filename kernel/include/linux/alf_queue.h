@@ -51,7 +51,7 @@ static inline void
 __helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
-	int i, index = p_head;
+	int i, index = p_head & q->mask;
 
 	/* Basic idea is to save masked "AND-op" in exchange with
 	 * branch-op for checking explicit for wrap
@@ -66,7 +66,7 @@ static inline void
 __helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
 				 struct alf_queue *q, void **ptr, const u32 elems)
 {
-	int i, index = c_head;
+	int i, index = c_head & q->mask;
 
 	for (i = 0; i < elems; i++, index++) {
 		ptr[i] = q->ring[index];
@@ -210,6 +210,8 @@ static inline void
 __helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {
+	p_head &= q->mask;
+	p_next &= q->mask;
 	if (p_next >= p_head) {
 		memcpy(&q->ring[p_head], ptr, (p_next-p_head) * sizeof(ptr[0]));
 	} else {
@@ -221,6 +223,8 @@ static inline void
 __helper_alf_dequeue_load_memcpy(u32 c_head, u32 c_next,
 				 struct alf_queue *q, void **ptr, const u32 elems)
 {
+	c_head &= q->mask;
+	c_next &= q->mask;
 	if (c_next >= c_head) {
 		memcpy(ptr, &q->ring[c_head], (c_next-c_head) * sizeof(ptr[0]));
 	} else {
@@ -252,7 +256,13 @@ alf_queue_count(struct alf_queue *q)
 	u32 p_tail = ACCESS_ONCE(q->producer.tail);
 	u32 elems;
 
-	elems = (p_tail - c_head) & q->mask;
+	/* Due to u32 arithmetic the values are implicitly
+	 * masked/modulo 32-bit, thus saving one mask operation
+	 */
+	elems = p_tail - c_head;
+	/* Thus, same as:
+	 *  elems = (p_tail - c_head) & q->mask;
+	 */
 	return elems;
 }
 
@@ -266,9 +276,14 @@ alf_queue_avail_space(struct alf_queue *q)
 	/* The max avail space is (q->size-1) because the empty state
 	 * is when (consumer == producer)
 	 */
-	space = (q->mask + c_tail - p_head) & q->mask;
-	/* Same as: */
-	// space = (c_tail - p_head - 1) & q->mask;
+
+	/* Due to u32 arithmetic the values are implicitly
+	 * masked/modulo 32-bit, thus saving one mask operation
+	 */
+	space = q->mask + c_tail - p_head;
+	/* Thus, same as:
+	 *  space = (q->mask + c_tail - p_head) & q->mask;
+	 */
 	return space;
 }
 
@@ -290,11 +305,11 @@ alf_mp_enqueue(const u32 n;
 		p_head = ACCESS_ONCE(q->producer.head);
 		c_tail = ACCESS_ONCE(q->consumer.tail);
 
-		space = (q->mask + c_tail - p_head) & mask;
+		space = mask + c_tail - p_head;
 		if (n > space)
 			return -ENOBUFS;
 
-		p_next = (p_head + n) & mask;
+		p_next = p_head + n;
 	}
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
 
@@ -320,21 +335,20 @@ alf_mc_dequeue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)
 {
 	u32 c_head, c_next, p_tail, elems;
-	u32 mask = q->mask;
 
 	/* Reserve part of the array for dequeue LOAD/READ */
 	do {
 		c_head = ACCESS_ONCE(q->consumer.head);
 		p_tail = ACCESS_ONCE(q->producer.tail);
 
-		elems = (p_tail - c_head) & mask;
+		elems = p_tail - c_head;
 
 		if (elems == 0)
 			return 0;
 		else
 			elems = min(elems, n);
 
-		c_next = (c_head + elems) & mask;
+		c_next = c_head + elems;
 	}
 	while (unlikely(cmpxchg(&q->consumer.head, c_head, c_next) != c_head));
 
