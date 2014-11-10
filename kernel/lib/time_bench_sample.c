@@ -196,6 +196,7 @@ int run_timing_tests(void)
 			NULL, time_bench_for_loop);
 
 	/* Cost for spin_lock+spin_unlock
+	 * 13.946 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=n
 	 * 16.449 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
 	 * 16.449 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y
 	 * 22.177 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
@@ -204,6 +205,7 @@ int run_timing_tests(void)
 			NULL, time_lock_unlock);
 
 	/* Cost for local_bh_{disable,enable}
+	 *  7.387 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=n
 	 *  7.459 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
 	 *  7.462 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y
 	 * 21.691 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
@@ -220,6 +222,7 @@ int run_timing_tests(void)
 			NULL, time_local_irq_save);
 
 	/* Cost for preempt_{disable,enable}:
+	 *   0.360 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=n
 	 *   4.291 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
 	 *   4.291 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
 	 *  12.294 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
