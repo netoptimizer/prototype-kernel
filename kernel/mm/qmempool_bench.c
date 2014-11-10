@@ -219,7 +219,8 @@ bool run_micro_benchmark_tests(void)
 	pr_info("Measured cost of doing alloc+free:\n");
 
 	/* Results:
-	 *  19.313 ns with SLUB
+	 *  19.313 ns with SLUB  CONFIG_PREEMPT=n
+	 *  20.756 ns with SLUB  CONFIG_PREEMPT=y
 	 */
 	time_bench_loop(loops*30, 0, "kmem fastpath reuse", NULL,
 			benchmark_kmem_cache_fastpath_reuse);
@@ -233,7 +234,8 @@ bool run_micro_benchmark_tests(void)
 	pr_info("N-pattern with %d elements\n", ARRAY_MAX_ELEMS);
 
 	/* Results:
-	 *  37.570 ns N=256 with SLUB
+	 *  37.570 ns N=256 with SLUB  CONFIG_PREEMPT=n
+	 *  39.364 ns N=256 with SLUB  CONFIG_PREEMPT=y
 	 */
 	time_bench_loop(loops/10, 0, "kmem alloc+free N-pattern", NULL,
 			benchmark_kmem_cache_pattern);

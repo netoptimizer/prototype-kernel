@@ -264,6 +264,11 @@ static int __init time_bench_module_init(void)
 {
 	if (verbose)
 		pr_info("Loaded\n");
+
+#ifdef CONFIG_DEBUG_PREEMPT
+	pr_warn("WARN: CONFIG_DEBUG_PREEMPT is enabled: this affect results\n");
+#endif
+
 	return 0;
 }
 module_init(time_bench_module_init);

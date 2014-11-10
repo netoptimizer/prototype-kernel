@@ -195,11 +195,19 @@ int run_timing_tests(void)
 	time_bench_loop(loops*10, 0, "for_loop", /*  0.360 ns */
 			NULL, time_bench_for_loop);
 
-	/* 16.449 ns cost for spin_lock+spin_unlock */
+	/* Cost for spin_lock+spin_unlock
+	 * 16.449 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
+	 * 16.449 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y
+	 * 22.177 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
+	 */
 	time_bench_loop(loops, 0, "spin_lock_unlock",
 			NULL, time_lock_unlock);
 
-	/*  7.459 ns cost for local_bh_{disable,enable} */
+	/* Cost for local_bh_{disable,enable}
+	 *  7.459 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
+	 *  7.462 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y
+	 * 21.691 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
+	 */
 	time_bench_loop(loops, 0, "local_BH_disable_enable",
 			NULL, time_local_bh);
 
@@ -211,7 +219,11 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "local_irq_save_restore",
 			NULL, time_local_irq_save);
 
-	/*  4.291 ns cost for preempt_{disable,enable} */
+	/* Cost for preempt_{disable,enable}:
+	 *   4.291 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
+	 *   4.291 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=y
+	 *  12.294 ns with CONFIG_PREEMPT=y PREEMPT_COUNT=y DEBUG_PREEMPT=y
+	 */
 	time_bench_loop(loops, 0, "preempt_disable_enable",
 			NULL, time_preempt);
 
@@ -223,7 +235,7 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "func_ptr_call_cost",
 			NULL, time_func_ptr);
 
-	/*  Approx 150 ns cost for alloc_page()+put_page() */
+	/*  Approx 141.488 ns cost for alloc_page()+put_page() */
 	time_bench_loop(loops/100, 0, "page_alloc_put",
 			NULL, time_page_alloc);
 	return 0;
@@ -234,6 +246,9 @@ static int __init time_bench_sample_module_init(void)
 	if (verbose)
 		pr_info("Loaded\n");
 
+#ifdef CONFIG_DEBUG_PREEMPT
+	pr_warn("WARN: CONFIG_DEBUG_PREEMPT is enabled: this affect results\n");
+#endif
 	if (run_timing_tests() < 0) {
 		return -ECANCELED;
 	}
