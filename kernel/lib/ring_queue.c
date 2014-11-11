@@ -228,14 +228,6 @@ static void __exit ring_queue_exit(void)
 }
 module_exit(ring_queue_exit);
 
-
-// Dummy EXPORT_SYMBOL func for testing overhead of call
-unsigned int ring_queue_fake_test(unsigned int count)
-{
-	return count;
-}
-EXPORT_SYMBOL(ring_queue_fake_test);
-
 MODULE_DESCRIPTION("Producer/Consumer ring based queue");
 MODULE_AUTHOR("Jesper Dangaard Brouer");
 MODULE_LICENSE("Dual BSD/GPL");

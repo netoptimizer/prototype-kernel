@@ -110,8 +110,6 @@
 #include <linux/compiler.h> /* barrier() */
 #include <linux/percpu.h>
 
-unsigned int ring_queue_fake_test(unsigned int count);
-
 // Need 32-bit version of cmpxchg()
 //  __cmpxchg(ptr, old, new, sizeof(u32))
 //  perhaps normal cmpxchg already handles this correctly...

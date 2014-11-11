@@ -148,7 +148,6 @@ struct func_ptr_ops {
 };
 static struct func_ptr_ops my_func_ptr __read_mostly = {
 	.func  = measured_function,
-	//.func2 = ring_queue_fake_test,
 };
 static int time_func_ptr(
 	struct time_bench_record *rec, void *data)

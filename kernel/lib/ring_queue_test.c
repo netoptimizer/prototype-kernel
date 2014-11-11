@@ -211,89 +211,6 @@ static int time_bench_for_loop(
 	return loops_cnt;
 }
 
-static int time_export_call_simple(
-	struct time_bench_record *rec, void *data)
-{
-	int i;
-	uint64_t loops_cnt = 0;
-	unsigned int tmp;
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-			tmp = ring_queue_fake_test(42);
-			loops_cnt++;
-	}
-	time_bench_stop(rec, loops_cnt);
-	return loops_cnt;
-}
-
-static int time_export_call(
-	struct time_bench_record *rec, void *data)
-{
-	int i, n;
-	uint64_t loops_cnt = 0;
-	unsigned int tmp;
-	int bulk = rec->step;
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		for (n = 0; n < bulk; n++) {
-			tmp = ring_queue_fake_test(42);
-			loops_cnt++;
-		}
-	}
-	time_bench_stop(rec, loops_cnt);
-	return loops_cnt;
-}
-
-static int time_export_call2(
-	struct time_bench_record *rec, void *data)
-{
-#define PIPELINE 4
-	int i, n;
-	uint64_t loops_cnt = 0;
-	unsigned int tmp;
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		for (n = 0; n < PIPELINE; n++) {
-			tmp = ring_queue_fake_test(42);
-			loops_cnt++;
-		}
-	}
-	time_bench_stop(rec, loops_cnt);
-	return loops_cnt;
-}
-
-static int time_export_call3(
-	struct time_bench_record *rec, void *data)
-{
-	int i;
-	uint64_t loops_cnt = 0;
-
-	time_bench_start(rec);
-
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		// Loop unrolled x4
-		ring_queue_fake_test(42);
-		loops_cnt++;
-		ring_queue_fake_test(42);
-		loops_cnt++;
-		ring_queue_fake_test(42);
-		loops_cnt++;
-		ring_queue_fake_test(42);
-		loops_cnt++;
-	}
-
-	time_bench_stop(rec, loops_cnt);
-
-	return loops_cnt;
-}
-
 /* Fake function ptr construct */
 unsigned int my_func(void *data, u16 q)
 {
@@ -304,11 +221,9 @@ unsigned int my_func(void *data, u16 q)
 }
 struct func_ptr_ops {
 	unsigned int (*func)(void *data, u16 q);
-	unsigned int (*func2)(unsigned int count);
 };
 static struct func_ptr_ops my_func_ptr __read_mostly = {
 	.func  = my_func,
-	.func2 = ring_queue_fake_test,
 };
 static int time_call_func_ptr(struct time_bench_record *rec, void *data)
 {
@@ -320,9 +235,7 @@ static int time_call_func_ptr(struct time_bench_record *rec, void *data)
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
-		//tmp = my_func_ptr.func(&tmp2);
 		tmp =func_ptr->func(&tmp2, 1);
-		//tmp =func_ptr->func2(1);
 		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
@@ -520,9 +433,6 @@ static int time_multi_enqueue_dequeue(
 fail:
 	return -1;
 }
-
-
-
 
 /** measuring doubly linked list **/
 
@@ -821,18 +731,6 @@ int run_timing_tests(void)
 	uint32_t loops = 10000000;
 
 	time_bench_loop(loops*1000, 0, "for_loop", NULL, time_bench_for_loop);
-
-//	time_bench_for_loop(loops*100, 0, "export_call_overhead", NULL,
-//			    time_export_call);
-
-	time_bench_loop(loops*10, 0, "export_call_overhead_simple", NULL,
-			time_export_call_simple);
-	time_bench_loop(loops, 8, "export_call_overhead", NULL,
-			time_export_call);
-	time_bench_loop(loops/10, 0, "export_call_overhead2", NULL,
-			time_export_call2);
-	time_bench_loop(loops/10, 0, "export_call_overhead3", NULL,
-			time_export_call3);
 
 	time_bench_loop(loops*20, 0, "time_call_func_ptr", NULL,
 			time_call_func_ptr);
