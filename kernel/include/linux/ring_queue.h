@@ -280,7 +280,7 @@ int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
  *   if behavior = RING_QUEUE_VARIABLE
  *   - n: Actual number of objects enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 			 unsigned n, enum ring_queue_queue_behavior behavior)
 {
@@ -369,7 +369,7 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
  *   if behavior = RING_QUEUE_VARIABLE
  *   - n: Actual number of objects enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 			 unsigned n, enum ring_queue_queue_behavior behavior)
 {
@@ -449,7 +449,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
  *   - n: Actual number of objects dequeued.
  */
 
-static inline int __attribute__((always_inline))
+static inline int
 __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		 unsigned n, enum ring_queue_queue_behavior behavior)
 {
@@ -533,7 +533,7 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
  *   if behavior = RING_QUEUE_VARIABLE
  *   - n: Actual number of objects dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 		 unsigned n, enum ring_queue_queue_behavior behavior)
 {
@@ -593,7 +593,7 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue, no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mp_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
 			 unsigned n)
 {
@@ -615,7 +615,7 @@ ring_queue_mp_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sp_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
 			 unsigned n)
 {
@@ -641,7 +641,7 @@ ring_queue_sp_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
 		      unsigned n)
 {
@@ -667,7 +667,7 @@ ring_queue_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mp_enqueue(struct ring_queue *r, void *obj)
 {
 	return ring_queue_mp_enqueue_bulk(r, &obj, 1);
@@ -686,7 +686,7 @@ ring_queue_mp_enqueue(struct ring_queue *r, void *obj)
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sp_enqueue(struct ring_queue *r, void *obj)
 {
 	return ring_queue_sp_enqueue_bulk(r, &obj, 1);
@@ -709,7 +709,7 @@ ring_queue_sp_enqueue(struct ring_queue *r, void *obj)
  *     high water mark is exceeded.
  *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_enqueue(struct ring_queue *r, void *obj)
 {
 	if (r->prod.sp_enqueue)
@@ -735,7 +735,7 @@ ring_queue_enqueue(struct ring_queue *r, void *obj)
  *   - -ENOENT: Not enough entries in the ring to dequeue; no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mc_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_mc_do_dequeue(r, obj_table, n, RING_QUEUE_FIXED);
@@ -756,7 +756,7 @@ ring_queue_mc_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
  *   - -ENOENT: Not enough entries in the ring to dequeue; no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sc_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_sc_do_dequeue(r, obj_table, n, RING_QUEUE_FIXED);
@@ -780,7 +780,7 @@ ring_queue_sc_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
  *   - -ENOENT: Not enough entries in the ring to dequeue, no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	if (r->cons.sc_dequeue)
@@ -804,7 +804,7 @@ ring_queue_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
  *   - -ENOENT: Not enough entries in the ring to dequeue; no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mc_dequeue(struct ring_queue *r, void **obj_p)
 {
 	return ring_queue_mc_dequeue_bulk(r, obj_p, 1);
@@ -822,7 +822,7 @@ ring_queue_mc_dequeue(struct ring_queue *r, void **obj_p)
  *   - -ENOENT: Not enough entries in the ring to dequeue, no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sc_dequeue(struct ring_queue *r, void **obj_p)
 {
 	return ring_queue_sc_dequeue_bulk(r, obj_p, 1);
@@ -844,7 +844,7 @@ ring_queue_sc_dequeue(struct ring_queue *r, void **obj_p)
  *   - -ENOENT: Not enough entries in the ring to dequeue, no object is
  *     dequeued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_dequeue(struct ring_queue *r, void **obj_p)
 {
 	if (r->cons.sc_dequeue)
@@ -931,21 +931,21 @@ ring_queue_free_count(const struct ring_queue *r)
  * space, still enqueue element but only as many as possible. Returns
  * the actual number of objects enqueued.
  */
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 			 unsigned n)
 {
 	return __ring_queue_mp_do_enqueue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 			 unsigned n)
 {
 	return __ring_queue_sp_do_enqueue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 		      unsigned n)
 {
@@ -955,19 +955,19 @@ ring_queue_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 		return ring_queue_mp_enqueue_burst(r, obj_table, n);
 }
 
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_mc_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_mc_do_dequeue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_sc_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_sc_do_dequeue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-static inline int __attribute__((always_inline))
+static inline int
 ring_queue_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	if (r->cons.sc_dequeue)
