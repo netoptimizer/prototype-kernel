@@ -980,20 +980,17 @@ ring_queue_free_count(const struct ring_queue *r)
 	return ((cons_tail - prod_tail - 1) & r->prod.mask);
 }
 
-/**
- * Enqueue several objects on the ring (multi-producers safe).
+
+/* The "*_burst" variants below uses RING_QUEUE_VARIABLE variant.
+ * Meaning:
  *
- * This function uses a "compare and set" instruction to move the
- * producer index atomically.
+ * On dequeue: when the request objects are more than the available
+ * objects, only dequeue the actual number of objects, and return the
+ * number of objects dequeued.
  *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @return
- *   - n: Actual number of objects enqueued.
+ * On enqueue: when number of enqueued elements is larger than avail
+ * space, still enqueue element but only as many as possible. Returns
+ * the actual number of objects enqueued.
  */
 static inline int __attribute__((always_inline))
 ring_queue_mp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
@@ -1002,18 +999,6 @@ ring_queue_mp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 	return __ring_queue_mp_do_enqueue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-/**
- * Enqueue several objects on a ring (NOT multi-producers safe).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @return
- *   - n: Actual number of objects enqueued.
- */
 static inline int __attribute__((always_inline))
 ring_queue_sp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 			 unsigned n)
@@ -1021,22 +1006,6 @@ ring_queue_sp_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 	return __ring_queue_sp_do_enqueue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-/**
- * Enqueue several objects on a ring.
- *
- * This function calls the multi-producer or the single-producer
- * version depending on the default behavior that was specified at
- * ring creation time (see flags).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @return
- *   - n: Actual number of objects enqueued.
- */
 static inline int __attribute__((always_inline))
 ring_queue_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 		      unsigned n)
@@ -1047,65 +1016,18 @@ ring_queue_enqueue_burst(struct ring_queue *r, void * const *obj_table,
 		return ring_queue_mp_enqueue_burst(r, obj_table, n);
 }
 
-/**
- * Dequeue several objects from a ring (multi-consumers safe). When the request
- * objects are more than the available objects, only dequeue the actual number
- * of objects
- *
- * This function uses a "compare and set" instruction to move the
- * consumer index atomically.
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @return
- *   - n: Actual number of objects dequeued, 0 if ring is empty
- */
 static inline int __attribute__((always_inline))
 ring_queue_mc_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_mc_do_dequeue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-/**
- * Dequeue several objects from a ring (NOT multi-consumers safe).When the
- * request objects are more than the available objects, only dequeue the
- * actual number of objects
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @return
- *   - n: Actual number of objects dequeued, 0 if ring is empty
- */
 static inline int __attribute__((always_inline))
 ring_queue_sc_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
 	return __ring_queue_sc_do_dequeue(r, obj_table, n, RING_QUEUE_VARIABLE);
 }
 
-/**
- * Dequeue multiple objects from a ring up to a maximum number.
- *
- * This function calls the multi-consumers or the single-consumer
- * version, depending on the default behaviour that was specified at
- * ring creation time (see flags).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @return
- *   - Number of objects dequeued, or a negative error code on error
- */
 static inline int __attribute__((always_inline))
 ring_queue_dequeue_burst(struct ring_queue *r, void **obj_table, unsigned n)
 {
