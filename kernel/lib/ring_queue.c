@@ -105,7 +105,28 @@
 #endif
 #define CACHE_LINE_MASK (CACHE_LINE_SIZE-1) /* Cache line mask */
 
-/* create the ring */
+/* Create/allocate a new ring
+ *
+ * This function allocate memory for the ring. Its size is
+ * set to *count*, which must be a power of two. Water marking is
+ * disabled by default.
+ * Note that the real usable ring size is *count-1* instead of
+ * *count*.
+ *
+ * @param count
+ *   The size of the ring (must be a power of 2).
+ * @param flags
+ *   An OR of the following:
+ *    - RING_F_SP_ENQ: If this flag is set, the default behavior when
+ *      using ``ring_queue_enqueue()`` or ``ring_queue_enqueue_bulk()``
+ *      is "single-producer". Otherwise, it is "multi-producers".
+ *    - RING_F_SC_DEQ: If this flag is set, the default behavior when
+ *      using ``ring_queue_dequeue()`` or ``ring_queue_dequeue_bulk()``
+ *      is "single-consumer". Otherwise, it is "multi-consumers".
+ * @return
+ *   On success, the pointer to the new allocated ring.
+ *   NULL on error
+ */
 struct ring_queue *
 ring_queue_create(unsigned int count, unsigned int flags)
 {
@@ -174,8 +195,9 @@ bool ring_queue_free(struct ring_queue *r)
 EXPORT_SYMBOL(ring_queue_free);
 
 
-/* change the high water mark. If *count* is 0, water marking is
- * disabled
+/* Change the high water mark. If *count* is 0, water marking is
+ * disabled. The *count* value must be greater than 0 and less
+ * than the ring size.
  */
 int
 ring_queue_set_water_mark(struct ring_queue *r, unsigned count)

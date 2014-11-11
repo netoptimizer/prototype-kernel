@@ -201,60 +201,8 @@ struct ring_queue {
 #define RING_QUEUE_QUOT_EXCEED (1 << 31)  /* Quota exceed for burst ops */
 #define RING_QUEUE_SZ_MASK  (unsigned)(0x0fffffff) /* Ring size mask */
 
-/**
- * Create a new ring named *name* in memory.
- *
- * This function allocate memory for the ring. Its size is
- * set to *count*, which must be a power of two. Water marking is
- * disabled by default.
- * Note that the real usable ring size is *count-1* instead of
- * *count*.
- *
- * @param count
- *   The size of the ring (must be a power of 2).
- * @param flags
- *   An OR of the following:
- *    - RING_F_SP_ENQ: If this flag is set, the default behavior when
- *      using ``ring_queue_enqueue()`` or ``ring_queue_enqueue_bulk()``
- *      is "single-producer". Otherwise, it is "multi-producers".
- *    - RING_F_SC_DEQ: If this flag is set, the default behavior when
- *      using ``ring_queue_dequeue()`` or ``ring_queue_dequeue_bulk()``
- *      is "single-consumer". Otherwise, it is "multi-consumers".
- * @return
- *   On success, the pointer to the new allocated ring. NULL on error
- * FIXME not-true: perhaps use PTR_ERR return values?
- *    - EINVAL - count provided is not a power of 2
- *    - ENOMEM - no memory avail
- */
-struct ring_queue *
-ring_queue_create(unsigned int count, unsigned int flags);
-
-/**
- * Free memory allocated to the ring
- *
- * @param r
- *   A pointer to the ring.
- */
+struct ring_queue * ring_queue_create(unsigned int count, unsigned int flags);
 bool ring_queue_free(struct ring_queue *r);
-
-/**
- * Change the high water mark.
- *
- * If *count* is 0, water marking is disabled. Otherwise, it is set to the
- * *count* value. The *count* value must be greater than 0 and less
- * than the ring size.
- *
- * This function can be called at any time (not necessarily at
- * initialization).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param count
- *   The new water mark value.
- * @return
- *   - 0: Success; water mark changed.
- *   - -EINVAL: Invalid water mark value.
- */
 int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
 
 /* the actual enqueue of pointers on the ring.
