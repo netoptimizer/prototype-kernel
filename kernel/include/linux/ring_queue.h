@@ -170,32 +170,32 @@ enum ring_queue_queue_behavior {
  * a problem.
  */
 struct ring_queue {
-	int flags;                       /**< Flags supplied at creation. */
+	int flags;                       /* Flags supplied at creation */
 
-	/** Ring producer status. */
+	/* Ring producer status */
 	struct prod {
-		uint32_t watermark;      /**< Maximum items before EDQUOT. */
-		uint32_t sp_enqueue;     /**< True, if single producer. */
-		uint32_t size;           /**< Size of ring. */
-		uint32_t mask;           /**< Mask (size-1) of ring. */
-		volatile uint32_t head;  /**< Producer head. */
-		volatile uint32_t tail;  /**< Producer tail. */
+		uint32_t watermark;      /* Maximum items before EDQUOT */
+		uint32_t sp_enqueue;     /* True, if single producer */
+		uint32_t size;           /* Size of ring */
+		uint32_t mask;           /* Mask (size-1) of ring */
+		volatile uint32_t head;  /* Producer head */
+		volatile uint32_t tail;  /* Producer tail */
 	} prod ____cacheline_aligned_in_smp;
 
-	/** Ring consumer status. */
+	/* Ring consumer status */
 	struct cons {
-		uint32_t sc_dequeue;     /**< True, if single consumer. */
-		uint32_t size;           /**< Size of the ring. */
-		uint32_t mask;           /**< Mask (size-1) of ring. */
-		volatile uint32_t head;  /**< Consumer head. */
-		volatile uint32_t tail;  /**< Consumer tail. */
+		uint32_t sc_dequeue;     /* True, if single consumer */
+		uint32_t size;           /* Size of the ring */
+		uint32_t mask;           /* Mask (size-1) of ring */
+		volatile uint32_t head;  /* Consumer head */
+		volatile uint32_t tail;  /* Consumer tail */
 #ifdef CONFIG_LIB_RING_QUEUE_SPLIT_PROD_CONS
 	} cons ____cacheline_aligned_in_smp;
 #else
 	} cons;
 #endif
 
-	/**< Memory space of ring starts here.
+	/* Memory space of ring starts here.
 	 * not volatile so need to be careful
 	 * about compiler re-ordering */
 	void *ring[0] ____cacheline_aligned_in_smp;
@@ -203,10 +203,10 @@ struct ring_queue {
 //	void * volatile ring[0] ____cacheline_aligned_in_smp;
 };
 
-#define RING_F_SP_ENQ 0x0001 /**< Flag selects enqueue "single-producer". */
-#define RING_F_SC_DEQ 0x0002 /**< Flag selects dequeue "single-consumer". */
-#define RING_QUEUE_QUOT_EXCEED (1 << 31)  /**< Quota exceed for burst ops */
-#define RING_QUEUE_SZ_MASK  (unsigned)(0x0fffffff) /**< Ring size mask */
+#define RING_F_SP_ENQ 0x0001 /* Flag selects enqueue "single-producer" */
+#define RING_F_SC_DEQ 0x0002 /* Flag selects dequeue "single-consumer" */
+#define RING_QUEUE_QUOT_EXCEED (1 << 31)  /* Quota exceed for burst ops */
+#define RING_QUEUE_SZ_MASK  (unsigned)(0x0fffffff) /* Ring size mask */
 
 /**
  * Create a new ring named *name* in memory.
@@ -398,8 +398,7 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		ret = (behavior == RING_QUEUE_FIXED) ? 0 : n;
 	}
 
-	/*
-	 * If there are other enqueues in progress that preceeded us,
+	/* If there are other enqueues in progress that preceeded us,
 	 * we need to wait for them to complete
 	 */
 	while (unlikely(r->prod.tail != prod_head))
@@ -561,8 +560,7 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	DEQUEUE_PTRS();
 	barrier(); /* compiler barrier */
 
-	/*
-	 * If there are other dequeues in progress that preceded us,
+	/* If there are other dequeues in progress that preceded us,
 	 * we need to wait for them to complete
 	 */
 	while (unlikely(r->cons.tail != cons_head))
