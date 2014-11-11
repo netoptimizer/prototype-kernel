@@ -65,6 +65,10 @@ static struct alf_queue *mpmc;
 #define PRODUCER_BULK	8
 #define CONSUMER_BULK	8
 
+#ifndef U32_MAX
+#define U32_MAX                ((u32)~0U)
+#endif
+
 static noinline unsigned int
 alf_run_producer(struct alf_queue *q, struct my_producer *me)
 {
