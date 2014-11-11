@@ -87,7 +87,6 @@
 #define _LINUX_RING_QUEUE_H
 
 /**
- * @file
  * Ring Queue
  *
  * The Ring Queue is a fixed-size queue, implemented as a table of
@@ -104,12 +103,8 @@
  *
  * Note: the ring implementation is not preemptable. A core must not
  * be interrupted by another task that uses the same ring.
- *
- * FIXME: Add preempt enable/disable, perhaps use???
- *  local_bh_{disable,enable} or do we need preempt_{disable,enable} ???
  */
 
-//#include <linux/kernel.h>
 #include <linux/errno.h>
 #include <asm/processor.h>  /* cpu_relax() */
 #include <linux/compiler.h> /* barrier() */
@@ -199,8 +194,6 @@ struct ring_queue {
 	 * not volatile so need to be careful
 	 * about compiler re-ordering */
 	void *ring[0] ____cacheline_aligned_in_smp;
-// alternative define ring as volatile like:
-//	void * volatile ring[0] ____cacheline_aligned_in_smp;
 };
 
 #define RING_F_SP_ENQ 0x0001 /* Flag selects enqueue "single-producer" */
