@@ -124,12 +124,6 @@ ring_queue_create(unsigned int count, unsigned int flags)
 #endif
 	BUILD_BUG_ON((offsetof(struct ring_queue, prod) &
 		      CACHE_LINE_MASK) != 0);
-#ifdef LIB_RING_QUEUE_DEBUG
-	BUILD_BUG_ON((sizeof(struct ring_queue_debug_stats) &
-		      CACHE_LINE_MASK) != 0);
-	BUILD_BUG_ON((offsetof(struct ring_queue, stats) &
-		      CACHE_LINE_MASK) != 0);
-#endif
 
 	/* count must be a power of 2 */
 	if ((!POWEROF2(count)) || (count > RING_QUEUE_SZ_MASK)) {
@@ -196,60 +190,6 @@ ring_queue_set_water_mark(struct ring_queue *r, unsigned count)
 	r->prod.watermark = count;
 	return 0;
 }
-
-/* dump the status of the ring on the console */
-void
-ring_queue_dump(const struct ring_queue *r)
-{
-#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
-	struct ring_queue_debug_stats sum;
-	unsigned core_id;
-#endif
-
-	pr_info("ring ptr 0x%p\n", r);
-	pr_info("  flags=0x%x\n", r->flags);
-	pr_info("  size=%u\n", r->prod.size);
-	pr_info("  cons.tail=%u\n", r->cons.tail);
-	pr_info("  cons.head=%u\n", r->cons.head);
-	pr_info("  prod.tail=%u\n", r->prod.tail);
-	pr_info("  prod.head=%u\n", r->prod.head);
-	pr_info("  used=%u\n" , ring_queue_count(r));
-	pr_info("  avail=%u\n", ring_queue_free_count(r));
-	if (r->prod.watermark == r->prod.size)
-		pr_info("  watermark=0\n");
-	else
-		pr_info("  watermark=%u\n", r->prod.watermark);
-
-	// sum and dump statistics
-#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
-	memset(&sum, 0, sizeof(sum));
-	for (core_id = 0; core_id < NR_CPUS; core_id++) {
-		sum.enq_success_bulk += r->stats[core_id].enq_success_bulk;
-		sum.enq_success_objs += r->stats[core_id].enq_success_objs;
-		sum.enq_quota_bulk += r->stats[core_id].enq_quota_bulk;
-		sum.enq_quota_objs += r->stats[core_id].enq_quota_objs;
-		sum.enq_fail_bulk += r->stats[core_id].enq_fail_bulk;
-		sum.enq_fail_objs += r->stats[core_id].enq_fail_objs;
-		sum.deq_success_bulk += r->stats[core_id].deq_success_bulk;
-		sum.deq_success_objs += r->stats[core_id].deq_success_objs;
-		sum.deq_fail_bulk += r->stats[core_id].deq_fail_bulk;
-		sum.deq_fail_objs += r->stats[core_id].deq_fail_objs;
-	}
-	pr_info("  enq_success_bulk=%llu\n", sum.enq_success_bulk);
-	pr_info("  enq_success_objs=%llu\n", sum.enq_success_objs);
-	pr_info("  enq_quota_bulk=%llu\n", sum.enq_quota_bulk);
-	pr_info("  enq_quota_objs=%llu\n", sum.enq_quota_objs);
-	pr_info("  enq_fail_bulk=%llu\n", sum.enq_fail_bulk);
-	pr_info("  enq_fail_objs=%llu\n", sum.enq_fail_objs);
-	pr_info("  deq_success_bulk=%llu\n", sum.deq_success_bulk);
-	pr_info("  deq_success_objs=%llu\n", sum.deq_success_objs);
-	pr_info("  deq_fail_bulk=%llu\n", sum.deq_fail_bulk);
-	pr_info("  deq_fail_objs=%llu\n", sum.deq_fail_objs);
-#else
-	pr_info("  no statistics available\n");
-#endif
-}
-EXPORT_SYMBOL(ring_queue_dump);
 
 static int __init ring_queue_init(void)
 {

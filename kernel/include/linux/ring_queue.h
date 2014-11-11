@@ -159,24 +159,6 @@ enum ring_queue_queue_behavior {
 	RING_QUEUE_VARIABLE   /* Enq/Deq as many items a possible from ring */
 };
 
-#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
-/**
- * A structure that stores the ring statistics (per-core).
- */
-struct ring_queue_debug_stats {
-	uint64_t enq_success_bulk; /**< Successful enqueues number. */
-	uint64_t enq_success_objs; /**< Objects successfully enqueued. */
-	uint64_t enq_quota_bulk;   /**< Successful enqueues above watermark. */
-	uint64_t enq_quota_objs;   /**< Objects enqueued above watermark. */
-	uint64_t enq_fail_bulk;    /**< Failed enqueues number. */
-	uint64_t enq_fail_objs;    /**< Objects that failed to be enqueued. */
-	uint64_t deq_success_bulk; /**< Successful dequeues number. */
-	uint64_t deq_success_objs; /**< Objects successfully dequeued. */
-	uint64_t deq_fail_bulk;    /**< Failed dequeues number. */
-	uint64_t deq_fail_objs;    /**< Objects that failed to be dequeued. */
-} ____cacheline_aligned_in_smp;
-#endif
-
 /**
  * The ring queue structure.
  *
@@ -213,10 +195,6 @@ struct ring_queue {
 	} cons;
 #endif
 
-#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
-	struct ring_queue_debug_stats stats[NR_CPUS];
-#endif
-
 	/**< Memory space of ring starts here.
 	 * not volatile so need to be careful
 	 * about compiler re-ordering */
@@ -229,27 +207,6 @@ struct ring_queue {
 #define RING_F_SC_DEQ 0x0002 /**< Flag selects dequeue "single-consumer". */
 #define RING_QUEUE_QUOT_EXCEED (1 << 31)  /**< Quota exceed for burst ops */
 #define RING_QUEUE_SZ_MASK  (unsigned)(0x0fffffff) /**< Ring size mask */
-
-/**
- * @internal When debug is enabled, store ring statistics.
- * @param r
- *   A pointer to the ring.
- * @param name
- *   The name of the statistics field to increment in the ring.
- * @param n
- *   The number to add to the object-oriented statistics.
- */
-//FIXME: can we save the bh_disable by only calling this from safe context?
-#ifdef CONFIG_LIB_RING_QUEUE_DEBUG
-#define __RING_STAT_ADD(r, name, n) do {			\
-		local_bh_disable();				\
-		r->stats[smp_processor_id()].name##_objs += n;	\
-		r->stats[smp_processor_id()].name##_bulk += 1;	\
-		local_bh_enable();				\
-	} while (0)
-#else
-#define __RING_STAT_ADD(r, name, n) do {} while (0)
-#endif
 
 /**
  * Create a new ring named *name* in memory.
@@ -306,14 +263,6 @@ bool ring_queue_free(struct ring_queue *r);
  *   - -EINVAL: Invalid water mark value.
  */
 int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
-
-/**
- * Dump the status of the ring to the console.
- *
- * @param r
- *   A pointer to the ring structure.
- */
-void ring_queue_dump(const struct ring_queue *r);
 
 /* the actual enqueue of pointers on the ring.
  * Placed here since identical code needed in both
@@ -420,12 +369,10 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		/* check that we have enough room in ring */
 		if (unlikely(n > free_entries)) {
 			if (behavior == RING_QUEUE_FIXED) {
-				__RING_STAT_ADD(r, enq_fail, n);
 				return -ENOBUFS;
 			} else {
 				/* No free entry available */
 				if (unlikely(free_entries == 0)) {
-					__RING_STAT_ADD(r, enq_fail, n);
 					return 0;
 				}
 
@@ -447,10 +394,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	if (unlikely(((mask + 1) - free_entries + n) > r->prod.watermark)) {
 		ret = (behavior == RING_QUEUE_FIXED) ? -EDQUOT :
 				(int)(n | RING_QUEUE_QUOT_EXCEED);
-		__RING_STAT_ADD(r, enq_quota, n);
 	} else {
 		ret = (behavior == RING_QUEUE_FIXED) ? 0 : n;
-		__RING_STAT_ADD(r, enq_success, n);
 	}
 
 	/*
@@ -507,12 +452,10 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	/* check that we have enough room in ring */
 	if (unlikely(n > free_entries)) {
 		if (behavior == RING_QUEUE_FIXED) {
-			__RING_STAT_ADD(r, enq_fail, n);
 			return -ENOBUFS;
 		} else {
 			/* No free entry available */
 			if (unlikely(free_entries == 0)) {
-				__RING_STAT_ADD(r, enq_fail, n);
 				return 0;
 			}
 
@@ -533,10 +476,8 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	if (unlikely(((mask + 1) - free_entries + n) > r->prod.watermark)) {
 		ret = (behavior == RING_QUEUE_FIXED) ? -EDQUOT :
 			(int)(n | RING_QUEUE_QUOT_EXCEED);
-		__RING_STAT_ADD(r, enq_quota, n);
 	} else {
 		ret = (behavior == RING_QUEUE_FIXED) ? 0 : n;
-		__RING_STAT_ADD(r, enq_success, n);
 	}
 
 	r->prod.tail = prod_next;
@@ -597,11 +538,9 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		/* Set the actual entries for dequeue */
 		if (n > entries) {
 			if (behavior == RING_QUEUE_FIXED) {
-				__RING_STAT_ADD(r, deq_fail, n);
 				return -ENOENT;
 			} else {
 				if (unlikely(entries == 0)) {
-					__RING_STAT_ADD(r, deq_fail, n);
 					return 0;
 				}
 
@@ -629,7 +568,6 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	while (unlikely(r->cons.tail != cons_head))
 		cpu_relax();
 
-	__RING_STAT_ADD(r, deq_success, n);
 	r->cons.tail = cons_next;
 
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
@@ -677,11 +615,9 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 
 	if (n > entries) {
 		if (behavior == RING_QUEUE_FIXED) {
-			__RING_STAT_ADD(r, deq_fail, n);
 			return -ENOENT;
 		} else {
 			if (unlikely(entries == 0)) {
-				__RING_STAT_ADD(r, deq_fail, n);
 				return 0;
 			}
 
@@ -698,7 +634,6 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	DEQUEUE_PTRS();
 	barrier(); /* compiler barrier */
 
-	__RING_STAT_ADD(r, deq_success, n);
 	r->cons.tail = cons_next;
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
