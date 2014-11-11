@@ -23,6 +23,7 @@
 
 #include <linux/ring_queue.h>
 #include <linux/prefetch.h>
+#include <linux/hardirq.h>
 
 /* Bulking is an essential part of the performance gains as this
  * amortize the cost of cmpxchg ops used when accessing sharedq
