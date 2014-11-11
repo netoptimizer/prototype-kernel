@@ -82,7 +82,6 @@
  * POSSIBILITY OF SUCH DAMAGE.
  *
  ***************************************************************************/
-
 #ifndef _LINUX_RING_QUEUE_H
 #define _LINUX_RING_QUEUE_H
 
@@ -255,30 +254,8 @@ int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
 	} \
 } while (0)
 
-/**
- * @internal Enqueue several objects on the ring (multi-producers safe).
- *
- * This function uses a "compare and set" instruction to move the
- * producer index atomically.
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @param behavior
- *   RING_QUEUE_FIXED:    Enqueue a fixed number of items from a ring
- *   RING_QUEUE_VARIABLE: Enqueue as many items a possible from ring
- * @return
- *   Depend on the behavior value
- *   if behavior = RING_QUEUE_FIXED
- *   - 0: Success; objects enqueue.
- *   - -EDQUOT: Quota exceeded. The objects have been enqueued, but the
- *     high water mark is exceeded.
- *   - -ENOBUFS: Not enough room in the ring to enqueue, no object is enqueued.
- *   if behavior = RING_QUEUE_VARIABLE
- *   - n: Actual number of objects enqueued.
+/* Main: Multi-Producer Enqueue (cmpxchg based)
+ *  can Enqueue several objects on the ring (multi-producers safe)
  */
 static inline int
 __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
@@ -347,27 +324,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	return ret;
 }
 
-/**
- * @internal Enqueue several objects on a ring (NOT multi-producers safe).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @param behavior
- *   RING_QUEUE_FIXED:    Enqueue a fixed number of items from a ring
- *   RING_QUEUE_VARIABLE: Enqueue as many items a possible from ring
- * @return
- *   Depend on the behavior value
- *   if behavior = RING_QUEUE_FIXED
- *   - 0: Success; objects enqueue.
- *   - -EDQUOT: Quota exceeded. The objects have been enqueued, but the
- *     high water mark is exceeded.
- *   - -ENOBUFS: Not enough room in the ring to enqueue, no object is enqueued.
- *   if behavior = RING_QUEUE_VARIABLE
- *   - n: Actual number of objects enqueued.
+/* Main: Single-Producer Enqueue
+ *  can enqueue several objects on a ring (NOT multi-producers safe)
  */
 static inline int
 __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
@@ -422,33 +380,9 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	return ret;
 }
 
-/**
- * @internal Dequeue several objects from a ring (multi-consumers safe). When
- * the request objects are more than the available objects, only dequeue the
- * actual number of objects
- *
- * This function uses a "compare and set" instruction to move the
- * consumer index atomically.
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @param behavior
- *   RING_QUEUE_FIXED:    Dequeue a fixed number of items from a ring
- *   RING_QUEUE_VARIABLE: Dequeue as many items a possible from ring
- * @return
- *   Depend on the behavior value
- *   if behavior = RING_QUEUE_FIXED
- *   - 0: Success; objects dequeued.
- *   - -ENOENT: Not enough entries in the ring to dequeue; no object is
- *     dequeued.
- *   if behavior = RING_QUEUE_VARIABLE
- *   - n: Actual number of objects dequeued.
+/* Main: Multi-Consumer dequeue (cmpxchg based)
+ *  can dequeue several objects from a ring (multi-consumers safe).
  */
-
 static inline int
 __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		 unsigned n, enum ring_queue_queue_behavior behavior)
@@ -510,28 +444,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
 
-/**
- * @internal Dequeue several objects from a ring (NOT multi-consumers safe).
- * When the request objects are more than the available objects, only dequeue
- * the actual number of objects
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @param behavior
- *   RING_QUEUE_FIXED:    Dequeue a fixed number of items from a ring
- *   RING_QUEUE_VARIABLE: Dequeue as many items a possible from ring
- * @return
- *   Depend on the behavior value
- *   if behavior = RING_QUEUE_FIXED
- *   - 0: Success; objects dequeued.
- *   - -ENOENT: Not enough entries in the ring to dequeue; no object is
- *     dequeued.
- *   if behavior = RING_QUEUE_VARIABLE
- *   - n: Actual number of objects dequeued.
+/* Main: Single-Consumer dequeue
+ *  can dequeue several objects from a ring (NOT multi-consumers safe).
  */
 static inline int
 __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
@@ -622,24 +536,9 @@ ring_queue_sp_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
 	return __ring_queue_sp_do_enqueue(r, obj_table, n, RING_QUEUE_FIXED);
 }
 
-/**
- * Enqueue several objects on a ring.
- *
- * This function calls the multi-producer or the single-producer
+/* This function calls the multi-producer or the single-producer
  * version depending on the default behavior that was specified at
  * ring creation time (see flags).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects).
- * @param n
- *   The number of objects to add in the ring from the obj_table.
- * @return
- *   - 0: Success; objects enqueued.
- *   - -EDQUOT: Quota exceeded. The objects have been enqueued, but the
- *     high water mark is exceeded.
- *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
 static inline int
 ring_queue_enqueue_bulk(struct ring_queue *r, void * const *obj_table,
@@ -692,22 +591,9 @@ ring_queue_sp_enqueue(struct ring_queue *r, void *obj)
 	return ring_queue_sp_enqueue_bulk(r, &obj, 1);
 }
 
-/**
- * Enqueue one object on a ring.
- *
- * This function calls the multi-producer or the single-producer
+/* This function calls the multi-producer or the single-producer
  * version, depending on the default behaviour that was specified at
  * ring creation time (see flags).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj
- *   A pointer to the object to be added.
- * @return
- *   - 0: Success; objects enqueued.
- *   - -EDQUOT: Quota exceeded. The objects have been enqueued, but the
- *     high water mark is exceeded.
- *   - -ENOBUFS: Not enough room in the ring to enqueue; no object is enqueued.
  */
 static inline int
 ring_queue_enqueue(struct ring_queue *r, void *obj)
@@ -762,23 +648,9 @@ ring_queue_sc_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
 	return __ring_queue_sc_do_dequeue(r, obj_table, n, RING_QUEUE_FIXED);
 }
 
-/**
- * Dequeue several objects from a ring.
- *
- * This function calls the multi-consumers or the single-consumer
+/* This function calls the multi-consumers or the single-consumer
  * version, depending on the default behaviour that was specified at
  * ring creation time (see flags).
- *
- * @param r
- *   A pointer to the ring structure.
- * @param obj_table
- *   A pointer to a table of void * pointers (objects) that will be filled.
- * @param n
- *   The number of objects to dequeue from the ring to the obj_table.
- * @return
- *   - 0: Success; objects dequeued.
- *   - -ENOENT: Not enough entries in the ring to dequeue, no object is
- *     dequeued.
  */
 static inline int
 ring_queue_dequeue_bulk(struct ring_queue *r, void **obj_table, unsigned n)
@@ -853,75 +725,41 @@ ring_queue_dequeue(struct ring_queue *r, void **obj_p)
 		return ring_queue_mc_dequeue(r, obj_p);
 }
 
-/**
- * Test if a ring is full.
- *
- * @param r
- *   A pointer to the ring structure.
- * @return
- *   - 1: The ring is full.
- *   - 0: The ring is not full.
- */
-static inline int
-ring_queue_full(const struct ring_queue *r)
+/* Test if a ring is full */
+static inline int ring_queue_full(const struct ring_queue *r)
 {
 	uint32_t prod_tail = r->prod.tail;
 	uint32_t cons_tail = r->cons.tail;
 	return (((cons_tail - prod_tail - 1) & r->prod.mask) == 0);
 }
 
-/**
- * Test if a ring is empty.
- *
- * @param r
- *   A pointer to the ring structure.
- * @return
- *   - 1: The ring is empty.
- *   - 0: The ring is not empty.
- */
-static inline int
-ring_queue_empty(const struct ring_queue *r)
+/* Test if a ring is empty */
+static inline int ring_queue_empty(const struct ring_queue *r)
 {
 	uint32_t prod_tail = r->prod.tail;
 	uint32_t cons_tail = r->cons.tail;
 	return !!(cons_tail == prod_tail);
 }
 
-/**
- * Return the number of entries in a ring.
- *
- * @param r
- *   A pointer to the ring structure.
- * @return
- *   The number of entries in the ring.
- */
-static inline unsigned
-ring_queue_count(const struct ring_queue *r)
+/* Return the number of entries in a ring */
+static inline unsigned ring_queue_count(const struct ring_queue *r)
 {
 	uint32_t prod_tail = r->prod.tail;
 	uint32_t cons_tail = r->cons.tail;
 	return ((prod_tail - cons_tail) & r->prod.mask);
 }
 
-/**
- * Return the number of free entries in a ring.
- *
- * @param r
- *   A pointer to the ring structure.
- * @return
- *   The number of free entries in the ring.
- */
-static inline unsigned
-ring_queue_free_count(const struct ring_queue *r)
+/* Return the number of free entries in a ring */
+static inline unsigned ring_queue_free_count(const struct ring_queue *r)
 {
 	uint32_t prod_tail = r->prod.tail;
 	uint32_t cons_tail = r->cons.tail;
 	return ((cons_tail - prod_tail - 1) & r->prod.mask);
 }
 
-
 /* The "*_burst" variants below uses RING_QUEUE_VARIABLE variant.
  * Meaning:
+ *   Enqueue/dequeue as many items a possible from ring
  *
  * On dequeue: when the request objects are more than the available
  * objects, only dequeue the actual number of objects, and return the
