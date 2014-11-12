@@ -109,43 +109,6 @@
 #include <linux/compiler.h> /* barrier() */
 #include <linux/percpu.h>
 
-// Need 32-bit version of cmpxchg()
-//  __cmpxchg(ptr, old, new, sizeof(u32))
-//  perhaps normal cmpxchg already handles this correctly...
-/**
- * Atomic compare and set.
- *
- * (atomic) equivalent to:
- *   if (*dst == exp)
- *     *dst = src (all 32-bit words)
- *
- * @param dst
- *   The destination location into which the value will be written.
- * @param exp
- *   The expected value.
- * @param src
- *   The new value.
- * @return
- *   Non-zero on success; 0 on failure.
- */
-static inline int
-rte_atomic32_cmpset(volatile uint32_t *dst, uint32_t exp, uint32_t src)
-{
-	uint8_t res;
-
-	asm volatile(
-			"lock; "
-			"cmpxchgl %[src], %[dst];"
-			"sete %[res];"
-			: [res] "=a" (res),     /* output */
-			  [dst] "=m" (*dst)
-			: [src] "r" (src),      /* input */
-			  "a" (exp),
-			  "m" (*dst)
-			: "memory");            /* no-clobber list */
-	return res;
-}
-
 enum ring_queue_queue_behavior {
 	RING_QUEUE_FIXED = 0, /* Enq/Deq a fixed number of items from a ring */
 	RING_QUEUE_VARIABLE   /* Enq/Deq as many items a possible from ring */
@@ -297,8 +260,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		}
 
 		prod_next = prod_head + n;
-		success = rte_atomic32_cmpset(&r->prod.head, prod_head,
-					      prod_next);
+		success = (cmpxchg(&r->prod.head, prod_head,
+				   prod_next) == prod_head);
 	} while (unlikely(success == 0));
 
 	/* write entries in ring */
@@ -421,8 +384,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		}
 
 		cons_next = cons_head + n;
-		success = rte_atomic32_cmpset(&r->cons.head, cons_head,
-					      cons_next);
+		success = (cmpxchg(&r->cons.head, cons_head,
+				   cons_next) == cons_head);
 	} while (unlikely(success == 0));
 
 	/* copy in table */
