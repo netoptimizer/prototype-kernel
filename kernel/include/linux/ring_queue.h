@@ -265,6 +265,7 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		success = (cmpxchg(&r->prod.head, prod_head,
 				   prod_next) == prod_head);
 	} while (unlikely(success == 0));
+	/* smp_rmb() for cons.tail is implicit by cmpxchg */
 
 	ENQUEUE_PTRS(); /* write entries in ring */
 	smp_wmb(); /* matching dequeue LOADs */
@@ -301,6 +302,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	int ret;
 
 	prod_head = ACCESS_ONCE(r->prod.head);
+	smp_rmb(); /* for cons.tail write, making sure deq loads are done */
 	cons_tail = ACCESS_ONCE(r->cons.tail);
 	/* The subtraction is done between two unsigned 32bits value
 	 * (the result is always modulo 32 bits even if we have
@@ -387,7 +389,6 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 
 	/* The smp_rmb() is implicit by the cmpxchg's full MB */
 	DEQUEUE_PTRS(); /* copy in table */
-	barrier(); /* compiler barrier */
 
 	/* If there are other dequeues in progress that preceded us,
 	 * we need to wait for them to complete
@@ -395,6 +396,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	while (unlikely(ACCESS_ONCE(r->cons.tail) != cons_head))
 		cpu_relax();
 
+	/* cons.tail must not be visible before dequeue LOADs are finished */
+	smp_wmb();
 	ACCESS_ONCE(r->cons.tail) = cons_next;
 
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
@@ -437,8 +440,9 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 
 	smp_rmb(); /* matching enqueue STOREs */
 	DEQUEUE_PTRS(); /* copy in table */
-	barrier(); /* compiler barrier */
 
+	/* cons.tail must not be visible before dequeue LOADs are finished */
+	smp_wmb();
 	ACCESS_ONCE(r->cons.tail) = cons_next;
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
