@@ -266,10 +266,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 				   prod_next) == prod_head);
 	} while (unlikely(success == 0));
 
-	/* write entries in ring */
-	ENQUEUE_PTRS();
-	// wmb(); /* possibly need a Write-Memory-Barrier here on some archs??? */
-	barrier(); /* compiler barrier */
+	ENQUEUE_PTRS(); /* write entries in ring */
+	smp_wmb(); /* matching dequeue LOADs */
 
 	/* if we exceed the watermark */
 	if (unlikely(((mask + 1) - free_entries + n) > r->prod.watermark)) {
@@ -327,11 +325,8 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	prod_next = prod_head + n;
 	ACCESS_ONCE(r->prod.head) = prod_next;
 
-	/* write entries in ring */
-	ENQUEUE_PTRS();
-	// wmb(); /* possibly need a Write-Memory-Barrier here on some archs??? */
-	barrier(); /* compiler barrier */
-	// wmb especially for SP (Single Producer)
+	ENQUEUE_PTRS(); /* write entries in ring */
+	smp_wmb(); /* matching dequeue LOADs */
 
 	/* if we exceed the watermark */
 	if (unlikely(((mask + 1) - free_entries + n) > r->prod.watermark)) {
@@ -390,12 +385,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 				   cons_next) == cons_head);
 	} while (unlikely(success == 0));
 
-	/* copy in table */
-	//rmb() /* possibly need a Read-Memory-Barrier here on some archs??? */
-	/* Why did the barrier() move down under DEQUEUE_PTRS
-	 *  in dpdk commit 286bd05bf70d ("ring: optimisations")
-	 */
-	DEQUEUE_PTRS();
+	/* The smp_rmb() is implicit by the cmpxchg's full MB */
+	DEQUEUE_PTRS(); /* copy in table */
 	barrier(); /* compiler barrier */
 
 	/* If there are other dequeues in progress that preceded us,
@@ -444,10 +435,8 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	cons_next = cons_head + n;
 	ACCESS_ONCE(r->cons.head) = cons_next;
 
-	/* copy in table */
-	//rmb() /* possibly need a Read-Memory-Barrier here on some archs??? */
-	// especially for the SC (Single Consumer)
-	DEQUEUE_PTRS();
+	smp_rmb(); /* matching enqueue STOREs */
+	DEQUEUE_PTRS(); /* copy in table */
 	barrier(); /* compiler barrier */
 
 	ACCESS_ONCE(r->cons.tail) = cons_next;
