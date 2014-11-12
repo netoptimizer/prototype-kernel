@@ -125,25 +125,25 @@ enum ring_queue_queue_behavior {
  * a problem.
  */
 struct ring_queue {
-	int flags;                       /* Flags supplied at creation */
+	int flags;		/* Flags supplied at creation */
 
 	/* Ring producer status */
 	struct prod {
-		uint32_t watermark;      /* Maximum items before EDQUOT */
-		uint32_t sp_enqueue;     /* True, if single producer */
-		uint32_t size;           /* Size of ring */
-		uint32_t mask;           /* Mask (size-1) of ring */
-		uint32_t head;           /* Producer head */
-		uint32_t tail;           /* Producer tail */
+		u32 watermark;	/* Maximum items before EDQUOT */
+		u32 sp_enqueue;	/* True, if single producer */
+		u32 size;	/* Size of ring */
+		u32 mask;	/* Mask (size-1) of ring */
+		u32 head;	/* Producer head */
+		u32 tail;	/* Producer tail */
 	} prod ____cacheline_aligned_in_smp;
 
 	/* Ring consumer status */
 	struct cons {
-		uint32_t sc_dequeue;     /* True, if single consumer */
-		uint32_t size;           /* Size of the ring */
-		uint32_t mask;           /* Mask (size-1) of ring */
-		uint32_t head;           /* Consumer head */
-		uint32_t tail;           /* Consumer tail */
+		u32 sc_dequeue;	/* True, if single consumer */
+		u32 size;	/* Size of the ring */
+		u32 mask;	/* Mask (size-1) of ring */
+		u32 head;	/* Consumer head */
+		u32 tail;	/* Consumer tail */
 #ifdef CONFIG_LIB_RING_QUEUE_SPLIT_PROD_CONS
 	} cons ____cacheline_aligned_in_smp;
 #else
@@ -167,10 +167,11 @@ int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
 
 /* the actual enqueue of pointers on the ring.
  * Placed here since identical code needed in both
- * single and multi producer enqueue functions */
+ * single and multi producer enqueue functions
+ */
 #define ENQUEUE_PTRS() do { \
-	const uint32_t size = r->prod.size; \
-	uint32_t idx = prod_head & mask; \
+	const u32 size = r->prod.size; \
+	u32 idx = prod_head & mask; \
 	if (likely(idx + n < size)) { \
 		for (i = 0; i < (n & ((~(unsigned)0x3))); i += 4, idx += 4) { \
 			r->ring[idx] = obj_table[i]; \
@@ -193,10 +194,11 @@ int ring_queue_set_water_mark(struct ring_queue *r, unsigned count);
 
 /* the actual copy of pointers on the ring to obj_table.
  * Placed here since identical code needed in both
- * single and multi consumer dequeue functions */
+ * single and multi consumer dequeue functions
+ */
 #define DEQUEUE_PTRS() do { \
-	uint32_t idx = cons_head & mask; \
-	const uint32_t size = r->cons.size; \
+	u32 idx = cons_head & mask; \
+	const u32 size = r->cons.size; \
 	if (likely(idx + n < size)) { \
 		for (i = 0; i < (n & (~(unsigned)0x3)); i += 4, idx += 4) {\
 			obj_table[i] = r->ring[idx]; \
@@ -224,12 +226,12 @@ static inline int
 __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 			 unsigned n, enum ring_queue_queue_behavior behavior)
 {
-	uint32_t prod_head, prod_next;
-	uint32_t cons_tail, free_entries;
+	u32 prod_head, prod_next;
+	u32 cons_tail, free_entries;
 	const unsigned max = n;
 	int success;
 	unsigned i;
-	uint32_t mask = r->prod.mask;
+	u32 mask = r->prod.mask;
 	int ret;
 
 	/* move prod.head atomically */
@@ -294,10 +296,10 @@ static inline int
 __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 			 unsigned n, enum ring_queue_queue_behavior behavior)
 {
-	uint32_t prod_head, cons_tail;
-	uint32_t prod_next, free_entries;
+	u32 prod_head, cons_tail;
+	u32 prod_next, free_entries;
 	unsigned i;
-	uint32_t mask = r->prod.mask;
+	u32 mask = r->prod.mask;
 	int ret;
 
 	prod_head = ACCESS_ONCE(r->prod.head);
@@ -350,12 +352,12 @@ static inline int
 __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		 unsigned n, enum ring_queue_queue_behavior behavior)
 {
-	uint32_t cons_head, prod_tail;
-	uint32_t cons_next, entries;
+	u32 cons_head, prod_tail;
+	u32 cons_next, entries;
 	const unsigned max = n;
 	int success;
 	unsigned i;
-	uint32_t mask = r->prod.mask;
+	u32 mask = r->prod.mask;
 
 	/* move cons.head atomically */
 	do {
@@ -414,10 +416,10 @@ static inline int
 __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 		 unsigned n, enum ring_queue_queue_behavior behavior)
 {
-	uint32_t cons_head, prod_tail;
-	uint32_t cons_next, entries;
+	u32 cons_head, prod_tail;
+	u32 cons_next, entries;
 	unsigned i;
-	uint32_t mask = r->prod.mask;
+	u32 mask = r->prod.mask;
 
 	cons_head = ACCESS_ONCE(r->cons.head);
 	prod_tail = ACCESS_ONCE(r->prod.tail);
@@ -691,32 +693,32 @@ ring_queue_dequeue(struct ring_queue *r, void **obj_p)
 /* Test if a ring is full */
 static inline int ring_queue_full(const struct ring_queue *r)
 {
-	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
-	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
+	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
 	return (((cons_tail - prod_tail - 1) & r->prod.mask) == 0);
 }
 
 /* Test if a ring is empty */
 static inline int ring_queue_empty(const struct ring_queue *r)
 {
-	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
-	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
+	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
 	return !!(cons_tail == prod_tail);
 }
 
 /* Return the number of entries in a ring */
 static inline unsigned ring_queue_count(const struct ring_queue *r)
 {
-	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
-	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
+	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
 	return ((prod_tail - cons_tail) & r->prod.mask);
 }
 
 /* Return the number of free entries in a ring */
 static inline unsigned ring_queue_free_count(const struct ring_queue *r)
 {
-	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
-	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
+	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
 	return ((cons_tail - prod_tail - 1) & r->prod.mask);
 }
 
