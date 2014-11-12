@@ -94,9 +94,6 @@
 
 #include <linux/ring_queue.h>
 
-// Do we really need a list of all the rings created in kernel???
-//LIST_HEAD(global_ring_queue_list);
-
 /* True if x is a power of 2 */
 #define POWEROF2(x) (((x) & ((x) - 1)) == 0)
 
@@ -174,9 +171,6 @@ ring_queue_create(unsigned int count, unsigned int flags)
 	r->prod.head = r->cons.head = 0;
 	r->prod.tail = r->cons.tail = 0;
 
-	//TAILQ_INSERT_TAIL(ring_list, r, next);
-	//list_add_rcu(global_ring_queue_list, r->next);
-
 	return r;
 }
 EXPORT_SYMBOL(ring_queue_create);
@@ -213,18 +207,18 @@ ring_queue_set_water_mark(struct ring_queue *r, unsigned count)
 	return 0;
 }
 
+ //TODO: remove
 static int __init ring_queue_init(void)
 {
-	pr_warn("Loaded\n"); //TODO: remove
-	// TODO: create /proc dir for reading debug/dump info
+	pr_warn("Loaded\n");
 	return 0;
 }
 module_init(ring_queue_init);
 
+ // TODO: remove
 static void __exit ring_queue_exit(void)
 {
-	// TODO: perform sanity checks, and free mem
-	pr_warn("Unloaded\n"); //TODO: remove
+	pr_warn("Unloaded\n");
 }
 module_exit(ring_queue_exit);
 
