@@ -170,8 +170,8 @@ struct ring_queue {
 		uint32_t sp_enqueue;     /* True, if single producer */
 		uint32_t size;           /* Size of ring */
 		uint32_t mask;           /* Mask (size-1) of ring */
-		volatile uint32_t head;  /* Producer head */
-		volatile uint32_t tail;  /* Producer tail */
+		uint32_t head;           /* Producer head */
+		uint32_t tail;           /* Producer tail */
 	} prod ____cacheline_aligned_in_smp;
 
 	/* Ring consumer status */
@@ -179,8 +179,8 @@ struct ring_queue {
 		uint32_t sc_dequeue;     /* True, if single consumer */
 		uint32_t size;           /* Size of the ring */
 		uint32_t mask;           /* Mask (size-1) of ring */
-		volatile uint32_t head;  /* Consumer head */
-		volatile uint32_t tail;  /* Consumer tail */
+		uint32_t head;           /* Consumer head */
+		uint32_t tail;           /* Consumer tail */
 #ifdef CONFIG_LIB_RING_QUEUE_SPLIT_PROD_CONS
 	} cons ____cacheline_aligned_in_smp;
 #else
@@ -274,8 +274,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		/* Reset n to the initial burst count */
 		n = max;
 
-		prod_head = r->prod.head;
-		cons_tail = r->cons.tail;
+		prod_head = ACCESS_ONCE(r->prod.head);
+		cons_tail = ACCESS_ONCE(r->cons.tail);
 		/* The subtraction is done between two unsigned 32bits value
 		 * (the result is always modulo 32 bits even if we have
 		 * prod_head > cons_tail). So 'free_entries' is always between 0
@@ -317,10 +317,10 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	/* If there are other enqueues in progress that preceeded us,
 	 * we need to wait for them to complete
 	 */
-	while (unlikely(r->prod.tail != prod_head))
+	while (unlikely(ACCESS_ONCE(r->prod.tail) != prod_head))
 		cpu_relax();
 
-	r->prod.tail = prod_next;
+	ACCESS_ONCE(r->prod.tail) = prod_next;
 	return ret;
 }
 
@@ -337,8 +337,8 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	uint32_t mask = r->prod.mask;
 	int ret;
 
-	prod_head = r->prod.head;
-	cons_tail = r->cons.tail;
+	prod_head = ACCESS_ONCE(r->prod.head);
+	cons_tail = ACCESS_ONCE(r->cons.tail);
 	/* The subtraction is done between two unsigned 32bits value
 	 * (the result is always modulo 32 bits even if we have
 	 * prod_head > cons_tail). So 'free_entries' is always between 0
@@ -360,7 +360,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	}
 
 	prod_next = prod_head + n;
-	r->prod.head = prod_next;
+	ACCESS_ONCE(r->prod.head) = prod_next;
 
 	/* write entries in ring */
 	ENQUEUE_PTRS();
@@ -376,7 +376,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		ret = (behavior == RING_QUEUE_FIXED) ? 0 : n;
 	}
 
-	r->prod.tail = prod_next;
+	ACCESS_ONCE(r->prod.tail) = prod_next;
 	return ret;
 }
 
@@ -399,8 +399,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		/* Restore n as it may change every loop */
 		n = max;
 
-		cons_head = r->cons.head;
-		prod_tail = r->prod.tail;
+		cons_head = ACCESS_ONCE(r->cons.head);
+		prod_tail = ACCESS_ONCE(r->prod.tail);
 		/* The subtraction is done between two unsigned 32bits value
 		 * (the result is always modulo 32 bits even if we have
 		 * cons_head > prod_tail). So 'entries' is always between 0
@@ -436,10 +436,10 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	/* If there are other dequeues in progress that preceded us,
 	 * we need to wait for them to complete
 	 */
-	while (unlikely(r->cons.tail != cons_head))
+	while (unlikely(ACCESS_ONCE(r->cons.tail) != cons_head))
 		cpu_relax();
 
-	r->cons.tail = cons_next;
+	ACCESS_ONCE(r->cons.tail) = cons_next;
 
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
@@ -456,8 +456,8 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	unsigned i;
 	uint32_t mask = r->prod.mask;
 
-	cons_head = r->cons.head;
-	prod_tail = r->prod.tail;
+	cons_head = ACCESS_ONCE(r->cons.head);
+	prod_tail = ACCESS_ONCE(r->prod.tail);
 	/* The subtraction is done between two unsigned 32bits value
 	 * (the result is always modulo 32 bits even if we have
 	 * cons_head > prod_tail). So 'entries' is always between 0
@@ -477,7 +477,7 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	}
 
 	cons_next = cons_head + n;
-	r->cons.head = cons_next;
+	ACCESS_ONCE(r->cons.head) = cons_next;
 
 	/* copy in table */
 	//rmb() /* possibly need a Read-Memory-Barrier here on some archs??? */
@@ -485,7 +485,7 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	DEQUEUE_PTRS();
 	barrier(); /* compiler barrier */
 
-	r->cons.tail = cons_next;
+	ACCESS_ONCE(r->cons.tail) = cons_next;
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
 
@@ -728,32 +728,32 @@ ring_queue_dequeue(struct ring_queue *r, void **obj_p)
 /* Test if a ring is full */
 static inline int ring_queue_full(const struct ring_queue *r)
 {
-	uint32_t prod_tail = r->prod.tail;
-	uint32_t cons_tail = r->cons.tail;
+	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
+	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
 	return (((cons_tail - prod_tail - 1) & r->prod.mask) == 0);
 }
 
 /* Test if a ring is empty */
 static inline int ring_queue_empty(const struct ring_queue *r)
 {
-	uint32_t prod_tail = r->prod.tail;
-	uint32_t cons_tail = r->cons.tail;
+	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
+	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
 	return !!(cons_tail == prod_tail);
 }
 
 /* Return the number of entries in a ring */
 static inline unsigned ring_queue_count(const struct ring_queue *r)
 {
-	uint32_t prod_tail = r->prod.tail;
-	uint32_t cons_tail = r->cons.tail;
+	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
+	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
 	return ((prod_tail - cons_tail) & r->prod.mask);
 }
 
 /* Return the number of free entries in a ring */
 static inline unsigned ring_queue_free_count(const struct ring_queue *r)
 {
-	uint32_t prod_tail = r->prod.tail;
-	uint32_t cons_tail = r->cons.tail;
+	uint32_t prod_tail = ACCESS_ONCE(r->prod.tail);
+	uint32_t cons_tail = ACCESS_ONCE(r->cons.tail);
 	return ((cons_tail - prod_tail - 1) & r->prod.mask);
 }
 
