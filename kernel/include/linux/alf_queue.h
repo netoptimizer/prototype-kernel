@@ -41,251 +41,10 @@ void               alf_queue_free(struct alf_queue *q);
  *  1. They can be reused for both "Single" and "Multi" variants
  *  2. Allow us to experiment with (pipeline) optimizations in this area.
  */
+/* Only a single of these helpers will survive upstream submission */
+#include <linux/alf_queue_helpers.h>
 #define __helper_alf_enqueue_store __helper_alf_enqueue_store_unroll
 #define __helper_alf_dequeue_load  __helper_alf_dequeue_load_unroll
-
-/* Only a single of these helpers will survive upstream submission
- */
-
-static inline void
-__helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
-{
-	int i, index = p_head & q->mask;
-
-	/* Basic idea is to save masked "AND-op" in exchange with
-	 * branch-op for checking explicit for wrap
-	 */
-	for (i = 0; i < n; i++, index++) {
-		q->ring[index] = ptr[i];
-		if (unlikely(index == q->size)) /* handle array wrap */
-			index = 0;
-	}
-}
-static inline void
-__helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
-				 struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, index = c_head & q->mask;
-
-	for (i = 0; i < elems; i++, index++) {
-		ptr[i] = q->ring[index];
-		if (unlikely(index == q->size)) /* handle array wrap */
-			index = 0;
-	}
-}
-
-static inline void
-__helper_alf_enqueue_store_mask(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
-{
-	int i, index = p_head;
-
-	for (i = 0; i < n; i++, index++) {
-		q->ring[index & q->mask] = ptr[i];
-	}
-}
-static inline void
-__helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, index = c_head;
-
-	for (i = 0; i < elems; i++, index++) {
-		ptr[i] = q->ring[index & q->mask];
-	}
-}
-
-static inline void
-__helper_alf_enqueue_store_mask_less(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
-{
-	int i, index = p_head & q->mask;
-
-	if (likely((index + n) <= q->mask)) {
-		/* Can save masked-AND knowing we cannot wrap */
-		for (i = 0; i < n; i++, index++) {
-			q->ring[index] = ptr[i];
-		}
-	} else {
-		for (i = 0; i < n; i++, index++) {
-			q->ring[index & q->mask] = ptr[i];
-		}
-	}
-}
-static inline void
-__helper_alf_dequeue_load_mask_less(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, index = c_head & q->mask;
-
-	if (likely((index + elems) <= q->mask)) {
-		/* Can save masked-AND knowing we cannot wrap */
-		for (i = 0; i < elems; i++, index++) {
-			ptr[i] = q->ring[index];
-		}
-	} else {
-		for (i = 0; i < elems; i++, index++) {
-			ptr[i] = q->ring[index & q->mask];
-		}
-	}
-}
-
-static inline void
-__helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
-{
-	int i, iterations = n & ~3UL;
-	u32 index = p_head & q->mask;
-
-	if (likely((index + n) <= q->mask)) {
-		/* Can save masked-AND knowing we cannot wrap */
-		/* Loop unroll */
-		for (i = 0; i < iterations; i+=4, index+=4) {
-			q->ring[index  ] = ptr[i];
-			q->ring[index+1] = ptr[i+1];
-			q->ring[index+2] = ptr[i+2];
-			q->ring[index+3] = ptr[i+3];
-		}
-		/* Remainder handling */
-		switch(n & 0x3) {
-		case 3:
-			q->ring[index  ] = ptr[i];
-			q->ring[index+1] = ptr[i+1];
-			q->ring[index+2] = ptr[i+2];
-			break;
-		case 2:
-			q->ring[index  ] = ptr[i];
-			q->ring[index+1] = ptr[i+1];
-			break;
-		case 1:
-			q->ring[index  ] = ptr[i];
-		}
-	} else {
-		/* Fall-back to "mask" version */
-		for (i = 0; i < n; i++, index++) {
-			q->ring[index & q->mask] = ptr[i];
-		}
-	}
-}
-static inline void
-__helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
-{
-	int i, iterations = elems & ~3UL;
-	u32 index = c_head & q->mask;
-
-	if (likely((index + elems) <= q->mask)) {
-		/* Can save masked-AND knowing we cannot wrap */
-		/* Loop unroll */
-		for (i = 0; i < iterations; i+=4, index+=4) {
-			ptr[i]   = q->ring[index  ];
-			ptr[i+1] = q->ring[index+1];
-			ptr[i+2] = q->ring[index+2];
-			ptr[i+3] = q->ring[index+3];
-		}
-		/* Remainder handling */
-		switch(elems & 0x3) {
-		case 3:
-			ptr[i]   = q->ring[index  ];
-			ptr[i+1] = q->ring[index+1];
-			ptr[i+2] = q->ring[index+2];
-			break;
-		case 2:
-			ptr[i]   = q->ring[index  ];
-			ptr[i+1] = q->ring[index+1];
-			break;
-		case 1:
-			ptr[i]   = q->ring[index];
-		}
-	} else {
-		/* Fall-back to "mask" version */
-		for (i = 0; i < elems; i++, index++) {
-			ptr[i] = q->ring[index & q->mask];
-		}
-	}
-}
-
-static inline void
-__helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
-{
-	p_head &= q->mask;
-	p_next &= q->mask;
-	if (p_next >= p_head) {
-		memcpy(&q->ring[p_head], ptr, (p_next-p_head) * sizeof(ptr[0]));
-	} else {
-		memcpy(&q->ring[p_head], &ptr[0], (q->size-p_head) * sizeof(ptr[0]));
-		memcpy(&q->ring[0], &ptr[q->size-p_head], p_next * sizeof(ptr[0]));
-	}
-}
-static inline void
-__helper_alf_dequeue_load_memcpy(u32 c_head, u32 c_next,
-				 struct alf_queue *q, void **ptr, const u32 elems)
-{
-	c_head &= q->mask;
-	c_next &= q->mask;
-	if (c_next >= c_head) {
-		memcpy(ptr, &q->ring[c_head], (c_next-c_head) * sizeof(ptr[0]));
-	} else {
-		memcpy(&ptr[0], &q->ring[c_head], (q->size - c_head) * sizeof(ptr[0]));
-		memcpy(&ptr[q->size-c_head], &q->ring[0], c_next * sizeof(ptr[0]));
-	}
-}
-
-
-static inline bool
-alf_queue_empty(struct alf_queue *q)
-{
-	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
-	u32 p_tail = ACCESS_ONCE(q->producer.tail);
-
-	/* The empty (and initial state) is when consumer have reached
-	 * up with producer.
-	 *
-	 * DOUBLE-CHECK: Should we use producer.head, as this indicate
-	 * a producer is in-progress(?)
-	 */
-	return c_tail == p_tail;
-}
-
-static inline int
-alf_queue_count(struct alf_queue *q)
-{
-	u32 c_head = ACCESS_ONCE(q->consumer.head);
-	u32 p_tail = ACCESS_ONCE(q->producer.tail);
-	u32 elems;
-
-	/* Due to u32 arithmetic the values are implicitly
-	 * masked/modulo 32-bit, thus saving one mask operation
-	 */
-	elems = p_tail - c_head;
-	/* Thus, same as:
-	 *  elems = (p_tail - c_head) & q->mask;
-	 */
-	return elems;
-}
-
-static inline int
-alf_queue_avail_space(struct alf_queue *q)
-{
-	u32 p_head = ACCESS_ONCE(q->producer.head);
-	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
-	u32 space;
-
-	/* The max avail space is (q->size-1) because the empty state
-	 * is when (consumer == producer)
-	 */
-
-	/* Due to u32 arithmetic the values are implicitly
-	 * masked/modulo 32-bit, thus saving one mask operation
-	 */
-	space = q->mask + c_tail - p_head;
-	/* Thus, same as:
-	 *  space = (q->mask + c_tail - p_head) & q->mask;
-	 */
-	return space;
-}
 
 /* Main Multi-Producer ENQUEUE
  *
@@ -464,6 +223,59 @@ alf_sc_dequeue(const u32 n;
 	ACCESS_ONCE(q->consumer.tail) = c_next;
 
 	return elems;
+}
+
+static inline bool
+alf_queue_empty(struct alf_queue *q)
+{
+	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
+	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+
+	/* The empty (and initial state) is when consumer have reached
+	 * up with producer.
+	 *
+	 * DOUBLE-CHECK: Should we use producer.head, as this indicate
+	 * a producer is in-progress(?)
+	 */
+	return c_tail == p_tail;
+}
+
+static inline int
+alf_queue_count(struct alf_queue *q)
+{
+	u32 c_head = ACCESS_ONCE(q->consumer.head);
+	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+	u32 elems;
+
+	/* Due to u32 arithmetic the values are implicitly
+	 * masked/modulo 32-bit, thus saving one mask operation
+	 */
+	elems = p_tail - c_head;
+	/* Thus, same as:
+	 *  elems = (p_tail - c_head) & q->mask;
+	 */
+	return elems;
+}
+
+static inline int
+alf_queue_avail_space(struct alf_queue *q)
+{
+	u32 p_head = ACCESS_ONCE(q->producer.head);
+	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
+	u32 space;
+
+	/* The max avail space is (q->size-1) because the empty state
+	 * is when (consumer == producer)
+	 */
+
+	/* Due to u32 arithmetic the values are implicitly
+	 * masked/modulo 32-bit, thus saving one mask operation
+	 */
+	space = q->mask + c_tail - p_head;
+	/* Thus, same as:
+	 *  space = (q->mask + c_tail - p_head) & q->mask;
+	 */
+	return space;
 }
 
 #endif /* _LINUX_ALF_QUEUE_H */
