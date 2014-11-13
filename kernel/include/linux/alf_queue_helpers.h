@@ -168,6 +168,75 @@ __helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
 	}
 }
 
+
+static inline void
+__helper_alf_enqueue_store_unroll_duff(u32 p_head, u32 p_next,
+				  struct alf_queue *q, void **ptr, const u32 n)
+{
+	int i = 0, r = n & 0x3, iterations = n & ~3UL;
+	u32 index = p_head & q->mask;
+
+	if (likely((index + n) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		/* Loop unroll using duff's device w/end condition update */
+		switch(r) {
+		case 0:
+			do {
+				q->ring[index+3] = ptr[i+3];
+			case 3:
+				q->ring[index+2] = ptr[i+2];
+			case 2:
+				q->ring[index+1] = ptr[i+1];
+			case 1:
+				q->ring[index  ] = ptr[i];
+				//pr_info("i:%d index:%d r:%d iterations:%d\n",
+				//	i, index, r, iterations);
+			} while ((r > 0) ? (i+=r, index+=r, r=0, iterations)
+				  : (i+=4, index+=4)
+				 && i < iterations
+				);
+		}
+	} else {
+		/* Fall-back to "mask" version */
+		for (i = 0; i < n; i++, index++) {
+			q->ring[index & q->mask] = ptr[i];
+		}
+	}
+}
+static inline void
+__helper_alf_dequeue_load_unroll_duff(u32 c_head, u32 c_next,
+			       struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i = 0, r = elems & 0x3, iterations = elems & ~3UL;
+	u32 index = c_head & q->mask;
+
+	if (likely((index + elems) <= q->mask)) {
+		/* Can save masked-AND knowing we cannot wrap */
+		/* Loop unroll using duff's device w/end condition update */
+		switch(r) {
+		case 0:
+			do {
+				ptr[i+3] = q->ring[index+3];
+			case 3:
+				ptr[i+2] = q->ring[index+2];
+			case 2:
+				ptr[i+1] = q->ring[index+1];
+			case 1:
+				ptr[i]   = q->ring[index  ];
+			} while ((r > 0) ? (i+=r, index+=r, r=0, iterations)
+				 : (i+=4, index+=4)
+				 && i < iterations
+				);
+		}
+	} else {
+		/* Fall-back to "mask" version */
+		for (i = 0; i < elems; i++, index++) {
+			ptr[i] = q->ring[index & q->mask];
+		}
+	}
+}
+
+
 static inline void
 __helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
