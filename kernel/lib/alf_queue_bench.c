@@ -282,11 +282,11 @@ int run_benchmark_tests(void)
 	/* MPMC: Multi-Producer-Multi-Consumer tests */
 	MPMC = alf_queue_alloc(ring_size, GFP_KERNEL);
 
-	/* 10.910 ns cost for single enqueue or dequeue */
+	/* 8.615 ns cost for single enqueue or dequeue */
 	time_bench_loop(loops, 0, "ALF-MPMC-simple", MPMC,
 			time_bench_one_enq_deq_mpmc);
 
-	/* 13.576 ns cost when touching more of the array  */
+	/* 12.688 ns cost when touching more of the array  */
 	time_bench_loop(loops/100, 128, "ALF-MPMC-multi", MPMC,
 			time_multi_enq_deq_mpmc);
 
@@ -303,8 +303,10 @@ int run_benchmark_tests(void)
 	/* SPSC: Single-Producer-Single-Consumer tests */
 	SPSC = alf_queue_alloc(ring_size, GFP_KERNEL);
 
+	/* 2.024 ns cost for single enqueue or dequeue */
 	time_bench_loop(loops*10, 0, "ALF-SPSC-simple", SPSC,
 			time_bench_one_enq_deq_spsc);
+	/* 2.419 ns cost when touching more of the array  */
 	time_bench_loop(loops/10, 128, "ALF-SPSC-multi", SPSC,
 			time_multi_enq_deq_spsc);
 	/* Bulk SPSC */
