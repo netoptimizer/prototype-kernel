@@ -375,5 +375,95 @@ alf_mc_dequeue(const u32 n;
 	return elems;
 }
 
+#define ASSERT_DEBUG_SPSC 1
+#ifndef ASSERT_DEBUG_SPSC
+#define ASSERT(x) do { } while (0)
+#else
+#define ASSERT(x)						\
+	if (unlikely(!(x))) {					\
+		pr_crit("Assertion failed %s:%d: \"%s\"\n",	\
+			__FILE__, __LINE__, #x);		\
+		BUG();						\
+	}
+#endif
+
+/* Main SINGLE Producer ENQUEUE
+ *  caller MUST make sure preemption is disabled
+ */
+static inline int
+alf_sp_enqueue(const u32 n;
+	       struct alf_queue *q, void *ptr[n], const u32 n)
+{
+	u32 p_head, p_next, c_tail, space;
+	u32 mask = q->mask;
+
+	/* Reserve part of the array for enqueue STORE/WRITE */
+	p_head = ACCESS_ONCE(q->producer.head);
+	smp_rmb(); /* for consumer.tail write, making sure deq loads are done */
+	c_tail = ACCESS_ONCE(q->consumer.tail);
+
+	space = mask + c_tail - p_head;
+	if (n > space)
+		return -ENOBUFS;
+
+	p_next = p_head + n;
+	ASSERT(ACCESS_ONCE(q->producer.head) == p_head);
+	q->producer.head = p_next;
+
+	/* STORE the elems into the queue array */
+	__helper_alf_enqueue_store(p_head, p_next, q, ptr, n);
+	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
+
+	/* Assert no other CPU (or same CPU via preemption) changed queue */
+	ASSERT(ACCESS_ONCE(q->producer.tail) == p_head);
+
+	/* Mark this enq done and avail for consumption */
+	ACCESS_ONCE(q->producer.tail) = p_next;
+
+	return n;
+}
+
+/* Main SINGLE Consumer DEQUEUE
+ *  caller MUST make sure preemption is disabled
+ */
+static inline int
+alf_sc_dequeue(const u32 n;
+	       struct alf_queue *q, void *ptr[n], const u32 n)
+{
+	u32 c_head, c_next, p_tail, elems;
+
+	/* Reserve part of the array for dequeue LOAD/READ */
+	c_head = ACCESS_ONCE(q->consumer.head);
+	p_tail = ACCESS_ONCE(q->producer.tail);
+
+	elems = p_tail - c_head;
+
+	if (elems == 0)
+		return 0;
+	else
+		elems = min(elems, n);
+
+	c_next = c_head + elems;
+	ASSERT(ACCESS_ONCE(q->consumer.head) == c_head);
+	q->consumer.head = c_next;
+
+	smp_rmb(); /* Read-Memory-Barrier matching enq STOREs */
+	__helper_alf_dequeue_load(c_head, c_next,  q, ptr, elems);
+
+	/* Archs with weak Memory Ordering need a memory barrier here.
+	 * As the STORE to q->consumer.tail, must happen after the
+	 * dequeue LOADs. Dequeue LOADs have a dependent STORE into
+	 * ptr, thus a smp_wmb() is enough.
+	 */
+	smp_wmb();
+
+	/* Assert no other CPU (or same CPU via preemption) changed queue */
+	ASSERT(ACCESS_ONCE(q->consumer.tail) == c_head);
+
+	/* Mark this deq done and avail for producers */
+	ACCESS_ONCE(q->consumer.tail) = c_next;
+
+	return elems;
+}
 
 #endif /* _LINUX_ALF_QUEUE_H */
