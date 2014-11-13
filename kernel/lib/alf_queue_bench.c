@@ -35,8 +35,19 @@ static int time_bench_for_loop(
 	return loops_cnt;
 }
 
-static int time_bench_single_enqueue_dequeue(
-	struct time_bench_record *rec, void *data)
+#define ALF_FLAG_MP 0x1  /* Multi  Producer */
+#define ALF_FLAG_MC 0x2  /* Multi  Consumer */
+#define ALF_FLAG_SP 0x4  /* Single Producer */
+#define ALF_FLAG_SC 0x8  /* Single Consumer */
+
+enum queue_behavior_type {
+	MPMC = (ALF_FLAG_MP|ALF_FLAG_MC),
+	SPSC = (ALF_FLAG_SP|ALF_FLAG_SC)
+};
+
+static __always_inline int time_bench_one_enq_deq(
+	struct time_bench_record *rec, void *data,
+	enum queue_behavior_type type)
 {
 	int on_stack = 123;
 	int *obj = &on_stack;
@@ -58,12 +69,30 @@ static int time_bench_single_enqueue_dequeue(
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
-		if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
-			goto fail;
+		/* Compile will hopefull optimized this out */
+		if (type & ALF_FLAG_SP) {
+			if (alf_sp_enqueue(queue, (void **)&obj, 1) < 0)
+				goto fail;
+		} else if (type & ALF_FLAG_MP) {
+			if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+				goto fail;
+		} else {
+			BUILD_BUG();
+		}
+
 		loops_cnt++;
 		barrier(); /* compiler barrier */
-		if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
-			goto fail;
+
+		if (type & ALF_FLAG_SC) {
+			if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+				goto fail;
+		} else if (type & ALF_FLAG_MC) {
+			if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+				goto fail;
+		} else {
+			BUILD_BUG();
+		}
+
 		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
@@ -72,13 +101,25 @@ static int time_bench_single_enqueue_dequeue(
 fail:
 	return 0;
 }
+/* Compiler should inline optimize other function calls out */
+static int time_bench_one_enq_deq_mpmc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_bench_one_enq_deq(rec, data, MPMC);
+}
+static int time_bench_one_enq_deq_spsc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_bench_one_enq_deq(rec, data, SPSC);
+}
 
 /* Multi enqueue before dequeue
  * - strange test as bulk is normal solution, but want to see
  *   if we didn't have/use bulk, and touch more of array
  */
-static int time_multi_enqueue_dequeue(
-	struct time_bench_record *rec, void *data)
+static __always_inline int time_multi_enq_deq(
+	struct time_bench_record *rec, void *data,
+	enum queue_behavior_type type)
 {
 	int on_stack = 123;
 	int *obj = &on_stack;
@@ -103,14 +144,28 @@ static int time_multi_enqueue_dequeue(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		for (n = 0; n < elems; n++) {
-			if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
-				goto fail;
+			if (type & ALF_FLAG_SP) {
+				if (alf_sp_enqueue(queue, (void **)&obj, 1) < 0)
+					goto fail;
+			} else if (type  & ALF_FLAG_MP) {
+				if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+					goto fail;
+			} else {
+				BUILD_BUG();
+			}
 			loops_cnt++;
 		}
 		barrier(); /* compiler barrier */
 		for (n = 0; n < elems; n++) {
-			if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
-				goto fail;
+			if (type & ALF_FLAG_SC) {
+				if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+					goto fail;
+			} else if (type & ALF_FLAG_MC) {
+				if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+					goto fail;
+			} else {
+				BUILD_BUG();
+			}
 			loops_cnt++;
 		}
 	}
@@ -121,9 +176,21 @@ static int time_multi_enqueue_dequeue(
 fail:
 	return -1;
 }
-
-static int time_BULK_enqueue_dequeue(
+/* Compiler should inline optimize other function calls out */
+static int time_multi_enq_deq_mpmc(
 	struct time_bench_record *rec, void *data)
+{
+	return time_multi_enq_deq(rec, data, MPMC);
+}
+static int time_multi_enq_deq_spsc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_multi_enq_deq(rec, data, SPSC);
+}
+
+static __always_inline int time_BULK_enq_deq(
+	struct time_bench_record *rec, void *data,
+	enum queue_behavior_type type)
 {
 #define MAX_BULK 32
 	int *objs[MAX_BULK];
@@ -155,12 +222,27 @@ static int time_BULK_enqueue_dequeue(
 
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
-		if (alf_mp_enqueue(queue, (void**)objs, bulk) < 0)
-			goto fail;
+		if (type & ALF_FLAG_SP) {
+			if (alf_sp_enqueue(queue, (void**)objs, bulk) < 0)
+				goto fail;
+		} else if (type & ALF_FLAG_MP) {
+			if (alf_mp_enqueue(queue, (void**)objs, bulk) < 0)
+				goto fail;
+		} else {
+			BUILD_BUG();
+		}
 		loops_cnt += bulk;
+
 		barrier(); /* compiler barrier */
-		if (alf_mc_dequeue(queue, (void **)deq_objs, bulk) < 0)
-			goto fail;
+		if (type & ALF_FLAG_SC) {
+			if (alf_sc_dequeue(queue, (void **)deq_objs, bulk) < 0)
+				goto fail;
+		} else if (type & ALF_FLAG_MC) {
+			if (alf_mc_dequeue(queue, (void **)deq_objs, bulk) < 0)
+				goto fail;
+		} else {
+			BUILD_BUG();
+		}
 		loops_cnt +=bulk;
 	}
 
@@ -170,7 +252,17 @@ static int time_BULK_enqueue_dequeue(
 fail:
 	return -1;
 }
-
+/* Compiler should inline optimize other function calls out */
+static int time_BULK_enq_deq_mpmc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_BULK_enq_deq(rec, data, MPMC);
+}
+static int time_BULK_enq_deq_spsc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_BULK_enq_deq(rec, data, SPSC);
+}
 
 
 int run_benchmark_tests(void)
@@ -179,36 +271,51 @@ int run_benchmark_tests(void)
 	int ring_size = 512;
 	int passed_count = 0;
 	struct alf_queue *MPMC;
+	struct alf_queue *SPSC;
 
 	/* Results listed below for a E5-2695 CPU */
 
 	/*  0.360 ns cost overhead of the for loop */
-	time_bench_loop(loops*1000, 0,
+	time_bench_loop(loops*10, 0,
 			"for_loop", NULL, time_bench_for_loop);
 
+	/* MPMC: Multi-Producer-Multi-Consumer tests */
 	MPMC = alf_queue_alloc(ring_size, GFP_KERNEL);
 
 	/* 10.910 ns cost for single enqueue or dequeue */
-	time_bench_loop(loops, 0,
-			"ALF-simple", MPMC, time_bench_single_enqueue_dequeue);
+	time_bench_loop(loops, 0, "ALF-MPMC-simple", MPMC,
+			time_bench_one_enq_deq_mpmc);
 
 	/* 13.576 ns cost when touching more of the array  */
-	time_bench_loop(loops/100, 128, "ALF-multi", MPMC,
-			time_multi_enqueue_dequeue);
+	time_bench_loop(loops/100, 128, "ALF-MPMC-multi", MPMC,
+			time_multi_enq_deq_mpmc);
 
-	time_bench_loop(loops,  2, "ALF-bulk2", MPMC,
-			time_BULK_enqueue_dequeue);
-	time_bench_loop(loops,  4, "ALF-bulk4", MPMC,
-			time_BULK_enqueue_dequeue);
-	time_bench_loop(loops,  6, "ALF-bulk6", MPMC,
-			time_BULK_enqueue_dequeue);
-	time_bench_loop(loops,  8, "ALF-bulk8", MPMC,
-			time_BULK_enqueue_dequeue);
-	time_bench_loop(loops, 16, "ALF-bulk16", MPMC,
-			time_BULK_enqueue_dequeue);
-
+	/* Bulk MPMC */
+	time_bench_loop(loops,  2, "MPMC-bulk2",  MPMC, time_BULK_enq_deq_mpmc);
+	time_bench_loop(loops,  3, "MPMC-bulk3",  MPMC, time_BULK_enq_deq_mpmc);
+	time_bench_loop(loops,  4, "MPMC-bulk4",  MPMC, time_BULK_enq_deq_mpmc);
+	time_bench_loop(loops,  6, "MPMC-bulk6",  MPMC, time_BULK_enq_deq_mpmc);
+	time_bench_loop(loops,  8, "MPMC-bulk8",  MPMC, time_BULK_enq_deq_mpmc);
+	time_bench_loop(loops, 16, "MPMC-bulk16", MPMC, time_BULK_enq_deq_mpmc);
 
 	alf_queue_free(MPMC);
+
+	/* SPSC: Single-Producer-Single-Consumer tests */
+	SPSC = alf_queue_alloc(ring_size, GFP_KERNEL);
+
+	time_bench_loop(loops*10, 0, "ALF-SPSC-simple", SPSC,
+			time_bench_one_enq_deq_spsc);
+	time_bench_loop(loops/10, 128, "ALF-SPSC-multi", SPSC,
+			time_multi_enq_deq_spsc);
+	/* Bulk SPSC */
+	time_bench_loop(loops,  2, "SPSC-bulk2",  SPSC, time_BULK_enq_deq_spsc);
+	time_bench_loop(loops,  3, "SPSC-bulk3",  SPSC, time_BULK_enq_deq_spsc);
+	time_bench_loop(loops,  4, "SPSC-bulk4",  SPSC, time_BULK_enq_deq_spsc);
+	time_bench_loop(loops,  6, "SPSC-bulk6",  SPSC, time_BULK_enq_deq_spsc);
+	time_bench_loop(loops,  8, "SPSC-bulk8",  SPSC, time_BULK_enq_deq_spsc);
+	time_bench_loop(loops, 16, "SPSC-bulk16", SPSC, time_BULK_enq_deq_spsc);
+
+	alf_queue_free(SPSC);
 	return passed_count;
 }
 
