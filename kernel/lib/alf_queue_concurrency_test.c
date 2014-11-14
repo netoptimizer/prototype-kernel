@@ -90,7 +90,7 @@ alf_run_producer(struct alf_queue *q, struct my_producer *me)
 		retries = 0;
 	retry:
 		n = alf_mp_enqueue(q, objs, PRODUCER_BULK);
-		if (n < 0) {
+		if (n == 0) {
 			if (++retries < retries_max) {
 				cpu_relax(); // cond_resched();
 				goto retry;
@@ -98,6 +98,9 @@ alf_run_producer(struct alf_queue *q, struct my_producer *me)
 			/* scroll back counter */
 			me->data.cnt -= PRODUCER_BULK;
 			continue;
+		} else {
+			/* Fix this code if the API changed ;-) */
+			BUG_ON(n != PRODUCER_BULK);
 		}
 		total += n;
 		/* Hack: Wake up consumer after some enqueue */

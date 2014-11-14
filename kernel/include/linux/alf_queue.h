@@ -48,9 +48,11 @@ void               alf_queue_free(struct alf_queue *q);
 
 /* Main Multi-Producer ENQUEUE
  *
- * Discussion: What should the semantics be, when a bulk enqueue could
- * take part of the bulk, but not the entire bulk?  Current semantics
- * is to abort with -ENOBUFS.
+ * Even-though current API have a "fixed" semantics of aborting if it
+ * cannot enqueue the full bulk size.  Users of this API should check
+ * on the returned number of enqueue elements match, to verify enqueue
+ * was successful.  This allow us to introduce a "variable" enqueue
+ * scheme later.
  */
 static inline int
 alf_mp_enqueue(const u32 n;
@@ -66,7 +68,7 @@ alf_mp_enqueue(const u32 n;
 
 		space = mask + c_tail - p_head;
 		if (n > space)
-			return -ENOBUFS;
+			return 0;
 
 		p_next = p_head + n;
 	}
@@ -163,7 +165,7 @@ alf_sp_enqueue(const u32 n;
 
 	space = mask + c_tail - p_head;
 	if (n > space)
-		return -ENOBUFS;
+		return 0;
 
 	p_next = p_head + n;
 	ASSERT(ACCESS_ONCE(q->producer.head) == p_head);

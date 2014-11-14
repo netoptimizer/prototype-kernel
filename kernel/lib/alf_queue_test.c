@@ -47,13 +47,13 @@ static noinline bool test_add_and_remove_elem(void)
 		return false;
 
 	/* enqueue */
-	if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+	if (alf_mp_enqueue(queue, (void **)&obj, 1) != 1)
 		goto fail;
 	/* count */
 	if (alf_queue_count(queue) != 1)
 		goto fail;
 	/* dequeue */
-	if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+	if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) == 0)
 		goto fail;
 	/* compare pointer values from enq and deq */
 	if (verbose)
@@ -99,13 +99,13 @@ static bool test_add_and_remove_elems_BULK(void)
 		for (i = 0; i < BULK; i++, n++)
 			objs[i] = (void *)(unsigned long)(n);
 		/* enqueue */
-		if (alf_mp_enqueue(queue, objs, BULK) < 0)
+		if (alf_mp_enqueue(queue, objs, BULK) != BULK)
 			goto fail;
 		/* count */
 		if (alf_queue_count(queue) != BULK)
 			goto fail;
 		/* dequeue */
-		if (alf_mc_dequeue(queue, deq_objs, BULK) < 0)
+		if (alf_mc_dequeue(queue, deq_objs, BULK) != BULK)
 			goto fail;
 		/* compare pointers with fake values from enq to deq */
 		for (i = 0; i < BULK; i++) {

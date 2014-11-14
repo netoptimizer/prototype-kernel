@@ -71,10 +71,10 @@ static __always_inline int time_bench_one_enq_deq(
 	for (i = 0; i < rec->loops; i++) {
 		/* Compile will hopefull optimized this out */
 		if (type & ALF_FLAG_SP) {
-			if (alf_sp_enqueue(queue, (void **)&obj, 1) < 0)
+			if (alf_sp_enqueue(queue, (void **)&obj, 1) != 1)
 				goto fail;
 		} else if (type & ALF_FLAG_MP) {
-			if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+			if (alf_mp_enqueue(queue, (void **)&obj, 1) != 1)
 				goto fail;
 		} else {
 			BUILD_BUG();
@@ -84,10 +84,10 @@ static __always_inline int time_bench_one_enq_deq(
 		barrier(); /* compiler barrier */
 
 		if (type & ALF_FLAG_SC) {
-			if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+			if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) != 1)
 				goto fail;
 		} else if (type & ALF_FLAG_MC) {
-			if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+			if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) != 1)
 				goto fail;
 		} else {
 			BUILD_BUG();
@@ -145,10 +145,10 @@ static __always_inline int time_multi_enq_deq(
 	for (i = 0; i < rec->loops; i++) {
 		for (n = 0; n < elems; n++) {
 			if (type & ALF_FLAG_SP) {
-				if (alf_sp_enqueue(queue, (void **)&obj, 1) < 0)
+				if (alf_sp_enqueue(queue,(void **)&obj, 1) != 1)
 					goto fail;
 			} else if (type  & ALF_FLAG_MP) {
-				if (alf_mp_enqueue(queue, (void **)&obj, 1) < 0)
+				if (alf_mp_enqueue(queue,(void **)&obj, 1) != 1)
 					goto fail;
 			} else {
 				BUILD_BUG();
@@ -158,10 +158,10 @@ static __always_inline int time_multi_enq_deq(
 		barrier(); /* compiler barrier */
 		for (n = 0; n < elems; n++) {
 			if (type & ALF_FLAG_SC) {
-				if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+				if (alf_sc_dequeue(queue, (void **)&deq_obj, 1) != 1)
 					goto fail;
 			} else if (type & ALF_FLAG_MC) {
-				if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) < 0)
+				if (alf_mc_dequeue(queue, (void **)&deq_obj, 1) != 1)
 					goto fail;
 			} else {
 				BUILD_BUG();
@@ -223,10 +223,10 @@ static __always_inline int time_BULK_enq_deq(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		if (type & ALF_FLAG_SP) {
-			if (alf_sp_enqueue(queue, (void**)objs, bulk) < 0)
+			if (alf_sp_enqueue(queue, (void**)objs, bulk) != bulk)
 				goto fail;
 		} else if (type & ALF_FLAG_MP) {
-			if (alf_mp_enqueue(queue, (void**)objs, bulk) < 0)
+			if (alf_mp_enqueue(queue, (void**)objs, bulk) != bulk)
 				goto fail;
 		} else {
 			BUILD_BUG();
@@ -235,10 +235,10 @@ static __always_inline int time_BULK_enq_deq(
 
 		barrier(); /* compiler barrier */
 		if (type & ALF_FLAG_SC) {
-			if (alf_sc_dequeue(queue, (void **)deq_objs, bulk) < 0)
+			if (alf_sc_dequeue(queue, (void **)deq_objs, bulk) != bulk)
 				goto fail;
 		} else if (type & ALF_FLAG_MC) {
-			if (alf_mc_dequeue(queue, (void **)deq_objs, bulk) < 0)
+			if (alf_mc_dequeue(queue, (void **)deq_objs, bulk) != bulk)
 				goto fail;
 		} else {
 			BUILD_BUG();
