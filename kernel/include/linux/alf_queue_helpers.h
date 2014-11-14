@@ -142,6 +142,35 @@ __helper_alf_dequeue_load_mask_less2(u32 c_head, u32 c_next,
 
 
 static inline void
+__helper_alf_enqueue_store_nomask(u32 p_head, u32 p_next,
+				struct alf_queue *q, void **ptr, const u32 n)
+{
+	int i, index = p_head & q->mask;
+
+	/* Avoids if-statement and any mask of array index */
+	for (i = 0; i < n && index <= q->mask; i++, index++) {
+		q->ring[index] = ptr[i];
+	}
+	for (index = 0; i < n; i++, index++) {
+		q->ring[index] = ptr[i];
+	}
+}
+static inline void
+__helper_alf_dequeue_load_nomask(u32 c_head, u32 c_next,
+			       struct alf_queue *q, void **ptr, const u32 elems)
+{
+	int i, index = c_head & q->mask;
+
+	/* Avoids if-statement and any mask of array index */
+	for (i = 0; i < elems && index <= q->mask; i++, index++) {
+		ptr[i] = q->ring[index];
+	}
+	for (index = 0; i < elems; i++, index++) {
+		ptr[i] = q->ring[index];
+	}
+}
+
+static inline void
 __helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
 				  struct alf_queue *q, void **ptr, const u32 n)
 {

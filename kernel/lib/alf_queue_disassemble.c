@@ -38,6 +38,7 @@ create_helpers(simple);
 create_helpers(mask);
 create_helpers(mask_less);
 create_helpers(mask_less2);
+create_helpers(nomask);
 create_helpers(unroll);
 create_helpers(unroll_duff);
 create_helpers(memcpy);
@@ -60,6 +61,9 @@ void fake_calls(struct alf_queue *q)
 
 	call_helper_alf_enqueue_store(mask_less2);
 	call_helper_alf_dequeue_load(mask_less2);
+
+	call_helper_alf_enqueue_store(nomask);
+	call_helper_alf_dequeue_load(nomask);
 
 	call_helper_alf_enqueue_store(unroll);
 	call_helper_alf_dequeue_load(unroll);
