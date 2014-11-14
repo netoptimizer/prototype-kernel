@@ -46,7 +46,7 @@ struct my_producer {
 	struct my_data data;
 } ____cacheline_aligned_in_smp;
 
-#define NR_PRODUCERS	20
+#define NR_PRODUCERS	3
 static struct my_producer producers[NR_PRODUCERS];
 
 struct my_consumer {
@@ -65,6 +65,24 @@ static struct alf_queue *mpmc;
 #define PRODUCER_BULK	8
 #define CONSUMER_BULK	8
 
+/* PRODUCER_ELEMS_ENQ is the number of elements a single producer will
+ * try to enqueue.  If set below the QUEUE_SIZE, we have a better
+ * chance of avoiding a single producer starve other producers. We
+ * want to measure/provoke the worst case situation, where several
+ * producers compete and touch the queue data structures.
+ */
+#define PRODUCER_ELEMS_ENQ 1000
+
+/* Trying to catching and reporting benchmark performance when a race
+ * happened between the many enqueuers and the single dequeue.  If the
+ * number of dequeued packets exceed teh QUEUE_SIZE, then the
+ * situation should have occured.  But if the NR_PRODUCERS and the
+ * number of elements they enqueue is smaller than 2x QUEUE_SIZE, then
+ * the situation cannot occur, take this into account.
+ */
+#define CONSUMER_HIGH_DEQ_CNT min(QUEUE_SIZE * 2, \
+				  NR_PRODUCERS * PRODUCER_ELEMS_ENQ)
+
 #ifndef U32_MAX
 #define U32_MAX                ((u32)~0U)
 #endif
@@ -75,7 +93,7 @@ alf_run_producer(struct alf_queue *q, struct my_producer *me)
 	int i, j, n, total = 0;
 	void *objs[PRODUCER_BULK];
 	int retries = 0, retries_max = U32_MAX;
-	int elements = 1000;
+	int elements = PRODUCER_ELEMS_ENQ;
 	int32_t loops = elements / PRODUCER_BULK;
 
 	for (j = 0; j < loops; j++) {
@@ -215,7 +233,7 @@ static int alf_consumer_thread(void *arg)
 {
 	struct my_consumer *me = arg;
 	unsigned int cnt;
-	int min_bench_cnt = 5000; /* Shold be > QUEUE_SIZE */
+	int min_bench_cnt = CONSUMER_HIGH_DEQ_CNT; /* Should be > QUEUE_SIZE */
 	struct time_bench_record rec;
 	int cpu;
 
