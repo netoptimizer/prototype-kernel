@@ -21,7 +21,7 @@
 #ifndef _LINUX_QMEMPOOL_H
 #define _LINUX_QMEMPOOL_H
 
-#include <linux/ring_queue.h>
+#include <linux/alf_queue.h>
 #include <linux/prefetch.h>
 #include <linux/hardirq.h>
 
@@ -32,7 +32,7 @@
 #define QMEMPOOL_REFILL_MULTIPLIER 2
 
 struct qmempool_percpu {
-	struct ring_queue *localq;
+	struct alf_queue *localq;
 	/* room for percpu stats */
 	uint64_t refill_cnt;
 	uint64_t full_cnt; /* push back (to shared) elements when full */
@@ -45,7 +45,7 @@ struct qmempool {
 	 *  The queue support bulk transfers, which amortize the cost
 	 *  of the atomic cmpxchg operation.
 	 */
-	struct ring_queue	*sharedq;
+	struct alf_queue	*sharedq;
 
 	/* Per CPU local "cache" queues for faster lockfree access.
 	 * The local queues (localq) are Single-Producer-Single-Consumer
@@ -67,7 +67,7 @@ extern struct qmempool* qmempool_create(
 	struct kmem_cache *kmem, gfp_t gfp_mask);
 
 extern void* __qmempool_alloc_from_sharedq(
-	struct qmempool *pool, gfp_t gfp_mask, struct ring_queue *localq);
+	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
 extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems);
 
@@ -151,8 +151,8 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
-	res = ring_queue_sc_dequeue(cpu->localq, (void **)&element);
-	if (res == 0) {/* success: element dequeues from localq */
+	res = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
+	if (res == 1) {/* success: element dequeues from localq */
 		//prefetchw(element); // TODO: test effect
 		__qmempool_preempt_enable();
 		return element;
@@ -186,18 +186,19 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 }
 
 
-/* Defined in header, because this allow us to change
- * __qmempool_preempt_enable() compile time, depending on usage.
+/* This func could defined qmempool.c, but is kept in header, because
+ * all users of __qmempool_preempt_*() are kept in here to easier see
+ * how preemption protection is used.
  *
  * MUST be called with __qmempool_preempt_disable()
  *
  * Noinlined because it uses a lot of stack.
  */
 static noinline_for_stack bool
-__qmempool_free_to_sharedq(struct qmempool *pool, struct ring_queue *localq)
+__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
-	int res;
+	int res, n;
 
 	/* This function is called when the localq is full. Thus,
 	 * elements from localq needs to be returned to sharedq (or if
@@ -205,17 +206,18 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct ring_queue *localq)
 	 */
 
 	/* Make room in localq */
-	res = ring_queue_sc_dequeue_bulk(localq, elems, QMEMPOOL_BULK);
-	// should be "_burst" else localq must minimum be 32
-	if (unlikely(res < 0))
+	n = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
+	if (unlikely(n == 0))
 		goto failed;
 
-        /* Successful dequeue from localq */
+        /* Successful dequeued 'n' elements from localq */
 	/* Place elems in sharedq */
-	res = ring_queue_mp_enqueue_bulk(pool->sharedq,
-					 elems, QMEMPOOL_BULK);
-	if (res == 0) /* Success enqueued to sharedq */
+	res = alf_mp_enqueue(pool->sharedq, elems, n);
+	if (res == n) /* Success enqueued to sharedq */
 		return true;
+
+	/* Catch if enq API change to allow flexible enq */
+	BUG_ON(res > 0);
 
 	/* Allow slab kmem_cache_free() to run with preemption */
 	__qmempool_preempt_enable();
@@ -238,11 +240,11 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	debug_percpu(cpu);
-	res = ring_queue_sp_enqueue(cpu->localq, elem);
-	if (res == 0) /* success: element enqueued to localq */
+	res = alf_sp_enqueue(cpu->localq, &elem, 1);
+	if (res == 1) /* success: element free'ed by enqueued to localq */
 		goto done;
 
-	/* IDEA: use ring_queue watermark feature, to allow enqueue of
+	/* IDEA: use a watermark feature, to allow enqueue of
 	 * this cache-hot elem, and then return some to sharedq.
 	 */
 
@@ -258,13 +260,13 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 
 	/* 3. this elem is more cache hot, keep it in localq */
 	debug_percpu(cpu);
-	res = ring_queue_sp_enqueue(cpu->localq, elem);
-	if (unlikely(res < 0)) { /* should have been be room in localq!?! */
+	res = alf_sp_enqueue(cpu->localq, &elem, 1);
+	if (unlikely(res <= 0)) { /* should have been be room in localq!?! */
 		WARN_ON(1);
 		pr_err("%s() Why could this happen? localq:%d sharedq:%d"
 		       " irqs_disabled:%d in_softirq:%lu cpu:%d\n",
-		       __func__, ring_queue_count(cpu->localq),
-		       ring_queue_count(pool->sharedq), irqs_disabled(),
+		       __func__, alf_queue_count(cpu->localq),
+		       alf_queue_count(pool->sharedq), irqs_disabled(),
 		       in_softirq(), smp_processor_id());
 		kmem_cache_free(pool->kmem, elem);
 	}

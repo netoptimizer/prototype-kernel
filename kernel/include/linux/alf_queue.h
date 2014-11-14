@@ -136,7 +136,7 @@ alf_mc_dequeue(const u32 n;
 	return elems;
 }
 
-#define ASSERT_DEBUG_SPSC 1
+//#define ASSERT_DEBUG_SPSC 1
 #ifndef ASSERT_DEBUG_SPSC
 #define ASSERT(x) do { } while (0)
 #else

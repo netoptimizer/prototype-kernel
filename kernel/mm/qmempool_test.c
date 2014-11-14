@@ -3,8 +3,8 @@
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/ring_queue.h>
 #include <linux/module.h>
+#include <linux/alf_queue.h>
 #include <linux/slab.h>
 #include <linux/time_bench.h>
 #include <linux/skbuff.h>
@@ -78,13 +78,13 @@ static bool test_basic_req_elem(void)
 
 	preempt_disable();
 	cpu = this_cpu_ptr(pool->percpu);
-	queue_sz = ring_queue_count(cpu->localq);
+	queue_sz = alf_queue_count(cpu->localq);
 	/* Localq should be refilled with BULK-1 */
 	if (queue_sz != (QMEMPOOL_BULK - 1))
 		result = false;
 	if (verbose >= 2)
 		pr_info("%s() localq:%d sharedq:%d\n", __func__,
-			queue_sz, ring_queue_count(pool->sharedq));
+			queue_sz, alf_queue_count(pool->sharedq));
 	preempt_enable();
 
 	qmempool_destroy(pool);
@@ -100,8 +100,8 @@ static void print_qstats(struct qmempool *pool,
 
 	preempt_disable();
 	cpu = this_cpu_ptr(pool->percpu);
-	localq_sz  = ring_queue_count(cpu->localq);
-	sharedq_sz = ring_queue_count(pool->sharedq);
+	localq_sz  = alf_queue_count(cpu->localq);
+	sharedq_sz = alf_queue_count(pool->sharedq);
 	if (verbose >= 2)
 		pr_info("%s() qstats localq:%d sharedq:%d (%s)\n", func,
 			localq_sz, sharedq_sz, msg);
@@ -115,10 +115,10 @@ static bool test_alloc_and_free_nr(int nr)
 	void *elem;
 	bool result = true;
 	int i, res;
-	struct ring_queue *temp_queue;
+	struct alf_queue *temp_queue;
 
 	/* temporary queue for keeping elements for testing */
-	temp_queue = ring_queue_create(1024, RING_F_SP_ENQ|RING_F_SC_DEQ);
+	temp_queue = alf_queue_alloc(1024, GFP_ATOMIC);
 	if (temp_queue == NULL)
 		return false;
 
@@ -126,7 +126,7 @@ static bool test_alloc_and_free_nr(int nr)
 				 SLAB_HWCACHE_ALIGN, NULL);
 	pool = qmempool_create(32, 128, 0, slab, GFP_ATOMIC);
 	if (pool == NULL) {
-		ring_queue_free(temp_queue);
+		alf_queue_free(temp_queue);
 		kmem_cache_destroy(slab);
 		return false;
 	}
@@ -134,23 +134,23 @@ static bool test_alloc_and_free_nr(int nr)
 	/* Request many elements */
 	for (i = 0; i < nr; i++) {
 		elem = qmempool_alloc(pool, GFP_ATOMIC);
-		ring_queue_enqueue(temp_queue, elem);
+		alf_mp_enqueue(temp_queue, &elem, 1);
 	}
 	if (verbose >= 2)
 		pr_info("%s() nr elems %d qstats temp_queue:%d\n", __func__,
-			nr, ring_queue_count(temp_queue));
+			nr, alf_queue_count(temp_queue));
 
 	print_qstats(pool, __func__, "A");
 
 	/* Free all the elements */
 	for (i = 0; i < nr; i++) {
-		res = ring_queue_dequeue(temp_queue, (void **)&elem);
-		BUG_ON(res < 0);
+		res = alf_mc_dequeue(temp_queue, &elem, 1);
+		BUG_ON(res == 0);
 		qmempool_free(pool, elem);
 	}
 	print_qstats(pool, __func__, "B");
 
-	ring_queue_free(temp_queue);
+	alf_queue_free(temp_queue);
 	qmempool_destroy(pool);
 	kmem_cache_destroy(slab);
 	return result;

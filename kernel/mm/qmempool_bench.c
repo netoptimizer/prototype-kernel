@@ -3,8 +3,8 @@
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
-#include <linux/ring_queue.h>
 #include <linux/module.h>
+#include <linux/alf_queue.h>
 #include <linux/slab.h>
 #include <linux/time_bench.h>
 #include <linux/skbuff.h>
@@ -21,8 +21,8 @@ static void print_qstats(struct qmempool *pool,
 
 	preempt_disable();
 	cpu = this_cpu_ptr(pool->percpu);
-	localq_sz  = ring_queue_count(cpu->localq);
-	sharedq_sz = ring_queue_count(pool->sharedq);
+	localq_sz  = alf_queue_count(cpu->localq);
+	sharedq_sz = alf_queue_count(pool->sharedq);
 	if (verbose >= 2)
 		pr_info("%s() qstats localq:%d sharedq:%d (%s)\n", func,
 			localq_sz, sharedq_sz, msg);
@@ -227,8 +227,7 @@ bool run_micro_benchmark_tests(void)
 			benchmark_kmem_cache_fastpath_reuse);
 	/* Results:
 	 *   6.993 ns with preempt_{disable/enable} CONFIG_PREEMPT=n
-	 *   9.267 ns with preempt_{disable/enable}
-	 *  18.891 ns with local_bh_{disable/enable}
+	 *   9.659 ns with preempt_{disable/enable} CONFIG_PREEMPT=y
 	 */
 	time_bench_loop(loops*30, 0, "qmempool fastpath reuse", NULL,
 			benchmark_qmempool_fastpath_reuse);
@@ -244,8 +243,7 @@ bool run_micro_benchmark_tests(void)
 			benchmark_kmem_cache_pattern);
 	/* Results:
 	 *  10.507 ns N=256 with preempt_{disable/enable} CONFIG_PREEMPT=n
-	 *  12.539 ns N=256 with preempt_{disable/enable}
-	 *  23.409 ns N=256 with local_bh_{disable/enable}
+	 *  13.206 ns N=256 with preempt_{disable/enable} CONFIG_PREEMPT=y
 	 */
 	time_bench_loop(loops/10, 0, "qmempool alloc+free N-pattern", NULL,
 			benchmark_qmempool_pattern);

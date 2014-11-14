@@ -14,7 +14,7 @@
 #include <linux/slab.h> /* kzalloc */
 #include <linux/alf_queue.h>
 
-static int verbose=1;
+static int verbose=0;
 
 /* True if x is a power of 2 */
 #define POWEROF2(x) (((x) & ((x) - 1)) == 0)

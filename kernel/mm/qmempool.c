@@ -41,20 +41,19 @@ void qmempool_destroy(struct qmempool *pool)
 			struct qmempool_percpu *cpu =
 				per_cpu_ptr(pool->percpu, j);
 
-			while (ring_queue_dequeue(cpu->localq,
-						  (void **)&elem) >= 0)
+			while (alf_mc_dequeue(cpu->localq, &elem, 1) == 1)
 				kmem_cache_free(pool->kmem, elem);
-			BUG_ON(!ring_queue_empty(cpu->localq));
-			ring_queue_free(cpu->localq);
+			BUG_ON(!alf_queue_empty(cpu->localq));
+			alf_queue_free(cpu->localq);
 		}
 		free_percpu(pool->percpu);
 	}
 
 	if (pool->sharedq) {
-		while (ring_queue_dequeue(pool->sharedq, (void **)&elem) >= 0)
+		while (alf_mc_dequeue(pool->sharedq, &elem, 1) == 1)
 			kmem_cache_free(pool->kmem, elem);
-		BUG_ON(!ring_queue_empty(pool->sharedq));
-		ring_queue_free(pool->sharedq);
+		BUG_ON(!alf_queue_empty(pool->sharedq));
+		alf_queue_free(pool->sharedq);
 	}
 
 	kfree(pool);
@@ -71,7 +70,7 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 
 	/* Validate constraints, e.g. due to bulking */
 	if (localq_sz < QMEMPOOL_BULK) {
-		/* FIXME: perhaps <= because ring_queue 16 can only
+		/* FIXME: perhaps <= because alf_queue 16 can only
 		 * contain 15 elems */
 		pr_err("%s() localq size(%d) too small for bulking\n",
 		       __func__, localq_sz);
@@ -79,7 +78,7 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 	}
 	if (sharedq_sz <= (QMEMPOOL_BULK * QMEMPOOL_REFILL_MULTIPLIER)) {
 		/* Minimum sharedq size is 64 due to refill and return
-		 * bulking needs sufficient space.  Due to ring_queue
+		 * bulking needs sufficient space.  Due to alf_queue
 		 * implementation size can only contain is its size
 		 * minus 1, thus size 32 can only contain 31 elems
 		 * which is to small for REFILL_MULTIPLIER(2) * BULK(16)
@@ -94,7 +93,7 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		return NULL;
 	}
 	if (prealloc >= sharedq_sz) {
-		/* ring_queue limit is its size minus 1 */
+		/* alf_queue limit is its size minus 1 */
 		pr_err("%s() prealloc(%d) req >= sharedq size(%d)\n",
 		       __func__, prealloc, sharedq_sz);
 		return NULL;
@@ -114,8 +113,8 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 	pool->kmem     = kmem;
 	pool->gfp_mask = gfp_mask;
 
-	/* MPMC (Multi-Producer-Multi-Consumer) ring queue */
-	pool->sharedq = ring_queue_create(sharedq_sz, 0);
+	/* MPMC (Multi-Producer-Multi-Consumer) queue */
+	pool->sharedq = alf_queue_alloc(sharedq_sz, gfp_mask);
 	if (pool->sharedq == NULL) {
 		pr_err("%s() failed to create shared queue(%d)\n",
 		       __func__, sharedq_sz);
@@ -131,8 +130,9 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 			qmempool_destroy(pool);
 			return NULL;
 		}
-		res = ring_queue_enqueue(pool->sharedq, elem);
-		BUG_ON(res < 0);
+		/* Could use the SP version given it is not visible yet */
+		res = alf_mp_enqueue(pool->sharedq, &elem, 1);
+		BUG_ON(res <= 0);
 	}
 
 	pool->percpu = alloc_percpu(struct qmempool_percpu);
@@ -142,12 +142,11 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		return NULL;
 	}
 
-	/* SPSC (Single-Consumer-Single-Producer) ring queue per CPU */
+	/* SPSC (Single-Consumer-Single-Producer) queue per CPU */
 	for_each_possible_cpu(j) {
 		struct qmempool_percpu *cpu = per_cpu_ptr(pool->percpu, j);
 
-		cpu->localq = ring_queue_create(localq_sz,
-						RING_F_SP_ENQ|RING_F_SC_DEQ);
+		cpu->localq = alf_queue_alloc(localq_sz, gfp_mask);
 		if (cpu->localq == NULL) {
 			pr_err("%s() failed alloc localq on cpu:%d\n",
 			       __func__, j);
@@ -189,7 +188,7 @@ EXPORT_SYMBOL(qmempool_free);
 
 /* Assumed called with local_bh_disable() or preempt_disable() */
 void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
-				   struct ring_queue *localq)
+				   struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
@@ -199,9 +198,8 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 	 * elements.  Thus, the localq needs refilling */
 
 	/* Costs atomic "cmpxchg", but amortize cost by bulk dequeue */
-	res = ring_queue_mc_dequeue_bulk(pool->sharedq, elems, QMEMPOOL_BULK);
-	// FIXME: should be "_burst" variant if e.g. only 15 elements is left
-	if (likely(res == 0)) {/* Success */
+	res = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
+	if (likely(res > 0)) {/* Success */
 		/* FIXME: Consider prefetching data part of elements
 		 * here, it should be an optimal place to hide memory
 		 * prefetching.  Especially given the localq is known
@@ -210,15 +208,13 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 		 */
 		elem = elems[0]; /* extract one element */
 		/* Refill localq */
-		res = ring_queue_sp_enqueue_bulk(localq,
-						 &elems[1],
-						 QMEMPOOL_BULK-1);
+		res = alf_sp_enqueue(localq, &elems[1], res-1);
 		/* FIXME: localq should be empty, thus enqueue should
 		 * succeed, but races can exists. This MUST be fixed,
 		 * for now add an ASSERT, then users will notice this
-		 * problem need handling/implemeting the hard-way ;-)
+		 * problem need handling/implementing the hard-way ;-)
 		 */
-		BUG_ON(res < 0);
+		BUG_ON(res == 0);
 
 		return elem;
 	}
@@ -255,20 +251,18 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 			if (elems[j] == NULL) {
 				pr_err("%s() ARGH - slab returned NULL",
 				       __func__);
-				res = ring_queue_mp_enqueue_bulk(
-					pool->sharedq, elems, j-1);
+				res = alf_mp_enqueue(pool->sharedq, elems, j-1);
 				BUG_ON(res < 0); //FIXME handle
 				return elem;
 			}
 		}
-		res = ring_queue_mp_enqueue_bulk(
-			pool->sharedq, elems, QMEMPOOL_BULK);
+		res = alf_mp_enqueue(pool->sharedq, elems, QMEMPOOL_BULK);
 		/* FIXME: There is a theoretical chance that multiple
 		 * CPU enter here, refilling sharedq at the same time,
 		 * thus we must handle "full" situation, for now die
 		 * hard so some will need to fix this.
 		 */
-		BUG_ON(res < 0); /* sharedq should have room */
+		BUG_ON(res <= 0); /* sharedq should have room */
 	}
 
 	/* What about refilling localq ???  (guess it will happen on
@@ -297,10 +291,9 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems)
 
 	/* make enough room in sharedq for next round */
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
-		res = ring_queue_mc_dequeue_bulk(
-			pool->sharedq, elems, QMEMPOOL_BULK);
-		BUG_ON(res < 0); /* could race, but sharedq should be full */
-		for (j = 0; j < QMEMPOOL_BULK; j++) {
+		res = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
+		BUG_ON(res == 0); /* could race, but sharedq should be full */
+		for (j = 0; j < res; j++) {
 			kmem_cache_free(pool->kmem, elems[j]);
 		}
 	}
