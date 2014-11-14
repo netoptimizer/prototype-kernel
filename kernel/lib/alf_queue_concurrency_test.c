@@ -168,7 +168,7 @@ alf_run_consumer(struct alf_queue *q, struct my_consumer *me,
 	for (j = 0; j < loops; j++) {
 
 		n = alf_mc_dequeue(q, deq_objs, CONSUMER_BULK);
-		if (n < 0)
+		if (n == 0)
 			break; /* empty queue */
 		total += n;
 
@@ -287,7 +287,7 @@ empty_queue(struct alf_queue *q)
 
 	for (j = 0; j < loops; j++) {
 		n = alf_mc_dequeue(q, deq_objs, 1);
-		if (n < 0)
+		if (n == 0)
 			break;
 		total += n;
 	}
