@@ -75,7 +75,7 @@ alf_mp_enqueue(const u32 n;
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
 
 	/* STORE the elems into the queue array */
-	__helper_alf_enqueue_store(p_head, p_next, q, ptr, n);
+	__helper_alf_enqueue_store(p_head, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
 	/* Wait for other concurrent preceeding enqueues not yet done,
@@ -117,7 +117,7 @@ alf_mc_dequeue(const u32 n;
 	 *   We don't need a smb_rmb() Read-Memory-Barrier here because
 	 *   the above cmpxchg is an implied full Memory-Barrier.
 	 */
-	__helper_alf_dequeue_load(c_head, c_next,  q, ptr, elems);
+	__helper_alf_dequeue_load(c_head, q, ptr, elems);
 
 	/* Archs with weak Memory Ordering need a memory barrier here.
 	 * As the STORE to q->consumer.tail, must happen after the
@@ -172,7 +172,7 @@ alf_sp_enqueue(const u32 n;
 	q->producer.head = p_next;
 
 	/* STORE the elems into the queue array */
-	__helper_alf_enqueue_store(p_head, p_next, q, ptr, n);
+	__helper_alf_enqueue_store(p_head, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
 	/* Assert no other CPU (or same CPU via preemption) changed queue */
@@ -209,7 +209,7 @@ alf_sc_dequeue(const u32 n;
 	q->consumer.head = c_next;
 
 	smp_rmb(); /* Read-Memory-Barrier matching enq STOREs */
-	__helper_alf_dequeue_load(c_head, c_next,  q, ptr, elems);
+	__helper_alf_dequeue_load(c_head, q, ptr, elems);
 
 	/* Archs with weak Memory Ordering need a memory barrier here.
 	 * As the STORE to q->consumer.tail, must happen after the

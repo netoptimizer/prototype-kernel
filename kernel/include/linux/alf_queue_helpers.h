@@ -10,8 +10,8 @@
  */
 
 static inline void
-__helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_simple(u32 p_head, struct alf_queue *q,
+				  void **ptr, const u32 n)
 {
 	int i, index = p_head & q->mask;
 
@@ -25,8 +25,8 @@ __helper_alf_enqueue_store_simple(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
-				 struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_simple(u32 c_head, struct alf_queue *q,
+				 void **ptr, const u32 elems)
 {
 	int i, index = c_head & q->mask;
 
@@ -38,8 +38,8 @@ __helper_alf_dequeue_load_simple(u32 c_head, u32 c_next,
 }
 
 static inline void
-__helper_alf_enqueue_store_mask(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_mask(u32 p_head, struct alf_queue *q,
+				void **ptr, const u32 n)
 {
 	int i, index = p_head;
 
@@ -48,8 +48,8 @@ __helper_alf_enqueue_store_mask(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_mask(u32 c_head, struct alf_queue *q,
+			       void **ptr, const u32 elems)
 {
 	int i, index = c_head;
 
@@ -59,8 +59,8 @@ __helper_alf_dequeue_load_mask(u32 c_head, u32 c_next,
 }
 
 static inline void
-__helper_alf_enqueue_store_mask_less(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_mask_less(u32 p_head, struct alf_queue *q,
+				     void **ptr, const u32 n)
 {
 	int i, index = p_head & q->mask;
 
@@ -76,8 +76,8 @@ __helper_alf_enqueue_store_mask_less(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_mask_less(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_mask_less(u32 c_head, struct alf_queue *q,
+				    void **ptr, const u32 elems)
 {
 	int i, index = c_head & q->mask;
 
@@ -94,8 +94,8 @@ __helper_alf_dequeue_load_mask_less(u32 c_head, u32 c_next,
 }
 
 static inline void
-__helper_alf_enqueue_store_mask_less2(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_mask_less2(u32 p_head, struct alf_queue *q,
+				      void **ptr, const u32 n)
 {
 	int i = 0, index = p_head & q->mask;
 
@@ -117,8 +117,8 @@ __helper_alf_enqueue_store_mask_less2(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_mask_less2(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_mask_less2(u32 c_head, struct alf_queue *q,
+				     void **ptr, const u32 elems)
 {
 	int i = 0, index = c_head & q->mask;
 
@@ -142,8 +142,8 @@ __helper_alf_dequeue_load_mask_less2(u32 c_head, u32 c_next,
 
 
 static inline void
-__helper_alf_enqueue_store_nomask(u32 p_head, u32 p_next,
-				struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_nomask(u32 p_head, struct alf_queue *q,
+				  void **ptr, const u32 n)
 {
 	int i, index = p_head & q->mask;
 
@@ -156,8 +156,8 @@ __helper_alf_enqueue_store_nomask(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_nomask(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_nomask(u32 c_head, struct alf_queue *q,
+				 void **ptr, const u32 elems)
 {
 	int i, index = c_head & q->mask;
 
@@ -171,8 +171,8 @@ __helper_alf_dequeue_load_nomask(u32 c_head, u32 c_next,
 }
 
 static inline void
-__helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_unroll(u32 p_head, struct alf_queue *q,
+				  void **ptr, const u32 n)
 {
 	int i, iterations = n & ~3UL;
 	u32 index = p_head & q->mask;
@@ -208,8 +208,8 @@ __helper_alf_enqueue_store_unroll(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_unroll(u32 c_head, struct alf_queue *q,
+				 void **ptr, const u32 elems)
 {
 	int i, iterations = elems & ~3UL;
 	u32 index = c_head & q->mask;
@@ -247,8 +247,8 @@ __helper_alf_dequeue_load_unroll(u32 c_head, u32 c_next,
 
 
 static inline void
-__helper_alf_enqueue_store_unroll_duff(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_unroll_duff(u32 p_head,  struct alf_queue *q,
+				       void **ptr, const u32 n)
 {
 	int i = 0, r = n & 0x3, iterations = n & ~3UL;
 	u32 index = p_head & q->mask;
@@ -281,8 +281,8 @@ __helper_alf_enqueue_store_unroll_duff(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_unroll_duff(u32 c_head, u32 c_next,
-			       struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_unroll_duff(u32 c_head, struct alf_queue *q,
+				      void **ptr, const u32 elems)
 {
 	int i = 0, r = elems & 0x3, iterations = elems & ~3UL;
 	u32 index = c_head & q->mask;
@@ -314,11 +314,11 @@ __helper_alf_dequeue_load_unroll_duff(u32 c_head, u32 c_next,
 }
 
 static inline void
-__helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
-				  struct alf_queue *q, void **ptr, const u32 n)
+__helper_alf_enqueue_store_memcpy(u32 p_head, struct alf_queue *q,
+				  void **ptr, const u32 n)
 {
+	u32 p_next = (p_head + n) & q->mask;
 	p_head &= q->mask;
-	p_next &= q->mask;
 	if (p_next >= p_head) {
 		memcpy(&q->ring[p_head], ptr, (p_next-p_head) * sizeof(ptr[0]));
 	} else {
@@ -327,11 +327,11 @@ __helper_alf_enqueue_store_memcpy(u32 p_head, u32 p_next,
 	}
 }
 static inline void
-__helper_alf_dequeue_load_memcpy(u32 c_head, u32 c_next,
-				 struct alf_queue *q, void **ptr, const u32 elems)
+__helper_alf_dequeue_load_memcpy(u32 c_head, struct alf_queue *q,
+				 void **ptr, const u32 elems)
 {
+	u32 c_next = (c_head + elems) & q->mask;
 	c_head &= q->mask;
-	c_next &= q->mask;
 	if (c_next >= c_head) {
 		memcpy(ptr, &q->ring[c_head], (c_next-c_head) * sizeof(ptr[0]));
 	} else {

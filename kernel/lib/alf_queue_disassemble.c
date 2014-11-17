@@ -14,25 +14,25 @@ static int fake_variable=0;
 /* Defines for creating fake func calls to helpers */
 #define create_helper_alf_enqueue_store(NAME)				\
 	static noinline void						\
-	helper_alf_enqueue_store_##NAME(u32 p_head, u32 p_next,		\
-			struct alf_queue *q, void **ptr, const u32 n)	\
+	helper_alf_enqueue_store_##NAME(u32 p_head, struct alf_queue *q,\
+					void **ptr, const u32 n)	\
 	{								\
-	__helper_alf_enqueue_store_##NAME(p_head, p_next, q, ptr, n);   \
+		__helper_alf_enqueue_store_##NAME(p_head, q, ptr, n);   \
 	}
 #define create_helper_alf_dequeue_load(NAME)				\
 	static noinline void						\
-	helper_alf_dequeue_load_##NAME(u32 c_head, u32 c_next,		\
-		       struct alf_queue *q, void **ptr, const u32 n)	\
+	helper_alf_dequeue_load_##NAME(u32 c_head, struct alf_queue *q,	\
+				       void **ptr, const u32 n)		\
 	{								\
-	__helper_alf_dequeue_load_##NAME(c_head, c_next, q, ptr, n);	\
+		__helper_alf_dequeue_load_##NAME(c_head, q, ptr, n);	\
 	}
 #define create_helpers(NAME)						\
 	create_helper_alf_enqueue_store(NAME)				\
 	create_helper_alf_dequeue_load(NAME)
 #define call_helper_alf_enqueue_store(NAME)				\
-	helper_alf_enqueue_store_##NAME(p_head, p_next, q, ptr, n)
+	helper_alf_enqueue_store_##NAME(p_head, q, ptr, n)
 #define call_helper_alf_dequeue_load(NAME)				\
-	helper_alf_dequeue_load_##NAME (p_head, p_next, q, ptr, n)
+	helper_alf_dequeue_load_##NAME (p_head, q, ptr, n)
 
 create_helpers(simple);
 create_helpers(mask);
@@ -46,7 +46,7 @@ create_helpers(memcpy);
 static noinline
 void fake_calls(struct alf_queue *q)
 {
-	u32 p_head = 0, p_next = 1;
+	u32 p_head = 1;
 	void *ptr[42];
 	const u32 n = 1;
 
