@@ -10,6 +10,7 @@
 static int verbose=1;
 
 static int fake_variable=0;
+static void *fake_array[10];
 
 /* Defines for creating fake func calls to helpers */
 #define create_helper_alf_enqueue_store(NAME)				\
@@ -75,18 +76,50 @@ void fake_calls(struct alf_queue *q)
 	call_helper_alf_dequeue_load(memcpy);
 }
 
+/* This demonstrate that compiler will generate more specific/smaller
+ * code when number of enqueue elements is a constant.
+ */
+static noinline void fake_call_enq_elem1(struct alf_queue *q, void *elem)
+{
+	alf_sp_enqueue(q, &elem, 1);
+}
+static noinline void fake_call_enq_elem3(struct alf_queue *q, void *elem)
+{
+	alf_sp_enqueue(q, &elem, 3);
+}
+static noinline void fake_call_enq_elem4(struct alf_queue *q, void *elem)
+{
+	alf_sp_enqueue(q, &elem, 4);
+}
+static noinline void fake_call_enq_elem16(struct alf_queue *q, void *elem)
+{
+	alf_sp_enqueue(q, &elem, 16);
+}
+static noinline void fake_call_enq_variable(struct alf_queue *q,  void *elem, u32 n)
+{
+	alf_sp_enqueue(q, &elem, n);
+}
+
+
 static int __init alf_queue_test_module_init(void)
 {
 	struct alf_queue *q;
 	int ring_size = 512;
+	int n = 42;
 
 	if (verbose)
 		pr_info("Loaded\n");
 
 	q = alf_queue_alloc(ring_size, GFP_KERNEL);
 
-	if (fake_variable)
+	if (fake_variable) {
 		fake_calls(q);
+		fake_call_enq_elem1   (q, &fake_array[0]);
+		fake_call_enq_elem3   (q, &fake_array[0]);
+		fake_call_enq_elem4   (q, &fake_array[0]);
+		fake_call_enq_elem16  (q, &fake_array[0]);
+		fake_call_enq_variable(q, &fake_array[0], n);
+	}
 
 	alf_queue_free(q);
 	return 0;
