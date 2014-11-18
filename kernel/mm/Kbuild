@@ -1,6 +1,11 @@
 # Adding include path as desc in Documentation/kbuild/modules.txt
 ccflags-y := -I$(KDIR)/include
 
-obj-m += qmempool.o
+# Handle if qmempool is defined in kernel
+ifndef CONFIG_QMEMPOOL
+       CONFIG_QMEMPOOL=m
+endif
+obj-$(CONFIG_QMEMPOOL) += qmempool.o
+
 obj-m += qmempool_test.o
 obj-m += qmempool_bench.o

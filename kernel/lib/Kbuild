@@ -8,7 +8,12 @@ obj-m += time_bench_kmem_cache1.o
 obj-m += ring_queue.o
 obj-m += ring_queue_test.o
 
-obj-m += alf_queue.o
+# Handle if alf_queue is defined in kernel
+ifndef CONFIG_ALF_QUEUE
+       CONFIG_ALF_QUEUE=m
+endif
+obj-$(CONFIG_ALF_QUEUE) += alf_queue.o
+
 obj-m += alf_queue_test.o
 obj-m += alf_queue_bench.o
 obj-m += alf_queue_concurrency_test.o
