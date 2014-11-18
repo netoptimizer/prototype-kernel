@@ -40,6 +40,15 @@ push_remote: modules
 	fi
 	scripts/push_remote.sh $(HOST)
 
+clean_remote:
+	@if [ -z $(HOST) ]; then \
+		echo -e "\n ***ERROR***: need remote \"HOST\" variable, use:"; \
+		echo -e "  make clean_remote HOST=192.168.122.49\n"; \
+		exit 2; \
+	fi
+	scripts/push_remote.sh --delete $(HOST)
+
+
 clean:
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD clean
 	@rm -f *~

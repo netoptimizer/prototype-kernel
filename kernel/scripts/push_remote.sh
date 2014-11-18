@@ -10,6 +10,37 @@
 #
 e=echo
 
+# Options parsing
+optspec=":hv-:"
+while getopts "$optspec" optchar; do
+    case "${optchar}" in
+        -)
+            case "${OPTARG}" in
+                delete)
+                    # Deleting symlinks and kernel modules
+		    DELETE=yes
+                    ;;
+                *)
+		    echo "Unknown option --${OPTARG}" >&2
+                    ;;
+            esac;;
+        h)
+            echo "usage: $0 [-v] [--delete]" >&2
+            exit 5
+            ;;
+        v)
+            echo "Verbose '-${optchar}'" >&2
+	    e=echo
+            ;;
+        *)
+            if [ "$OPTERR" != 1 ] || [ "${optspec:0:1}" = ":" ]; then
+                echo "Unknown option: '-${OPTARG}'" >&2
+            fi
+            ;;
+    esac
+done
+shift $(( $OPTIND - 1 ))
+
 if [ -n "$1" ]; then
     export HOST=$1
 else
@@ -43,17 +74,18 @@ ssh $SSH_HOST mkdir -p $UPLOAD_DIR || exit 1
 # Copy over setup scripts
 rsync -avz scripts ${SSH_HOST}:/${UPLOAD_DIR}/ || exit 2
 
-# Push/copy binary modules to remote
-#rsync -avz lib/*.ko ${SSH_HOST}:/${UPLOAD_LIB_MODULES}/ || exit 3
-#
-dirs_with_modules="lib mm"
-for dir in $dirs_with_modules; do
-    ssh $SSH_HOST mkdir -p ${UPLOAD_DIR}/$dir || exit 7
-    rsync -avz ${dir}/*.ko ${SSH_HOST}:/${UPLOAD_DIR}/$dir/ || exit 3
-done
-# (below didn't work)
-#find ${SOURCE_DIR} -name \*.ko | \
-#   xargs scp -avz '{}' ${SSH_HOST}:/${UPLOAD_DIR}/
-
-# Run setup script remotely
-ssh $SSH_HOST "cd $UPLOAD_DIR && ./scripts/$setup_script $KERNEL" || exit 5
+if [ -n "$DELETE" ]; then
+    # Instruct setup_script to delete modules and symlinks
+    ssh $SSH_HOST "cd $UPLOAD_DIR && ./scripts/$setup_script --delete $KERNEL" || exit 5
+else
+    # Push/copy binary modules to remote
+    #rsync -avz lib/*.ko ${SSH_HOST}:/${UPLOAD_LIB_MODULES}/ || exit 3
+    #
+    dirs_with_modules="lib mm"
+    for dir in $dirs_with_modules; do
+	ssh $SSH_HOST mkdir -p ${UPLOAD_DIR}/$dir || exit 7
+	rsync -avz ${dir}/*.ko ${SSH_HOST}:/${UPLOAD_DIR}/$dir/ || exit 3
+    done
+    # Run setup script remotely
+    ssh $SSH_HOST "cd $UPLOAD_DIR && ./scripts/$setup_script $KERNEL" || exit 6
+fi
