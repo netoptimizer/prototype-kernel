@@ -11,7 +11,7 @@
  *  - Very fast
  *  - Designed as a queue for pointers to objects
  *  - Bulk enqueue and dequeue support
- *  - TODO: supports combinations of Multi and Single Producer/Consumer
+ *  - Supports combinations of Multi and Single Producer/Consumer
  *
  * Copyright (C) 2014, Red Hat, Inc.,
  *  by Jesper Dangaard Brouer and Hannes Frederic Sowa
