@@ -208,13 +208,14 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 		 */
 		elem = elems[0]; /* extract one element */
 		/* Refill localq */
-		res = alf_sp_enqueue(localq, &elems[1], res-1);
-		/* FIXME: localq should be empty, thus enqueue should
-		 * succeed, but races can exists. This MUST be fixed,
-		 * for now add an ASSERT, then users will notice this
-		 * problem need handling/implementing the hard-way ;-)
-		 */
-		BUG_ON(res == 0);
+		if (res > 1) {
+			res = alf_sp_enqueue(localq, &elems[1], res-1);
+			/* FIXME: localq should be empty, thus enqueue
+			 * should succeed... if this race exist
+			 * die-hard so users will notice this problem!
+			 */
+			BUG_ON(res == 0);
+		}
 
 		return elem;
 	}
