@@ -6,6 +6,7 @@
 
 #include <linux/module.h>
 #include <linux/alf_queue.h>
+#include <linux/alf_queue_helpers.h> /* needed if alf_queue.h gets upstream */
 
 static int verbose=1;
 
