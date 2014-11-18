@@ -115,9 +115,9 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 
 	/* MPMC (Multi-Producer-Multi-Consumer) queue */
 	pool->sharedq = alf_queue_alloc(sharedq_sz, gfp_mask);
-	if (pool->sharedq == NULL) {
-		pr_err("%s() failed to create shared queue(%d)\n",
-		       __func__, sharedq_sz);
+	if (IS_ERR_OR_NULL(pool->sharedq)) {
+		pr_err("%s() failed to create shared queue(%d) ERR_PTR:0x%p\n",
+		       __func__, sharedq_sz, pool->sharedq);
 		qmempool_destroy(pool);
 		return NULL;
 	}
@@ -147,9 +147,9 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		struct qmempool_percpu *cpu = per_cpu_ptr(pool->percpu, j);
 
 		cpu->localq = alf_queue_alloc(localq_sz, gfp_mask);
-		if (cpu->localq == NULL) {
-			pr_err("%s() failed alloc localq on cpu:%d\n",
-			       __func__, j);
+		if (IS_ERR_OR_NULL(cpu->localq)) {
+			pr_err("%s() failed alloc localq(sz:%d) on cpu:%d\n",
+			       __func__, localq_sz, j);
 			qmempool_destroy(pool);
 			return NULL;
 		}
