@@ -13,18 +13,16 @@
 #include <linux/module.h>
 #include <linux/slab.h> /* kzalloc */
 #include <linux/alf_queue.h>
+#include <linux/log2.h> /* is_power_of_2 */
 
 static int verbose=0;
-
-/* True if x is a power of 2 */
-#define POWEROF2(x) (((x) & ((x) - 1)) == 0)
 
 struct alf_queue * alf_queue_alloc(u32 size, gfp_t gfp)
 {
 	struct alf_queue *q;
 	size_t mem_size;
 
-	if (!(POWEROF2(size)) || size > 65536)
+	if (!(is_power_of_2(size)) || size > 65536)
 		return ERR_PTR(-EINVAL);
 
 	/* The ring array is allocated together with the queue struct

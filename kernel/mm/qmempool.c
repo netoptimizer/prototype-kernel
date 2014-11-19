@@ -12,6 +12,7 @@
 #include <linux/export.h>
 #include <linux/percpu.h>
 #include <linux/qmempool.h>
+#include <linux/log2.h>
 
 /* Global settings */
 
@@ -24,9 +25,6 @@ static LIST_HEAD(qmempool_list);
 static DEFINE_SPINLOCK(qmempool_list_lock);
 #endif
  */
-
-/* True if x is a power of 2 */
-#define POWEROF2(x) (((x) & ((x) - 1)) == 0)
 
 /* Creating and destroying the qmempool
  */
@@ -87,7 +85,7 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		       __func__, sharedq_sz);
 		return NULL;
 	}
-	if (!POWEROF2(localq_sz) || !POWEROF2(sharedq_sz)) {
+	if (!is_power_of_2(localq_sz) || !is_power_of_2(sharedq_sz)) {
 		pr_err("%s() queue sizes (%d/%d) must be power-of-2\n",
 		       __func__, localq_sz, sharedq_sz);
 		return NULL;
