@@ -59,14 +59,13 @@ alf_mp_enqueue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)
 {
 	u32 p_head, p_next, c_tail, space;
-	u32 mask = q->mask;
 
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	do {
 		p_head = ACCESS_ONCE(q->producer.head);
 		c_tail = ACCESS_ONCE(q->consumer.tail);
 
-		space = mask + c_tail - p_head;
+		space = q->size + c_tail - p_head;
 		if (n > space)
 			return 0;
 
@@ -156,14 +155,13 @@ alf_sp_enqueue(const u32 n;
 	       struct alf_queue *q, void *ptr[n], const u32 n)
 {
 	u32 p_head, p_next, c_tail, space;
-	u32 mask = q->mask;
 
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	p_head = q->producer.head;
 	smp_rmb(); /* for consumer.tail write, making sure deq loads are done */
 	c_tail = ACCESS_ONCE(q->consumer.tail);
 
-	space = mask + c_tail - p_head;
+	space = q->size + c_tail - p_head;
 	if (n > space)
 		return 0;
 
@@ -266,16 +264,16 @@ alf_queue_avail_space(struct alf_queue *q)
 	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
 	u32 space;
 
-	/* The max avail space is (q->size-1) because the empty state
-	 * is when (consumer == producer)
+	/* The max avail space is q->size and
+	 * the empty state is when (consumer == producer)
 	 */
 
 	/* Due to u32 arithmetic the values are implicitly
 	 * masked/modulo 32-bit, thus saving one mask operation
 	 */
-	space = q->mask + c_tail - p_head;
+	space = q->size + c_tail - p_head;
 	/* Thus, same as:
-	 *  space = (q->mask + c_tail - p_head) & q->mask;
+	 *  space = (q->size + c_tail - p_head) & q->mask;
 	 */
 	return space;
 }

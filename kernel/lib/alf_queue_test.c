@@ -90,8 +90,8 @@ static bool test_add_and_remove_elems_BULK(void)
 	queue = alf_queue_alloc(SIZE, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(queue))
 		return false;
-	/* The max queue size it SIZE-1 */
-	if (alf_queue_avail_space(queue) != (SIZE-1))
+	/* The max queue size is SIZE */
+	if (alf_queue_avail_space(queue) != (SIZE))
 		goto fail;
 	/* Repeat the enqueue/dequeue cycle */
 	for (j = 0; j < LOOPS; j++) {
@@ -153,8 +153,8 @@ static bool test_add_until_full(void)
 	q = alf_queue_alloc(SIZE, GFP_KERNEL);
 	if (IS_ERR_OR_NULL(q))
 		return false;
-	/* The max queue size it SIZE-1 */
-	if (alf_queue_avail_space(q) != (SIZE-1))
+	/* The max queue size is SIZE */
+	if (alf_queue_avail_space(q) != (SIZE))
 		goto fail;
 	/* fake init pointers to a number */
 	for (i = 0; i < BULK; i++, n++)
