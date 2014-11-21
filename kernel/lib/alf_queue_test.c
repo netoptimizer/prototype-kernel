@@ -174,8 +174,9 @@ static bool test_add_until_full(void)
 
 		/* count */
 		if (verbose)
-			pr_info("%s(bulk:%d): enq before full %d(%d)\n",
-				__func__, j, enq_cnt_total, alf_queue_count(q));
+			pr_info("%s(bulk:%d):enq before full %d(%d) avail:%d\n",
+				__func__, j, enq_cnt_total, alf_queue_count(q),
+				alf_queue_avail_space(q));
 		if (alf_queue_count(q) != enq_cnt_total)
 			goto fail;
 		/* dequeue until empty */
