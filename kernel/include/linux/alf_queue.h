@@ -159,7 +159,7 @@ alf_sp_enqueue(const u32 n;
 	u32 mask = q->mask;
 
 	/* Reserve part of the array for enqueue STORE/WRITE */
-	p_head = ACCESS_ONCE(q->producer.head);
+	p_head = q->producer.head;
 	smp_rmb(); /* for consumer.tail write, making sure deq loads are done */
 	c_tail = ACCESS_ONCE(q->consumer.tail);
 
@@ -194,7 +194,7 @@ alf_sc_dequeue(const u32 n;
 	u32 c_head, c_next, p_tail, elems;
 
 	/* Reserve part of the array for dequeue LOAD/READ */
-	c_head = ACCESS_ONCE(q->consumer.head);
+	c_head = q->consumer.head;
 	p_tail = ACCESS_ONCE(q->producer.tail);
 
 	elems = p_tail - c_head;
