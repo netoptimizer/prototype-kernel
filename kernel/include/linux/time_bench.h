@@ -89,6 +89,21 @@ static __always_inline uint64_t tsc_stop_clock(void) {
 	return ((uint64_t)lo) | (((uint64_t)hi) << 32);
 }
 
+/* Notes for RDTSC and RDTSCP
+ *
+ * Hannes found out that __builtin_ia32_rdtsc and
+ * __builtin_ia32_rdtscp are undocumented available in gcc, so there
+ * is no need to write inline assembler functions for them any more.
+ *
+ *  unsigned long long __builtin_ia32_rdtscp(unsigned int *foo);
+ *   (where foo is set to: numa_node << 12 | cpu)
+ *    and
+ *  unsigned long long __builtin_ia32_rdtsc(void);
+ *
+ * Above we combine the calls with CPUID, thus I don't see how this is
+ * directly appreciable.
+ */
+
 /*
 inline uint64_t rdtsc(void)
 {
