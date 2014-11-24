@@ -19,14 +19,11 @@
 /* Due to hotplug CPU support, we need access to all qmempools
  * in-order to cleanup elements in localq for the CPU going offline.
  *
- * FIXME: NOT IMPLEMENTED this is just a prototype
+ * TODO: implement HOTPLUG_CPU
 #ifdef CONFIG_HOTPLUG_CPU
 static LIST_HEAD(qmempool_list);
 static DEFINE_SPINLOCK(qmempool_list_lock);
 #endif
- */
-
-/* Creating and destroying the qmempool
  */
 
 void qmempool_destroy(struct qmempool *pool)
@@ -235,14 +232,13 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
 		for (j = 0; j < QMEMPOOL_BULK; j++) {
-			elems[j] =
-				kmem_cache_alloc(pool->kmem, gfp_mask);
-			// Handle if slab gives us NULL elem!
+			elems[j] = kmem_cache_alloc(pool->kmem, gfp_mask);
+			/* Handle if slab gives us NULL elem */
 			if (elems[j] == NULL) {
 				pr_err("%s() ARGH - slab returned NULL",
 				       __func__);
 				res = alf_mp_enqueue(pool->sharedq, elems, j-1);
-				BUG_ON(res < 0); //FIXME handle
+				BUG_ON(res == 0); //FIXME handle
 				return elem;
 			}
 		}
@@ -263,7 +259,6 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	 */
 
 	return elem;
-	//TODO: Add stat counter for this event
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_slab);
 
