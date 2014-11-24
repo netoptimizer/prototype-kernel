@@ -139,7 +139,6 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 			qmempool_destroy(pool);
 			return NULL;
 		}
-		cpu->owner_cpu = -1;
 	}
 
 	return pool;

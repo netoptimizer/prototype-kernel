@@ -33,7 +33,6 @@
 
 struct qmempool_percpu {
 	struct alf_queue *localq;
-	int owner_cpu;
 };
 
 struct qmempool {
@@ -67,22 +66,6 @@ extern void* __qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
 extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
-
-//#define DEBUG_PERCPU 1
-static inline void debug_percpu(struct qmempool_percpu *cpu)
-{
-#ifdef DEBUG_PERCPU
-	if (unlikely(cpu->owner_cpu == -1)) {
-		cpu->owner_cpu = smp_processor_id();
-		return;
-	}
-	if (cpu->owner_cpu != smp_processor_id()) {
-		WARN_ON(1);
-		pr_err("BUG localq changed CPU %d -> %d\n",
-		       cpu->owner_cpu, smp_processor_id());
-	}
-#endif /* DEBUG_PERCPU */
-}
 
 /* The percpu variables (SPSC queues) needs preempt protection, and
  * the shared MPMC queue also needs protection against the same CPU
@@ -235,7 +218,6 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
-	debug_percpu(cpu);
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
 	if (num == 1) /* success: element free'ed by enqueue to localq */
 		goto done;
@@ -255,7 +237,6 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	}
 
 	/* 3. this elem is more cache hot, keep it in localq */
-	debug_percpu(cpu);
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
 	if (unlikely(num == 0)) { /* should have been be room in localq!?! */
 		WARN_ON(1);
