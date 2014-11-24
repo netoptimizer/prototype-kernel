@@ -68,19 +68,11 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 
 	/* Validate constraints, e.g. due to bulking */
 	if (localq_sz < QMEMPOOL_BULK) {
-		/* FIXME: perhaps <= because alf_queue 16 can only
-		 * contain 15 elems */
 		pr_err("%s() localq size(%d) too small for bulking\n",
 		       __func__, localq_sz);
 		return NULL;
 	}
-	if (sharedq_sz <= (QMEMPOOL_BULK * QMEMPOOL_REFILL_MULTIPLIER)) {
-		/* Minimum sharedq size is 64 due to refill and return
-		 * bulking needs sufficient space.  Due to alf_queue
-		 * implementation size can only contain is its size
-		 * minus 1, thus size 32 can only contain 31 elems
-		 * which is to small for REFILL_MULTIPLIER(2) * BULK(16)
-		 */
+	if (sharedq_sz < (QMEMPOOL_BULK * QMEMPOOL_REFILL_MULTIPLIER)) {
 		pr_err("%s() sharedq size(%d) too small for bulk refill\n",
 		       __func__, sharedq_sz);
 		return NULL;
@@ -90,9 +82,8 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		       __func__, localq_sz, sharedq_sz);
 		return NULL;
 	}
-	if (prealloc >= sharedq_sz) {
-		/* alf_queue limit is its size minus 1 */
-		pr_err("%s() prealloc(%d) req >= sharedq size(%d)\n",
+	if (prealloc > sharedq_sz) {
+		pr_err("%s() prealloc(%d) req > sharedq size(%d)\n",
 		       __func__, prealloc, sharedq_sz);
 		return NULL;
 	}
