@@ -145,14 +145,14 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	//TODO: handle numa node stuff e.g. numa_mem_id()
 	void *element;
 	struct qmempool_percpu *cpu;
-	int res;
+	int num;
 
 	__qmempool_preempt_disable();
 
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
-	res = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
-	if (res == 1) {/* success: element dequeues from localq */
+	num = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
+	if (num == 1) {/* success: element dequeues from localq */
 		//prefetchw(element); // TODO: test effect
 		__qmempool_preempt_enable();
 		return element;
@@ -186,9 +186,9 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 }
 
 
-/* This func could defined qmempool.c, but is kept in header, because
- * all users of __qmempool_preempt_*() are kept in here to easier see
- * how preemption protection is used.
+/* This func could be defined in qmempool.c, but is kept in header,
+ * because all users of __qmempool_preempt_*() are kept in here to
+ * easier see how preemption protection is used.
  *
  * MUST be called with __qmempool_preempt_disable()
  *
@@ -198,7 +198,7 @@ static noinline_for_stack bool
 __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
-	int res, n;
+	int num_enq, num_deq;
 
 	/* This function is called when the localq is full. Thus,
 	 * elements from localq needs to be returned to sharedq (or if
@@ -206,18 +206,22 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 	 */
 
 	/* Make room in localq */
-	n = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
-	if (unlikely(n == 0))
+	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
+	if (unlikely(num_deq == 0))
 		goto failed;
 
-        /* Successful dequeued 'n' elements from localq */
-	/* Place elems in sharedq */
-	res = alf_mp_enqueue(pool->sharedq, elems, n);
-	if (res == n) /* Success enqueued to sharedq */
+        /* Successful dequeued 'num_deq' elements from localq, "free"
+	 * these elems by enqueuing to sharedq
+	 */
+	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
+	if (num_enq == num_deq) /* Success enqueued to sharedq */
 		return true;
 
-	/* Catch if enq API change to allow flexible enq */
-	BUG_ON(res > 0);
+	/* If sharedq is full (num_enq == 0) dequeue elements will be
+	 * returned directly to the SLAB allocator.
+	 *
+	 * Catch if enq API change to allow flexible enq */
+	BUG_ON(num_enq > 0);
 
 	/* Allow slab kmem_cache_free() to run with preemption */
 	__qmempool_preempt_enable();
@@ -232,7 +236,7 @@ failed:
 static inline void __qmempool_free(struct qmempool *pool, void *elem)
 {
 	struct qmempool_percpu *cpu;
-	int res;
+	int num;
 	bool used_sharedq;
 
 	__qmempool_preempt_disable();
@@ -240,8 +244,8 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	debug_percpu(cpu);
-	res = alf_sp_enqueue(cpu->localq, &elem, 1);
-	if (res == 1) /* success: element free'ed by enqueued to localq */
+	num = alf_sp_enqueue(cpu->localq, &elem, 1);
+	if (num == 1) /* success: element free'ed by enqueued to localq */
 		goto done;
 
 	/* IDEA: use a watermark feature, to allow enqueue of
@@ -260,8 +264,8 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 
 	/* 3. this elem is more cache hot, keep it in localq */
 	debug_percpu(cpu);
-	res = alf_sp_enqueue(cpu->localq, &elem, 1);
-	if (unlikely(res <= 0)) { /* should have been be room in localq!?! */
+	num = alf_sp_enqueue(cpu->localq, &elem, 1);
+	if (unlikely(num == 0)) { /* should have been be room in localq!?! */
 		WARN_ON(1);
 		pr_err("%s() Why could this happen? localq:%d sharedq:%d"
 		       " irqs_disabled:%d in_softirq:%lu cpu:%d\n",

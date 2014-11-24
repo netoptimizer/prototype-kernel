@@ -60,7 +60,7 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		struct kmem_cache *kmem, gfp_t gfp_mask)
 {
 	struct qmempool* pool;
-	int i, j, res;
+	int i, j, num;
 	void *elem;
 
 	/* Validate constraints, e.g. due to bulking */
@@ -117,8 +117,8 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 			return NULL;
 		}
 		/* Could use the SP version given it is not visible yet */
-		res = alf_mp_enqueue(pool->sharedq, &elem, 1);
-		BUG_ON(res <= 0);
+		num = alf_mp_enqueue(pool->sharedq, &elem, 1);
+		BUG_ON(num <= 0);
 	}
 
 	pool->percpu = alloc_percpu(struct qmempool_percpu);
@@ -178,14 +178,14 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
-	int res;
+	int num;
 
 	/* This function is called when the localq runs out-of
 	 * elements.  Thus, the localq needs refilling */
 
 	/* Costs atomic "cmpxchg", but amortize cost by bulk dequeue */
-	res = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-	if (likely(res > 0)) {/* Success */
+	num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
+	if (likely(num > 0)) {/* Success */
 		/* FIXME: Consider prefetching data part of elements
 		 * here, it should be an optimal place to hide memory
 		 * prefetching.  Especially given the localq is known
@@ -194,13 +194,13 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 		 */
 		elem = elems[0]; /* extract one element */
 		/* Refill localq */
-		if (res > 1) {
-			res = alf_sp_enqueue(localq, &elems[1], res-1);
+		if (num > 1) {
+			num = alf_sp_enqueue(localq, &elems[1], num-1);
 			/* FIXME: localq should be empty, thus enqueue
 			 * should succeed... if this race exist
 			 * die-hard so users will notice this problem!
 			 */
-			BUG_ON(res == 0);
+			BUG_ON(num == 0);
 		}
 
 		return elem;
@@ -213,7 +213,7 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
-	int res, i, j;
+	int num, i, j;
 	/* This function is called when sharedq runs-out of elements.
 	 * Thus, sharedq needs to be refilled from slab.
 	 */
@@ -237,18 +237,18 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 			if (elems[j] == NULL) {
 				pr_err("%s() ARGH - slab returned NULL",
 				       __func__);
-				res = alf_mp_enqueue(pool->sharedq, elems, j-1);
-				BUG_ON(res == 0); //FIXME handle
+				num = alf_mp_enqueue(pool->sharedq, elems, j-1);
+				BUG_ON(num == 0); //FIXME handle
 				return elem;
 			}
 		}
-		res = alf_mp_enqueue(pool->sharedq, elems, QMEMPOOL_BULK);
+		num = alf_mp_enqueue(pool->sharedq, elems, QMEMPOOL_BULK);
 		/* FIXME: There is a theoretical chance that multiple
 		 * CPU enter here, refilling sharedq at the same time,
 		 * thus we must handle "full" situation, for now die
 		 * hard so some will need to fix this.
 		 */
-		BUG_ON(res <= 0); /* sharedq should have room */
+		BUG_ON(num == 0); /* sharedq should have room */
 	}
 
 	/* What about refilling localq ???  (guess it will happen on
@@ -264,7 +264,7 @@ EXPORT_SYMBOL(__qmempool_alloc_from_slab);
 
 bool __qmempool_free_to_slab(struct qmempool *pool, void **elems)
 {
-	int res, i, j;
+	int num, i, j;
 	/* Called when sharedq is full, thus make room */
 
 	/* free these elements for real */
@@ -276,9 +276,9 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems)
 
 	/* make enough room in sharedq for next round */
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
-		res = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-		BUG_ON(res == 0); /* could race, but sharedq should be full */
-		for (j = 0; j < res; j++) {
+		num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
+		BUG_ON(num == 0); /* could race, but sharedq should be full */
+		for (j = 0; j < num; j++) {
 			kmem_cache_free(pool->kmem, elems[j]);
 		}
 	}
