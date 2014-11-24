@@ -87,8 +87,12 @@ static inline void debug_percpu(struct qmempool_percpu *cpu)
 #endif /* DEBUG_PERCPU */
 }
 
-/* This is needed to protect access to the percpu variables (SPSC
- * queues), e.g. avoiding the process gets rescheduled on another CPU.
+/* The percpu variables (SPSC queues) needs preempt protection, and
+ * the shared MPMC queue also needs protection against the same CPU
+ * access the same queue.
+ *
+ * Specialize and optimize the qmempool to run from softirq.
+ * Don't allow qmempool to be used from interrupt context.
  *
  * IDEA: When used from softirq, take advantage of the protection
  * softirq gives.  A softirq will never preempt another softirq,
@@ -104,34 +108,24 @@ static inline void debug_percpu(struct qmempool_percpu *cpu)
  *  if (!in_serving_softirq())
  *		local_bh_disable();
  *
- * Q: BUT that if CONFIG_PREEMPT is enabled?!? Can it preempt a softirq?
- *
+ * This makes qmempool very fast, when accesses from softirq, but
+ * slower when accessed outside softirq.  The other contexts need to
+ * disable bottom-halves "bh" via local_bh_{disable,enable} (which on
+ * have been measured add cost if 7.5ns on CPU E5-2695).
  */
 static inline void __qmempool_preempt_disable(void)
 {
-	/* 4.291 ns cost for preempt_{disable,enable} with
-	 *  CONFIG_PREEMPT is not set, but CONFIG_PREEMPT_COUNT=y
-	 */
-	preempt_disable();
-//	if (!in_serving_softirq())
-//		local_bh_disable(); //7.459 ns cost local_bh_{disable,enable}
+	if (!in_serving_softirq())
+		local_bh_disable();
 
-	/* If we know/assure that this cannot be called with IRQ's
-	 * disabled, then we use the more lightweight
-	 * local_irq_{disable,enable} 2.860 ns cost instead of
-	 * local_irq_save()+local_irq_restore() 14.840 ns cost
-	 */
 	/* Cannot be used from interrupt context */
-//	BUG_ON(in_interrupt());
+	BUG_ON(in_irq());
 }
 
 static inline void __qmempool_preempt_enable(void)
 {
-	preempt_enable();
-//	if (!in_serving_softirq())
-//		local_bh_enable();
-
-//	local_irq_enable();
+	if (!in_serving_softirq())
+		local_bh_enable();
 }
 
 /* Elements - alloc and free functions are inlined here for
@@ -139,6 +133,7 @@ static inline void __qmempool_preempt_enable(void)
  * fast as possible.
  */
 
+/* Main allocation function */
 static __always_inline void *
 __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 {
@@ -152,30 +147,26 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	num = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
-	if (num == 1) {/* success: element dequeues from localq */
-		//prefetchw(element); // TODO: test effect
+	if (num == 1) {
+		/* Succesfully alloc elem by deq from localq cpu cache */
 		__qmempool_preempt_enable();
 		return element;
 	}
 
 	/* 2. attempt get element from shared queue.  This involves
 	 * refilling the localq for next round.
-	 *
-	 * Q: Do we need to "keep" preempt/local_xxx_disable()
-	 * A: Yes, probably because we will refill localq
-	 * Problem: this way we only support GFP_ATOMIC...
 	 */
 	element = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
 	if (element) {
 		__qmempool_preempt_enable();
 		return element;
 	}
-	__qmempool_preempt_enable();
 
 	/* 3. handle if sharedq runs out of elements (element == NULL)
 	 * slab can can sleep if (gfp_mask & __GFP_WAIT), thus must
 	 * not run with preemption disabled.
 	 */
+	__qmempool_preempt_enable();
 	element = __qmempool_alloc_from_slab(pool, gfp_mask);
 	return element;
 }
@@ -233,6 +224,7 @@ failed:
 	return false;
 }
 
+/* Main free function */
 static inline void __qmempool_free(struct qmempool *pool, void *elem)
 {
 	struct qmempool_percpu *cpu;
@@ -240,12 +232,15 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	bool used_sharedq;
 
 	__qmempool_preempt_disable();
+	/* NUMA considerations, how do we make sure to avoid caching
+	 * elements from a different NUMA node.
+	 */
 
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	debug_percpu(cpu);
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
-	if (num == 1) /* success: element free'ed by enqueued to localq */
+	if (num == 1) /* success: element free'ed by enqueue to localq */
 		goto done;
 
 	/* IDEA: use a watermark feature, to allow enqueue of
