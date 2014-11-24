@@ -69,7 +69,7 @@ extern struct qmempool* qmempool_create(
 extern void* __qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
-extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems);
+extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
 
 //#define DEBUG_PERCPU 1
 static inline void debug_percpu(struct qmempool_percpu *cpu)
@@ -225,7 +225,7 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 
 	/* Allow slab kmem_cache_free() to run with preemption */
 	__qmempool_preempt_enable();
-	__qmempool_free_to_slab(pool, elems);
+	__qmempool_free_to_slab(pool, elems, num_deq);
 	return false;
 failed:
 	/* dequeing from a full localq should always be possible */

@@ -262,13 +262,13 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_slab);
 
-bool __qmempool_free_to_slab(struct qmempool *pool, void **elems)
+bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 {
 	int num, i, j;
 	/* Called when sharedq is full, thus make room */
 
 	/* free these elements for real */
-	for (i = 0; i < QMEMPOOL_BULK; i++) {
+	for (i = 0; i < n; i++) {
 		kmem_cache_free(pool->kmem, elems[i]);
 	}
 
