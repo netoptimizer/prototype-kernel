@@ -33,9 +33,6 @@
 
 struct qmempool_percpu {
 	struct alf_queue *localq;
-	/* room for percpu stats */
-	uint64_t refill_cnt;
-	uint64_t full_cnt; /* push back (to shared) elements when full */
 	int owner_cpu;
 };
 

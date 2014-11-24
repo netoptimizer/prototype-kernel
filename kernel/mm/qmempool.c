@@ -139,8 +139,6 @@ qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 			qmempool_destroy(pool);
 			return NULL;
 		}
-		cpu->refill_cnt = 0;
-		cpu->full_cnt = 0;
 		cpu->owner_cpu = -1;
 	}
 
