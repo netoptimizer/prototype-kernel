@@ -146,7 +146,10 @@ EXPORT_SYMBOL(qmempool_create);
 /* Element handling
  */
 
-/* Assumed called with local_bh_disable() or preempt_disable() */
+/* This function is called when the localq runs out-of elements.
+ * Thus, localq is refilled (enq) with elements (deq) from sharedq.
+ * Called with __qmempool_preempt_disable
+ */
 void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 				   struct alf_queue *localq)
 {
@@ -154,55 +157,44 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 	void *elem;
 	int num;
 
-	/* This function is called when the localq runs out-of
-	 * elements.  Thus, the localq needs refilling */
-
 	/* Costs atomic "cmpxchg", but amortize cost by bulk dequeue */
 	num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-	if (likely(num > 0)) {/* Success */
-		/* FIXME: Consider prefetching data part of elements
-		 * here, it should be an optimal place to hide memory
-		 * prefetching.  Especially given the localq is known
-		 * to be an empty FIFO which guarantees the order objs
-		 * are accessed in.
+	if (likely(num > 0)) {
+		/* Consider prefetching data part of elements here, it
+		 * should be an optimal place to hide memory prefetching.
+		 * Especially given the localq is known to be an empty FIFO
+		 * which guarantees the order objs are accessed in.
 		 */
 		elem = elems[0]; /* extract one element */
-		/* Refill localq */
 		if (num > 1) {
 			num = alf_sp_enqueue(localq, &elems[1], num-1);
-			/* FIXME: localq should be empty, thus enqueue
-			 * should succeed... if this race exist
-			 * die-hard so users will notice this problem!
-			 */
+			/* Refill localq, should be empty, must succeed */
 			BUG_ON(num == 0);
 		}
-
 		return elem;
 	}
 	return NULL;
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_sharedq);
 
+/* This function is called when sharedq runs-out of elements.
+ * Thus, sharedq needs to be refilled (enq) with elems from slab.
+ */
 void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
 	int num, i, j;
-	/* This function is called when sharedq runs-out of elements.
-	 * Thus, sharedq needs to be refilled from slab.
+
+	elem = kmem_cache_alloc(pool->kmem, gfp_mask);
+	if (elem == NULL) /* slab depleted, no reason to call below allocs */
+		return NULL;
+
+	/* SLAB considerations, we need a kmem_cache interface that
+	 * supports allocating a bulk of elements.
 	 */
 
-	/* TODO: Consider prefetching this elem */
-	elem = kmem_cache_alloc(pool->kmem, gfp_mask);
-	/* Note: This one extra alloc will "unalign" the
-	 * number of elements in localq from BULK(16) setting.
-	 */
-	if (elem == NULL) {
-		/* slab is depleted, no reason to call below allocs */
-		pr_err("%s() slab is depleted returning NULL\n", __func__);
-		WARN_ON(!elem);
-		return NULL;
-	}
+	/* FIXME: alf_mp_enqueue() calls must have preemption disabled */
 
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
 		for (j = 0; j < QMEMPOOL_BULK; j++) {
@@ -220,38 +212,37 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 		/* FIXME: There is a theoretical chance that multiple
 		 * CPU enter here, refilling sharedq at the same time,
 		 * thus we must handle "full" situation, for now die
-		 * hard so some will need to fix this.
+		 * hard so someone will need to fix this.
 		 */
 		BUG_ON(num == 0); /* sharedq should have room */
 	}
 
-	/* What about refilling localq ???  (guess it will happen on
-	 * next cycle, but it will cost an extra cmpxchg).  One
-	 * additional small cost for refilling localq here, would be
-	 * that we have to call this_cpu_ptr() again as the CPU could
-	 * have changed.
+	/* What about refilling localq here? (else it will happen on
+	 * next cycle, and will cost an extra cmpxchg).  One
+	 * additional cost would be to disable preemption here.
 	 */
-
 	return elem;
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_slab);
 
+/* Called when sharedq is full. Thus also make room in sharedq,
+ * besides also freeing the "elems" given.
+ */
 bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 {
 	int num, i, j;
-	/* Called when sharedq is full, thus make room */
+	/* SLAB considerations, we could use kmem_cache interface that
+	 * supports returning a bulk of elements.
+	 */
 
 	/* free these elements for real */
 	for (i = 0; i < n; i++) {
 		kmem_cache_free(pool->kmem, elems[i]);
 	}
 
-        //Q: is it wise to dealloc 48 elems to slab in one go?
-
-	/* make enough room in sharedq for next round */
+	/* Make room in sharedq for next round */
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
 		num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-		BUG_ON(num == 0); /* could race, but sharedq should be full */
 		for (j = 0; j < num; j++) {
 			kmem_cache_free(pool->kmem, elems[j]);
 		}

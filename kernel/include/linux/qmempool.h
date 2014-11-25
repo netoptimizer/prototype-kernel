@@ -6,13 +6,20 @@
  * SLAB/SLUB reuse/caching of fixed size memory elements
  *
  * The speed gain comes from, the shared storage, using a Lock-Free
- * queue that supports bulking elements with a single cmpxchg.
+ * queue that supports bulk refilling elements (to a percpu cache)
+ * with a single cmpxchg.  Thus, the lock-prefixed cmpxchg cost is
+ * amortize over the bulk size.
  *
  * The Lock-Free queue is based on an array (of pointer to elements).
  * This make access more cache optimal, as e.g. on 64bit 8 pointers
  * can be stored per cache-line (which is superior to a linked list
  * approach).  Only storing the pointers to elements, is also
  * beneficial as we don't touch the elements data.
+ *
+ * Qmempool cannot easily replace all kmem_cache usage, because it is
+ * restricted in which contexts is can be used in, as the Lock-Free
+ * queue is not preemption safe.  This version is optimized for usage
+ * from softirq context, and cannot be used from hardirq context.
  *
  * Copyright (C) 2014, Red Hat, Inc., Jesper Dangaard Brouer
  *  for licensing details see kernel-base/COPYING
@@ -43,7 +50,7 @@ struct qmempool {
 	 */
 	struct alf_queue	*sharedq;
 
-	/* Per CPU local "cache" queues for faster lockfree access.
+	/* Per CPU local "cache" queues for faster atomic free access.
 	 * The local queues (localq) are Single-Producer-Single-Consumer
 	 * queues as they are per CPU.
 	 */
@@ -117,7 +124,9 @@ static inline void __qmempool_preempt_enable(void)
 static __always_inline void *
 __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 {
-	//TODO: handle numa node stuff e.g. numa_mem_id()
+	/* NUMA considerations, for now the "node" is not used, this
+	 * could be handled via e.g. numa_mem_id()
+	 */
 	void *element;
 	struct qmempool_percpu *cpu;
 	int num;
@@ -156,8 +165,11 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 	return __qmempool_alloc_node(pool, gfp_mask, -1);
 }
 
-
-/* This func could be defined in qmempool.c, but is kept in header,
+/* This function is called when the localq is full. Thus, elements
+ * from localq needs to be (dequeued) and returned (enqueued) to
+ * sharedq (or if shared is full, need to be free'ed to slab)
+ *
+ * This func could be defined in qmempool.c, but is kept in header,
  * because all users of __qmempool_preempt_*() are kept in here to
  * easier see how preemption protection is used.
  *
@@ -170,11 +182,6 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	int num_enq, num_deq;
-
-	/* This function is called when the localq is full. Thus,
-	 * elements from localq needs to be returned to sharedq (or if
-	 * shared is full, need to be free'ed for real)
-	 */
 
 	/* Make room in localq */
 	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
@@ -211,20 +218,16 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	int num;
 	bool used_sharedq;
 
-	__qmempool_preempt_disable();
 	/* NUMA considerations, how do we make sure to avoid caching
 	 * elements from a different NUMA node.
 	 */
+	__qmempool_preempt_disable();
 
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
 	if (num == 1) /* success: element free'ed by enqueue to localq */
 		goto done;
-
-	/* IDEA: use a watermark feature, to allow enqueue of
-	 * this cache-hot elem, and then return some to sharedq.
-	 */
 
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room.
@@ -236,17 +239,15 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 		cpu = this_cpu_ptr(pool->percpu); /* have to reload "cpu" ptr */
 	}
 
-	/* 3. this elem is more cache hot, keep it in localq */
+	/* Optimization: this elem is more cache hot, thus keep it in
+	 * localq, which should have room now.  No room indicate CPU
+	 * changed or race while returning elements to slab, simply
+	 * free to slab.
+	 */
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
-	if (unlikely(num == 0)) { /* should have been be room in localq!?! */
-		WARN_ON(1);
-		pr_err("%s() Why could this happen? localq:%d sharedq:%d"
-		       " irqs_disabled:%d in_softirq:%lu cpu:%d\n",
-		       __func__, alf_queue_count(cpu->localq),
-		       alf_queue_count(pool->sharedq), irqs_disabled(),
-		       in_softirq(), smp_processor_id());
+	if (unlikely(num == 0))
 		kmem_cache_free(pool->kmem, elem);
-	}
+
 done:
 	__qmempool_preempt_enable();
 }
