@@ -14,8 +14,6 @@
 #include <linux/qmempool.h>
 #include <linux/log2.h>
 
-/* Global settings */
-
 /* Due to hotplug CPU support, we need access to all qmempools
  * in-order to cleanup elements in localq for the CPU going offline.
  *
@@ -148,27 +146,6 @@ EXPORT_SYMBOL(qmempool_create);
 /* Element handling
  */
 
-/* Debug hack to ease profiling functions when not inlined */
-#ifdef QMEMPOOL_DEBUG_PROFILING
-noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
-{
-       return __qmempool_alloc_node(pool, gfp_mask, 0);
-}
-EXPORT_SYMBOL(qmempool_alloc);
-
-noinline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
-{
-       return __qmempool_alloc_node(pool, gfp_mask, 0);
-}
-EXPORT_SYMBOL(qmempool_alloc_node);
-
-noinline void qmempool_free(struct qmempool *pool, void *elem)
-{
-	return __qmempool_free(pool, elem);
-}
-EXPORT_SYMBOL(qmempool_free);
-#endif
-
 /* Assumed called with local_bh_disable() or preempt_disable() */
 void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 				   struct alf_queue *localq)
@@ -282,6 +259,28 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 	return true;
 }
 EXPORT_SYMBOL(__qmempool_free_to_slab);
+
+/* Allow users control over whether it is optimal to inline qmempool */
+#ifdef CONFIG_QMEMPOOL_NOINLINE
+noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+{
+       return __qmempool_alloc_node(pool, gfp_mask, 0);
+}
+EXPORT_SYMBOL(qmempool_alloc);
+
+noinline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
+				   int node)
+{
+       return __qmempool_alloc_node(pool, gfp_mask, 0);
+}
+EXPORT_SYMBOL(qmempool_alloc_node);
+
+noinline void qmempool_free(struct qmempool *pool, void *elem)
+{
+	return __qmempool_free(pool, elem);
+}
+EXPORT_SYMBOL(qmempool_free);
+#endif /* CONFIG_QMEMPOOL_NOINLINE */
 
 MODULE_DESCRIPTION("Quick queue based mempool (qmempool)");
 MODULE_AUTHOR("Jesper Dangaard Brouer <netoptimizer@brouer.com>");

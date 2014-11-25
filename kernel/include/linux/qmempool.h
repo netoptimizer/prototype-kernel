@@ -251,19 +251,20 @@ done:
 	__qmempool_preempt_enable();
 }
 
-/* Debug hack to ease profiling functions when not inlined
- */
-//#define QMEMPOOL_DEBUG_PROFILING 1
-#ifdef QMEMPOOL_DEBUG_PROFILING
+/* Allow users control over whether it is optimal to inline qmempool */
+#ifdef CONFIG_QMEMPOOL_NOINLINE
 extern void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
-extern void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node);
+extern void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
+				 int node);
 extern void qmempool_free(struct qmempool *pool, void *elem);
-#else /* !QMEMPOOL_DEBUG_PROFILING */
+
+#else /* !CONFIG_QMEMPOOL_NOINLINE */
 static inline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	return __qmempool_alloc_node(pool, gfp_mask, -1);
 }
-static inline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
+static inline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
+					int node)
 {
 	return __qmempool_alloc_node(pool, gfp_mask, -1);
 }
@@ -271,6 +272,6 @@ static inline void qmempool_free(struct qmempool *pool, void *elem)
 {
 	return __qmempool_free(pool, elem);
 }
-#endif /* QMEMPOOL_DEBUG_PROFILING */
+#endif /* CONFIG_QMEMPOOL_NOINLINE */
 
 #endif /* _LINUX_QMEMPOOL_H */

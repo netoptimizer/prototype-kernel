@@ -1,0 +1,26 @@
+#
+# This content need to be added mm/Kconfig
+#  when submissing/using in upstream kernels
+#
+
+config QMEMPOOL
+	bool "Quick queue based mempool (qmempool)"
+	default y
+	select ALF_QUEUE
+	help
+	  A mempool designed for faster than SLAB/kmem_cache
+	  reuse/caching of fixed size memory elements.  Works as a
+	  caching layer in-front of existing kmem_cache SLABs.  Speed
+	  is achieved by _bulk_ refilling percpu local cache, from a
+	  Lock-Free queue requiring a single (locked) cmpxchg per bulk
+	  transfer, thus amortizing the cost of the cmpxchg.
+
+config QMEMPOOL_NOINLINE
+	bool "Don't inline qmempool"
+	default n
+	depends on QMEMPOOL
+	help
+	 It might not be optimal to inline qmempool calls, if it is
+	 used in many places.  Select this option if you don't want
+	 inlined qmempool function calls, this will also make it
+	 easier to see qmempool usage in perf top.
