@@ -11,6 +11,11 @@
 static int verbose=1;
 
 static int fake_variable=0;
+
+static unsigned int fake_n=5;
+module_param(fake_n, uint, 0644);
+MODULE_PARM_DESC(fake_n , "Trick to avoid compiler to optimize as const");
+
 static void *fake_array[10];
 
 /* Defines for creating fake func calls to helpers */
@@ -50,7 +55,7 @@ void fake_calls(struct alf_queue *q)
 {
 	u32 p_head = 1;
 	void *ptr[42];
-	const u32 n = 1;
+	u32 n = fake_n;
 
 	call_helper_alf_enqueue_store(simple);
 	call_helper_alf_dequeue_load(simple);
@@ -106,7 +111,7 @@ static int __init alf_queue_test_module_init(void)
 {
 	struct alf_queue *q;
 	int ring_size = 512;
-	int n = 42;
+	int n = fake_n;
 
 	if (verbose)
 		pr_info("Loaded\n");
