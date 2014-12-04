@@ -317,6 +317,11 @@ noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
        return __qmempool_alloc(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc);
+noinline void* qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask)
+{
+       return __qmempool_alloc_softirq(pool, gfp_mask);
+}
+EXPORT_SYMBOL(qmempool_alloc_softirq);
 noinline void qmempool_free(struct qmempool *pool, void *elem)
 {
 	return __qmempool_free(pool, elem);

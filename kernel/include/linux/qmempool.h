@@ -165,7 +165,7 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 	return elem;
 }
 
-static inline void* qmempool_alloc_softirq(struct qmempool *pool,
+static inline void* __qmempool_alloc_softirq(struct qmempool *pool,
 					     gfp_t gfp_mask)
 {
 	return main_qmempool_alloc(pool, gfp_mask);
@@ -202,12 +202,18 @@ done:
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 extern void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
+extern void* qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask);
 extern void qmempool_free(struct qmempool *pool, void *elem);
 
 #else /* !CONFIG_QMEMPOOL_NOINLINE */
 static inline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	return __qmempool_alloc(pool, gfp_mask);
+}
+static inline void* qmempool_alloc_softirq(struct qmempool *pool,
+					   gfp_t gfp_mask)
+{
+	return __qmempool_alloc_softirq(pool, gfp_mask);
 }
 static inline void qmempool_free(struct qmempool *pool, void *elem)
 {
