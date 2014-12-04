@@ -75,7 +75,7 @@ extern void* __qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
 extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
-extern void __qmempool_free_to_sharedq(struct qmempool *pool,
+extern void __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 				       struct alf_queue *localq);
 
 /* The percpu variables (SPSC queues) needs preempt protection, and
@@ -196,16 +196,7 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room.
 	 */
-	__qmempool_free_to_sharedq(pool, cpu->localq);
-
-	/* Optimization: this elem is more cache hot, thus keep it in
-	 * localq, which should have room now.  No room indicate CPU
-	 * changed or race while returning elements to slab, simply
-	 * free to slab.
-	 */
-	num = alf_sp_enqueue(cpu->localq, &elem, 1);
-	if (unlikely(num == 0))
-		kmem_cache_free(pool->kmem, elem);
+	__qmempool_free_to_sharedq(elem, pool, cpu->localq);
 
 done:
 	__qmempool_preempt_enable(state);

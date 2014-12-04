@@ -263,7 +263,8 @@ EXPORT_SYMBOL(__qmempool_free_to_slab);
  * MUST be called from a preemptive safe context.
  */
 void
-__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
+__qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
+			   struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	int num_enq, num_deq;
@@ -272,6 +273,12 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
 	if (unlikely(num_deq == 0))
 		goto failed;
+
+	/* Optimization: this elem is more cache hot, thus keep it in
+	 * localq, which should have room now.
+	 * NOTICE: this might cost too much icache wise (41-47bytes extra)
+	 */
+	alf_sp_enqueue(localq, &elem, 1);
 
         /* Successful dequeued 'num_deq' elements from localq, "free"
 	 * these elems by enqueuing to sharedq
@@ -296,6 +303,12 @@ failed:
 	return;
 }
 EXPORT_SYMBOL(__qmempool_free_to_sharedq);
+
+void testsize_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+{
+	__qmempool_alloc(pool, gfp_mask);
+}
+EXPORT_SYMBOL(testsize_qmempool_alloc);
 
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
