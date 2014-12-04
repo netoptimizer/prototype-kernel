@@ -314,7 +314,7 @@ EXPORT_SYMBOL(testsize_qmempool_alloc);
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-       return __qmempool_alloc(pool, gfp_mask, 0);
+       return __qmempool_alloc(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc);
 noinline void qmempool_free(struct qmempool *pool, void *elem)
