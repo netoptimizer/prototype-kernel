@@ -130,7 +130,7 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	/* NUMA considerations, for now the "node" is not used, this
 	 * could be handled via e.g. numa_mem_id()
 	 */
-	void *element;
+	void *elem;
 	struct qmempool_percpu *cpu;
 	int num;
 	int state;
@@ -139,29 +139,29 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
-	num = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
+	num = alf_sc_dequeue(cpu->localq, (void **)&elem, 1);
 	if (num == 1) {
 		/* Succesfully alloc elem by deq from localq cpu cache */
 		__qmempool_preempt_enable(state);
-		return element;
+		return elem;
 	}
 
 	/* 2. attempt get element from shared queue.  This involves
 	 * refilling the localq for next round.
 	 */
-	element = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
-	if (element) {
+	elem = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
+	if (elem) {
 		__qmempool_preempt_enable(state);
-		return element;
+		return elem;
 	}
 
-	/* 3. handle if sharedq runs out of elements (element == NULL)
+	/* 3. handle if sharedq runs out of elements (elem == NULL)
 	 * slab can can sleep if (gfp_mask & __GFP_WAIT), thus must
 	 * not run with preemption disabled.
 	 */
 	__qmempool_preempt_enable(state);
-	element = __qmempool_alloc_from_slab(pool, gfp_mask);
-	return element;
+	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
+	return elem;
 }
 
 static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
