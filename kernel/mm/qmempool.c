@@ -269,16 +269,12 @@ __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	int num_enq, num_deq;
 
+	elems[0] = elem;
 	/* Make room in localq */
-	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
+	num_deq = alf_sc_dequeue(localq, &elems[1], QMEMPOOL_BULK-1);
 	if (unlikely(num_deq == 0))
 		goto failed;
-
-	/* Optimization: this elem is more cache hot, thus keep it in
-	 * localq, which should have room now.
-	 * NOTICE: this might cost too much icache wise (41-47bytes extra)
-	 */
-	alf_sp_enqueue(localq, &elem, 1);
+	num_deq++; /* count first 'elem' */
 
         /* Successful dequeued 'num_deq' elements from localq, "free"
 	 * these elems by enqueuing to sharedq
