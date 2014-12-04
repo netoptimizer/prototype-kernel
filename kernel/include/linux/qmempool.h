@@ -21,6 +21,8 @@
  * queue is not preemption safe.  This version is optimized for usage
  * from softirq context, and cannot be used from hardirq context.
  *
+ * Only support GFP_ATOMIC allocations from SLAB.
+ *
  * Copyright (C) 2014, Red Hat, Inc., Jesper Dangaard Brouer
  *  for licensing details see kernel-base/COPYING
  */
@@ -123,65 +125,64 @@ static inline void __qmempool_preempt_enable(int in_serving_softirq)
  * fast as possible.
  */
 
-/* Main allocation function */
+/* Main allocation function
+ *
+ * Caller must make sure this is called from a preemptive safe context
+ */
 static __always_inline void *
-__qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
+main_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-	/* NUMA considerations, for now the "node" is not used, this
-	 * could be handled via e.g. numa_mem_id()
+	/* NUMA considerations, for now the numa node is not handles,
+	 * this could be handled via e.g. numa_mem_id()
 	 */
 	void *elem;
 	struct qmempool_percpu *cpu;
 	int num;
-	int state;
-
-	state = __qmempool_preempt_disable();
 
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	num = alf_sc_dequeue(cpu->localq, (void **)&elem, 1);
-	if (num == 1) {
-		/* Succesfully alloc elem by deq from localq cpu cache */
-		__qmempool_preempt_enable(state);
+	if (num == 1) /* Succes: alloc elem by deq from localq cpu cache */
 		return elem;
-	}
 
 	/* 2. attempt get element from shared queue.  This involves
 	 * refilling the localq for next round.
 	 */
 	elem = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
-	if (elem) {
-		__qmempool_preempt_enable(state);
+	if (elem)
 		return elem;
-	}
 
-	/* 3. handle if sharedq runs out of elements (elem == NULL)
-	 * slab can can sleep if (gfp_mask & __GFP_WAIT), thus must
-	 * not run with preemption disabled.
-	 */
-	__qmempool_preempt_enable(state);
+	/* 3. use slab if sharedq runs out of elements (elem == NULL) */
 	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
 	return elem;
 }
 
 static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-	return __qmempool_alloc_node(pool, gfp_mask, -1);
+	void *elem;
+	int state;
+
+	state = __qmempool_preempt_disable();
+	elem  = main_qmempool_alloc(pool, gfp_mask);
+	__qmempool_preempt_enable(state);
+	return elem;
+}
+
+static inline void* qmempool_alloc_softirq(struct qmempool *pool,
+					     gfp_t gfp_mask)
+{
+	return main_qmempool_alloc(pool, gfp_mask);
 }
 
 /* This function is called when the localq is full. Thus, elements
  * from localq needs to be (dequeued) and returned (enqueued) to
  * sharedq (or if shared is full, need to be free'ed to slab)
  *
- * This func could be defined in qmempool.c, but is kept in header,
- * because all users of __qmempool_preempt_*() are kept in here to
- * easier see how preemption protection is used.
- *
- * MUST be called with __qmempool_preempt_disable()
+ * MUST be called from a preemptive safe context.
  *
  * Noinlined because it uses a lot of stack.
  */
-static noinline_for_stack bool
+static noinline_for_stack void
 __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
 			   int state)
 {
@@ -198,7 +199,7 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
 	 */
 	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
 	if (num_enq == num_deq) /* Success enqueued to sharedq */
-		return true;
+		return;
 
 	/* If sharedq is full (num_enq == 0) dequeue elements will be
 	 * returned directly to the SLAB allocator.
@@ -206,14 +207,12 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
 	 * Catch if enq API change to allow flexible enq */
 	BUG_ON(num_enq > 0);
 
-	/* Allow slab kmem_cache_free() to run with preemption */
-	__qmempool_preempt_enable(state);
 	__qmempool_free_to_slab(pool, elems, num_deq);
-	return false;
+	return;
 failed:
 	/* dequeing from a full localq should always be possible */
 	BUG();
-	return false;
+	return;
 }
 
 /* Main free function */
@@ -221,7 +220,6 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 {
 	struct qmempool_percpu *cpu;
 	int num;
-	bool used_sharedq;
 	int state;
 
 	/* NUMA considerations, how do we make sure to avoid caching
@@ -238,12 +236,7 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room.
 	 */
-	used_sharedq = __qmempool_free_to_sharedq(pool, cpu->localq, state);
-	if (!used_sharedq) {
-		/* preempt got enabled when using real SLAB */
-		state = __qmempool_preempt_disable();
-		cpu = this_cpu_ptr(pool->percpu); /* have to reload "cpu" ptr */
-	}
+	__qmempool_free_to_sharedq(pool, cpu->localq, state);
 
 	/* Optimization: this elem is more cache hot, thus keep it in
 	 * localq, which should have room now.  No room indicate CPU
@@ -261,19 +254,12 @@ done:
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 extern void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
-extern void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
-				 int node);
 extern void qmempool_free(struct qmempool *pool, void *elem);
 
 #else /* !CONFIG_QMEMPOOL_NOINLINE */
 static inline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-	return __qmempool_alloc_node(pool, gfp_mask, -1);
-}
-static inline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
-					int node)
-{
-	return __qmempool_alloc_node(pool, gfp_mask, -1);
+	return __qmempool_alloc(pool, gfp_mask);
 }
 static inline void qmempool_free(struct qmempool *pool, void *elem)
 {

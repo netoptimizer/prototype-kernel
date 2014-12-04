@@ -179,12 +179,20 @@ EXPORT_SYMBOL(__qmempool_alloc_from_sharedq);
 
 /* This function is called when sharedq runs-out of elements.
  * Thus, sharedq needs to be refilled (enq) with elems from slab.
+ *
+ * Caller must assure this is called in an preemptive safe context due
+ * to alf_mp_enqueue() call.
  */
 void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
 	int num, i, j;
+
+	/* Cannot use SLAB that can sleep if (gfp_mask & __GFP_WAIT),
+	 * else preemption disable/enable scheme becomes too complicated
+	 */
+	BUG_ON(gfp_mask & __GFP_WAIT);
 
 	elem = kmem_cache_alloc(pool->kmem, gfp_mask);
 	if (elem == NULL) /* slab depleted, no reason to call below allocs */
@@ -193,8 +201,6 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	/* SLAB considerations, we need a kmem_cache interface that
 	 * supports allocating a bulk of elements.
 	 */
-
-	/* FIXME: alf_mp_enqueue() calls must have preemption disabled */
 
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
 		for (j = 0; j < QMEMPOOL_BULK; j++) {
@@ -218,8 +224,7 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	}
 
 	/* What about refilling localq here? (else it will happen on
-	 * next cycle, and will cost an extra cmpxchg).  One
-	 * additional cost would be to disable preemption here.
+	 * next cycle, and will cost an extra cmpxchg).
 	 */
 	return elem;
 }
@@ -255,17 +260,9 @@ EXPORT_SYMBOL(__qmempool_free_to_slab);
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-       return __qmempool_alloc_node(pool, gfp_mask, 0);
+       return __qmempool_alloc(pool, gfp_mask, 0);
 }
 EXPORT_SYMBOL(qmempool_alloc);
-
-noinline void* qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask,
-				   int node)
-{
-       return __qmempool_alloc_node(pool, gfp_mask, 0);
-}
-EXPORT_SYMBOL(qmempool_alloc_node);
-
 noinline void qmempool_free(struct qmempool *pool, void *elem)
 {
 	return __qmempool_free(pool, elem);
