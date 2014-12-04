@@ -203,8 +203,10 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
 	/* If sharedq is full (num_enq == 0) dequeue elements will be
 	 * returned directly to the SLAB allocator.
 	 *
-	 * Catch if enq API change to allow flexible enq */
-	BUG_ON(num_enq > 0);
+	 * Note: This usage of alf_queue API depend on enqueue is
+	 * fixed, by only enqueueing if all elements could fit, this
+	 * is an API that might change.
+	 */
 
 	__qmempool_free_to_slab(pool, elems, num_deq);
 	return;
