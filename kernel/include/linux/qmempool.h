@@ -75,6 +75,8 @@ extern void* __qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
 extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
+extern void __qmempool_free_to_sharedq(struct qmempool *pool,
+				       struct alf_queue *localq);
 
 /* The percpu variables (SPSC queues) needs preempt protection, and
  * the shared MPMC queue also needs protection against the same CPU
@@ -173,49 +175,6 @@ static inline void* qmempool_alloc_softirq(struct qmempool *pool,
 	return main_qmempool_alloc(pool, gfp_mask);
 }
 
-/* This function is called when the localq is full. Thus, elements
- * from localq needs to be (dequeued) and returned (enqueued) to
- * sharedq (or if shared is full, need to be free'ed to slab)
- *
- * MUST be called from a preemptive safe context.
- *
- * Noinlined because it uses a lot of stack.
- */
-static noinline_for_stack void
-__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
-			   int state)
-{
-	void *elems[QMEMPOOL_BULK]; /* on stack variable */
-	int num_enq, num_deq;
-
-	/* Make room in localq */
-	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
-	if (unlikely(num_deq == 0))
-		goto failed;
-
-        /* Successful dequeued 'num_deq' elements from localq, "free"
-	 * these elems by enqueuing to sharedq
-	 */
-	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
-	if (num_enq == num_deq) /* Success enqueued to sharedq */
-		return;
-
-	/* If sharedq is full (num_enq == 0) dequeue elements will be
-	 * returned directly to the SLAB allocator.
-	 *
-	 * Note: This usage of alf_queue API depend on enqueue is
-	 * fixed, by only enqueueing if all elements could fit, this
-	 * is an API that might change.
-	 */
-
-	__qmempool_free_to_slab(pool, elems, num_deq);
-	return;
-failed:
-	/* dequeing from a full localq should always be possible */
-	BUG();
-	return;
-}
-
 /* Main free function */
 static inline void __qmempool_free(struct qmempool *pool, void *elem)
 {
@@ -237,7 +196,7 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room.
 	 */
-	__qmempool_free_to_sharedq(pool, cpu->localq, state);
+	__qmempool_free_to_sharedq(pool, cpu->localq);
 
 	/* Optimization: this elem is more cache hot, thus keep it in
 	 * localq, which should have room now.  No room indicate CPU

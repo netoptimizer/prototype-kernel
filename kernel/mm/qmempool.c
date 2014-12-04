@@ -256,6 +256,47 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 }
 EXPORT_SYMBOL(__qmempool_free_to_slab);
 
+/* This function is called when the localq is full. Thus, elements
+ * from localq needs to be (dequeued) and returned (enqueued) to
+ * sharedq (or if shared is full, need to be free'ed to slab)
+ *
+ * MUST be called from a preemptive safe context.
+ */
+void
+__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
+{
+	void *elems[QMEMPOOL_BULK]; /* on stack variable */
+	int num_enq, num_deq;
+
+	/* Make room in localq */
+	num_deq = alf_sc_dequeue(localq, elems, QMEMPOOL_BULK);
+	if (unlikely(num_deq == 0))
+		goto failed;
+
+        /* Successful dequeued 'num_deq' elements from localq, "free"
+	 * these elems by enqueuing to sharedq
+	 */
+	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
+	if (num_enq == num_deq) /* Success enqueued to sharedq */
+		return;
+
+	/* If sharedq is full (num_enq == 0) dequeue elements will be
+	 * returned directly to the SLAB allocator.
+	 *
+	 * Note: This usage of alf_queue API depend on enqueue is
+	 * fixed, by only enqueueing if all elements could fit, this
+	 * is an API that might change.
+	 */
+
+	__qmempool_free_to_slab(pool, elems, num_deq);
+	return;
+failed:
+	/* dequeing from a full localq should always be possible */
+	BUG();
+	return;
+}
+EXPORT_SYMBOL(__qmempool_free_to_sharedq);
+
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
