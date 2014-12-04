@@ -100,18 +100,21 @@ extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
  * disable bottom-halves "bh" via local_bh_{disable,enable} (which on
  * have been measured add cost if 7.5ns on CPU E5-2695).
  */
-static inline void __qmempool_preempt_disable(void)
+static inline int __qmempool_preempt_disable(void)
 {
-	if (!in_serving_softirq())
+	int in_serving_softirq = in_serving_softirq();
+	if (!in_serving_softirq)
 		local_bh_disable();
 
 	/* Cannot be used from interrupt context */
 	BUG_ON(in_irq());
+
+	return in_serving_softirq;
 }
 
-static inline void __qmempool_preempt_enable(void)
+static inline void __qmempool_preempt_enable(int in_serving_softirq)
 {
-	if (!in_serving_softirq())
+	if (!in_serving_softirq)
 		local_bh_enable();
 }
 
@@ -130,15 +133,16 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	void *element;
 	struct qmempool_percpu *cpu;
 	int num;
+	int state;
 
-	__qmempool_preempt_disable();
+	state = __qmempool_preempt_disable();
 
 	/* 1. attempt get element from local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	num = alf_sc_dequeue(cpu->localq, (void **)&element, 1);
 	if (num == 1) {
 		/* Succesfully alloc elem by deq from localq cpu cache */
-		__qmempool_preempt_enable();
+		__qmempool_preempt_enable(state);
 		return element;
 	}
 
@@ -147,7 +151,7 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	 */
 	element = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
 	if (element) {
-		__qmempool_preempt_enable();
+		__qmempool_preempt_enable(state);
 		return element;
 	}
 
@@ -155,7 +159,7 @@ __qmempool_alloc_node(struct qmempool *pool, gfp_t gfp_mask, int node)
 	 * slab can can sleep if (gfp_mask & __GFP_WAIT), thus must
 	 * not run with preemption disabled.
 	 */
-	__qmempool_preempt_enable();
+	__qmempool_preempt_enable(state);
 	element = __qmempool_alloc_from_slab(pool, gfp_mask);
 	return element;
 }
@@ -178,7 +182,8 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
  * Noinlined because it uses a lot of stack.
  */
 static noinline_for_stack bool
-__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
+__qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq,
+			   int state)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	int num_enq, num_deq;
@@ -202,7 +207,7 @@ __qmempool_free_to_sharedq(struct qmempool *pool, struct alf_queue *localq)
 	BUG_ON(num_enq > 0);
 
 	/* Allow slab kmem_cache_free() to run with preemption */
-	__qmempool_preempt_enable();
+	__qmempool_preempt_enable(state);
 	__qmempool_free_to_slab(pool, elems, num_deq);
 	return false;
 failed:
@@ -217,11 +222,12 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	struct qmempool_percpu *cpu;
 	int num;
 	bool used_sharedq;
+	int state;
 
 	/* NUMA considerations, how do we make sure to avoid caching
 	 * elements from a different NUMA node.
 	 */
-	__qmempool_preempt_disable();
+	state = __qmempool_preempt_disable();
 
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
@@ -232,10 +238,10 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room.
 	 */
-	used_sharedq = __qmempool_free_to_sharedq(pool, cpu->localq);
+	used_sharedq = __qmempool_free_to_sharedq(pool, cpu->localq, state);
 	if (!used_sharedq) {
 		/* preempt got enabled when using real SLAB */
-		__qmempool_preempt_disable();
+		state = __qmempool_preempt_disable();
 		cpu = this_cpu_ptr(pool->percpu); /* have to reload "cpu" ptr */
 	}
 
@@ -249,7 +255,7 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 		kmem_cache_free(pool->kmem, elem);
 
 done:
-	__qmempool_preempt_enable();
+	__qmempool_preempt_enable(state);
 }
 
 /* Allow users control over whether it is optimal to inline qmempool */
