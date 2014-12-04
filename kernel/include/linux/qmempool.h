@@ -101,15 +101,14 @@ extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
  * slower when accessed outside softirq.  The other contexts need to
  * disable bottom-halves "bh" via local_bh_{disable,enable} (which on
  * have been measured add cost if 7.5ns on CPU E5-2695).
+ *
+ * MUST not be used from interrupt context, when relying on softirq usage.
  */
 static inline int __qmempool_preempt_disable(void)
 {
 	int in_serving_softirq = in_serving_softirq();
 	if (!in_serving_softirq)
 		local_bh_disable();
-
-	/* Cannot be used from interrupt context */
-	BUG_ON(in_irq());
 
 	return in_serving_softirq;
 }
