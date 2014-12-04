@@ -147,14 +147,10 @@ main_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 		return elem;
 
 	/* 2. attempt get element from shared queue.  This involves
-	 * refilling the localq for next round.
+	 * refilling the localq for next round. Side-effect can be
+	 * alloc from SLAB.
 	 */
 	elem = __qmempool_alloc_from_sharedq(pool, gfp_mask, cpu->localq);
-	if (elem)
-		return elem;
-
-	/* 3. use slab if sharedq runs out of elements (elem == NULL) */
-	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
 	return elem;
 }
 
@@ -194,7 +190,8 @@ static inline void __qmempool_free(struct qmempool *pool, void *elem)
 		goto done;
 
 	/* 2. localq cannot store more elements, need to return some
-	 * from localq to sharedq, to make room.
+	 * from localq to sharedq, to make room. Side-effect can be
+	 * free to SLAB.
 	 */
 	__qmempool_free_to_sharedq(elem, pool, cpu->localq);
 

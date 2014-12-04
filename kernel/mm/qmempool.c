@@ -148,7 +148,9 @@ EXPORT_SYMBOL(qmempool_create);
 
 /* This function is called when the localq runs out-of elements.
  * Thus, localq is refilled (enq) with elements (deq) from sharedq.
- * Called with __qmempool_preempt_disable
+ *
+ * Caller must assure this is called in an preemptive safe context due
+ * to alf_mp_dequeue() call.
  */
 void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 				   struct alf_queue *localq)
@@ -173,7 +175,9 @@ void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
 		}
 		return elem;
 	}
-	return NULL;
+	/* Use slab if sharedq runs out of elements */
+	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
+	return elem;
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_sharedq);
 
