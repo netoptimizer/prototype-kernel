@@ -304,12 +304,6 @@ failed:
 }
 EXPORT_SYMBOL(__qmempool_free_to_sharedq);
 
-void testsize_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
-{
-	__qmempool_alloc(pool, gfp_mask);
-}
-EXPORT_SYMBOL(testsize_qmempool_alloc);
-
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
 noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
