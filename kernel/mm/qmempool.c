@@ -146,41 +146,6 @@ EXPORT_SYMBOL(qmempool_create);
 /* Element handling
  */
 
-/* This function is called when the localq runs out-of elements.
- * Thus, localq is refilled (enq) with elements (deq) from sharedq.
- *
- * Caller must assure this is called in an preemptive safe context due
- * to alf_mp_dequeue() call.
- */
-void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
-				   struct alf_queue *localq)
-{
-	void *elems[QMEMPOOL_BULK]; /* on stack variable */
-	void *elem;
-	int num;
-
-	/* Costs atomic "cmpxchg", but amortize cost by bulk dequeue */
-	num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-	if (likely(num > 0)) {
-		/* Consider prefetching data part of elements here, it
-		 * should be an optimal place to hide memory prefetching.
-		 * Especially given the localq is known to be an empty FIFO
-		 * which guarantees the order objs are accessed in.
-		 */
-		elem = elems[0]; /* extract one element */
-		if (num > 1) {
-			num = alf_sp_enqueue(localq, &elems[1], num-1);
-			/* Refill localq, should be empty, must succeed */
-			BUG_ON(num == 0);
-		}
-		return elem;
-	}
-	/* Use slab if sharedq runs out of elements */
-	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
-	return elem;
-}
-EXPORT_SYMBOL(__qmempool_alloc_from_sharedq);
-
 /* This function is called when sharedq runs-out of elements.
  * Thus, sharedq needs to be refilled (enq) with elems from slab.
  *
@@ -233,6 +198,41 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	return elem;
 }
 EXPORT_SYMBOL(__qmempool_alloc_from_slab);
+
+/* This function is called when the localq runs out-of elements.
+ * Thus, localq is refilled (enq) with elements (deq) from sharedq.
+ *
+ * Caller must assure this is called in an preemptive safe context due
+ * to alf_mp_dequeue() call.
+ */
+void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
+				   struct alf_queue *localq)
+{
+	void *elems[QMEMPOOL_BULK]; /* on stack variable */
+	void *elem;
+	int num;
+
+	/* Costs atomic "cmpxchg", but amortize cost by bulk dequeue */
+	num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
+	if (likely(num > 0)) {
+		/* Consider prefetching data part of elements here, it
+		 * should be an optimal place to hide memory prefetching.
+		 * Especially given the localq is known to be an empty FIFO
+		 * which guarantees the order objs are accessed in.
+		 */
+		elem = elems[0]; /* extract one element */
+		if (num > 1) {
+			num = alf_sp_enqueue(localq, &elems[1], num-1);
+			/* Refill localq, should be empty, must succeed */
+			BUG_ON(num == 0);
+		}
+		return elem;
+	}
+	/* Use slab if sharedq runs out of elements */
+	elem = __qmempool_alloc_from_slab(pool, gfp_mask);
+	return elem;
+}
+EXPORT_SYMBOL(__qmempool_alloc_from_sharedq);
 
 /* Called when sharedq is full. Thus also make room in sharedq,
  * besides also freeing the "elems" given.
