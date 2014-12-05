@@ -152,7 +152,7 @@ EXPORT_SYMBOL(qmempool_create);
  * Caller must assure this is called in an preemptive safe context due
  * to alf_mp_enqueue() call.
  */
-void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
+void *__qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
@@ -197,7 +197,6 @@ void * __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	 */
 	return elem;
 }
-EXPORT_SYMBOL(__qmempool_alloc_from_slab);
 
 /* This function is called when the localq runs out-of elements.
  * Thus, localq is refilled (enq) with elements (deq) from sharedq.
@@ -258,7 +257,6 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 	}
 	return true;
 }
-EXPORT_SYMBOL(__qmempool_free_to_slab);
 
 /* This function is called when the localq is full. Thus, elements
  * from localq needs to be (dequeued) and returned (enqueued) to
@@ -284,7 +282,7 @@ __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 	 * these elems by enqueuing to sharedq
 	 */
 	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
-	if (num_enq == num_deq) /* Success enqueued to sharedq */
+	if (likely(num_enq == num_deq)) /* Success enqueued to sharedq */
 		return;
 
 	/* If sharedq is full (num_enq == 0) dequeue elements will be

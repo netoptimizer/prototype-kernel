@@ -73,8 +73,6 @@ extern struct qmempool* qmempool_create(
 
 extern void* __qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
-extern void* __qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask);
-extern bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n);
 extern void __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 				       struct alf_queue *localq);
 
