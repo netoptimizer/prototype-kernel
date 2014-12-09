@@ -34,8 +34,8 @@ struct alf_queue {
 	void *ring[0] ____cacheline_aligned_in_smp;
 };
 
-struct alf_queue * alf_queue_alloc(u32 size, gfp_t gfp);
-void               alf_queue_free(struct alf_queue *q);
+struct alf_queue *alf_queue_alloc(u32 size, gfp_t gfp);
+void		  alf_queue_free(struct alf_queue *q);
 
 /* Helpers for LOAD and STORE of elements, have been split-out because:
  *  1. They can be reused for both "Single" and "Multi" variants
@@ -53,11 +53,6 @@ void               alf_queue_free(struct alf_queue *q);
  * on the returned number of enqueue elements match, to verify enqueue
  * was successful.  This allow us to introduce a "variable" enqueue
  * scheme later.
- *
- * Not preemption safe. Multiple CPUs can enqueue elements, but the
- * same CPU is not allowed to be preempted and access the same
- * queue. Due to how the tail is updated, this can result in a soft
- * lock-up. (Same goes for alf_mc_dequeue).
  */
 static inline int
 alf_mp_enqueue(const u32 n;
@@ -82,7 +77,7 @@ alf_mp_enqueue(const u32 n;
 	__helper_alf_enqueue_store(p_head, q, ptr, n);
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
-	/* Wait for other concurrent preceeding enqueues not yet done,
+	/* Wait for other concurrent preceding enqueues not yet done,
 	 * this part make us none-wait-free and could be problematic
 	 * in case of congestion with many CPUs
 	 */
@@ -131,7 +126,7 @@ alf_mc_dequeue(const u32 n;
 	 */
 	smp_wmb();
 
-	/* Wait for other concurrent preceeding dequeues not yet done */
+	/* Wait for other concurrent preceding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
 	/* Mark this deq done and avail for producers */
@@ -140,16 +135,18 @@ alf_mc_dequeue(const u32 n;
 	return elems;
 }
 
-//#define ASSERT_DEBUG_SPSC 1
+/* #define ASSERT_DEBUG_SPSC 1 */
 #ifndef ASSERT_DEBUG_SPSC
 #define ASSERT(x) do { } while (0)
 #else
-#define ASSERT(x)						\
-	if (unlikely(!(x))) {					\
-		pr_crit("Assertion failed %s:%d: \"%s\"\n",	\
-			__FILE__, __LINE__, #x);		\
-		BUG();						\
-	}
+#define ASSERT(x)							\
+	do {								\
+		if (unlikely(!(x))) {					\
+			pr_crit("Assertion failed %s:%d: \"%s\"\n",	\
+				__FILE__, __LINE__, #x);		\
+			BUG();						\
+		}							\
+	} while (0)
 #endif
 
 /* Main SINGLE Producer ENQUEUE
