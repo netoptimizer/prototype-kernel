@@ -67,11 +67,11 @@ struct qmempool {
 };
 
 extern void qmempool_destroy(struct qmempool *pool);
-extern struct qmempool* qmempool_create(
+extern struct qmempool *qmempool_create(
 	uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 	struct kmem_cache *kmem, gfp_t gfp_mask);
 
-extern void* __qmempool_alloc_from_sharedq(
+extern void *__qmempool_alloc_from_sharedq(
 	struct qmempool *pool, gfp_t gfp_mask, struct alf_queue *localq);
 extern void __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 				       struct alf_queue *localq);
@@ -107,6 +107,7 @@ extern void __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 static inline int __qmempool_preempt_disable(void)
 {
 	int in_serving_softirq = in_serving_softirq();
+
 	if (!in_serving_softirq)
 		local_bh_disable();
 
@@ -152,7 +153,7 @@ main_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 	return elem;
 }
 
-static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+static inline void *__qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	void *elem;
 	int state;
@@ -163,7 +164,7 @@ static inline void* __qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 	return elem;
 }
 
-static inline void* __qmempool_alloc_softirq(struct qmempool *pool,
+static inline void *__qmempool_alloc_softirq(struct qmempool *pool,
 					     gfp_t gfp_mask)
 {
 	return main_qmempool_alloc(pool, gfp_mask);
@@ -199,16 +200,16 @@ done:
 
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
-extern void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
-extern void* qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask);
+extern void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
+extern void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask);
 extern void qmempool_free(struct qmempool *pool, void *elem);
 
 #else /* !CONFIG_QMEMPOOL_NOINLINE */
-static inline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+static inline void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	return __qmempool_alloc(pool, gfp_mask);
 }
-static inline void* qmempool_alloc_softirq(struct qmempool *pool,
+static inline void *qmempool_alloc_softirq(struct qmempool *pool,
 					   gfp_t gfp_mask)
 {
 	return __qmempool_alloc_softirq(pool, gfp_mask);

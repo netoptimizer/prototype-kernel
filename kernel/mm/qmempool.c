@@ -53,11 +53,11 @@ void qmempool_destroy(struct qmempool *pool)
 }
 EXPORT_SYMBOL(qmempool_destroy);
 
-struct qmempool*
+struct qmempool *
 qmempool_create(uint32_t localq_sz, uint32_t sharedq_sz, uint32_t prealloc,
 		struct kmem_cache *kmem, gfp_t gfp_mask)
 {
-	struct qmempool* pool;
+	struct qmempool *pool;
 	int i, j, num;
 	void *elem;
 
@@ -204,8 +204,8 @@ void *__qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
  * Caller must assure this is called in an preemptive safe context due
  * to alf_mp_dequeue() call.
  */
-void * __qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
-				   struct alf_queue *localq)
+void *__qmempool_alloc_from_sharedq(struct qmempool *pool, gfp_t gfp_mask,
+				    struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	void *elem;
@@ -244,16 +244,14 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
 	 */
 
 	/* free these elements for real */
-	for (i = 0; i < n; i++) {
+	for (i = 0; i < n; i++)
 		kmem_cache_free(pool->kmem, elems[i]);
-	}
 
 	/* Make room in sharedq for next round */
 	for (i = 0; i < QMEMPOOL_REFILL_MULTIPLIER; i++) {
 		num = alf_mc_dequeue(pool->sharedq, elems, QMEMPOOL_BULK);
-		for (j = 0; j < num; j++) {
+		for (j = 0; j < num; j++)
 			kmem_cache_free(pool->kmem, elems[j]);
-		}
 	}
 	return true;
 }
@@ -264,9 +262,8 @@ bool __qmempool_free_to_slab(struct qmempool *pool, void **elems, int n)
  *
  * MUST be called from a preemptive safe context.
  */
-void
-__qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
-			   struct alf_queue *localq)
+void __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
+				struct alf_queue *localq)
 {
 	void *elems[QMEMPOOL_BULK]; /* on stack variable */
 	int num_enq, num_deq;
@@ -278,7 +275,7 @@ __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 		goto failed;
 	num_deq++; /* count first 'elem' */
 
-        /* Successful dequeued 'num_deq' elements from localq, "free"
+	/* Successful dequeued 'num_deq' elements from localq, "free"
 	 * these elems by enqueuing to sharedq
 	 */
 	num_enq = alf_mp_enqueue(pool->sharedq, elems, num_deq);
@@ -298,20 +295,19 @@ __qmempool_free_to_sharedq(void *elem, struct qmempool *pool,
 failed:
 	/* dequeing from a full localq should always be possible */
 	BUG();
-	return;
 }
 EXPORT_SYMBOL(__qmempool_free_to_sharedq);
 
 /* Allow users control over whether it is optimal to inline qmempool */
 #ifdef CONFIG_QMEMPOOL_NOINLINE
-noinline void* qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+noinline void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
-       return __qmempool_alloc(pool, gfp_mask);
+	return __qmempool_alloc(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc);
-noinline void* qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask)
+noinline void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask)
 {
-       return __qmempool_alloc_softirq(pool, gfp_mask);
+	return __qmempool_alloc_softirq(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc_softirq);
 noinline void qmempool_free(struct qmempool *pool, void *elem)
