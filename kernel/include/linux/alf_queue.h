@@ -53,6 +53,11 @@ void		  alf_queue_free(struct alf_queue *q);
  * on the returned number of enqueue elements match, to verify enqueue
  * was successful.  This allow us to introduce a "variable" enqueue
  * scheme later.
+ *
+ * Not preemption safe. Multiple CPUs can enqueue elements, but the
+ * same CPU is not allowed to be preempted and access the same
+ * queue. Due to how the tail is updated, this can result in a soft
+ * lock-up. (Same goes for alf_mc_dequeue).
  */
 static inline int
 alf_mp_enqueue(const u32 n;
