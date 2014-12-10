@@ -129,8 +129,7 @@ static inline void __qmempool_preempt_enable(int in_serving_softirq)
  *
  * Caller must make sure this is called from a preemptive safe context
  */
-static __always_inline void *
-main_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+static inline void * main_qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	/* NUMA considerations, for now the numa node is not handles,
 	 * this could be handled via e.g. numa_mem_id()
@@ -198,26 +197,9 @@ done:
 	__qmempool_preempt_enable(state);
 }
 
-/* Allow users control over whether it is optimal to inline qmempool */
-#ifdef CONFIG_QMEMPOOL_NOINLINE
+/* API users can choose to use "__" prefixed versions for inlining */
 extern void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
 extern void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask);
 extern void qmempool_free(struct qmempool *pool, void *elem);
-
-#else /* !CONFIG_QMEMPOOL_NOINLINE */
-static inline void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
-{
-	return __qmempool_alloc(pool, gfp_mask);
-}
-static inline void *qmempool_alloc_softirq(struct qmempool *pool,
-					   gfp_t gfp_mask)
-{
-	return __qmempool_alloc_softirq(pool, gfp_mask);
-}
-static inline void qmempool_free(struct qmempool *pool, void *elem)
-{
-	return __qmempool_free(pool, elem);
-}
-#endif /* CONFIG_QMEMPOOL_NOINLINE */
 
 #endif /* _LINUX_QMEMPOOL_H */

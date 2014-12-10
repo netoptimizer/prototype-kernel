@@ -298,24 +298,24 @@ failed:
 }
 EXPORT_SYMBOL(__qmempool_free_to_sharedq);
 
-/* Allow users control over whether it is optimal to inline qmempool */
-#ifdef CONFIG_QMEMPOOL_NOINLINE
-noinline void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
+/* API users can choose to use "__" prefixed versions for inlining */
+void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask)
 {
 	return __qmempool_alloc(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc);
-noinline void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask)
+
+void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask)
 {
 	return __qmempool_alloc_softirq(pool, gfp_mask);
 }
 EXPORT_SYMBOL(qmempool_alloc_softirq);
-noinline void qmempool_free(struct qmempool *pool, void *elem)
+
+void qmempool_free(struct qmempool *pool, void *elem)
 {
 	return __qmempool_free(pool, elem);
 }
 EXPORT_SYMBOL(qmempool_free);
-#endif /* CONFIG_QMEMPOOL_NOINLINE */
 
 MODULE_DESCRIPTION("Quick queue based mempool (qmempool)");
 MODULE_AUTHOR("Jesper Dangaard Brouer <netoptimizer@brouer.com>");
