@@ -170,36 +170,45 @@ static inline void *__qmempool_alloc_softirq(struct qmempool *pool,
 }
 
 /* Main free function */
-static inline void __qmempool_free(struct qmempool *pool, void *elem)
+static inline void main_qmempool_free(struct qmempool *pool, void *elem)
 {
 	struct qmempool_percpu *cpu;
 	int num;
-	int state;
 
 	/* NUMA considerations, how do we make sure to avoid caching
 	 * elements from a different NUMA node.
 	 */
-	state = __qmempool_preempt_disable();
 
 	/* 1. attempt to free/return element to local per CPU queue */
 	cpu = this_cpu_ptr(pool->percpu);
 	num = alf_sp_enqueue(cpu->localq, &elem, 1);
 	if (num == 1) /* success: element free'ed by enqueue to localq */
-		goto done;
+		return;
 
 	/* 2. localq cannot store more elements, need to return some
 	 * from localq to sharedq, to make room. Side-effect can be
 	 * free to SLAB.
 	 */
 	__qmempool_free_to_sharedq(elem, pool, cpu->localq);
+}
 
-done:
+static inline void __qmempool_free(struct qmempool *pool, void *elem)
+{
+	int state;
+	state = __qmempool_preempt_disable();
+	main_qmempool_free(pool, elem);
 	__qmempool_preempt_enable(state);
+}
+
+static inline void __qmempool_free_softirq(struct qmempool *pool, void *elem)
+{
+	main_qmempool_free(pool, elem);
 }
 
 /* API users can choose to use "__" prefixed versions for inlining */
 extern void *qmempool_alloc(struct qmempool *pool, gfp_t gfp_mask);
 extern void *qmempool_alloc_softirq(struct qmempool *pool, gfp_t gfp_mask);
 extern void qmempool_free(struct qmempool *pool, void *elem);
+extern void qmempool_free_softirq(struct qmempool *pool, void *elem);
 
 #endif /* _LINUX_QMEMPOOL_H */

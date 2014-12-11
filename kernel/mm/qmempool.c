@@ -317,6 +317,12 @@ void qmempool_free(struct qmempool *pool, void *elem)
 }
 EXPORT_SYMBOL(qmempool_free);
 
+void qmempool_free_softirq(struct qmempool *pool, void *elem)
+{
+	return __qmempool_free(pool, elem);
+}
+EXPORT_SYMBOL(qmempool_free_softirq);
+
 MODULE_DESCRIPTION("Quick queue based mempool (qmempool)");
 MODULE_AUTHOR("Jesper Dangaard Brouer <netoptimizer@brouer.com>");
 MODULE_LICENSE("GPL");
