@@ -9,3 +9,4 @@ obj-$(CONFIG_QMEMPOOL) += qmempool.o
 
 obj-m += qmempool_test.o
 obj-m += qmempool_bench.o
+obj-m += slab_test.o
