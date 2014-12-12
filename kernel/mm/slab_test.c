@@ -1,4 +1,4 @@
-/* test-slab.c
+/* test_slab.c
  *
  * Test module for synthetic in kernel slab allocator testing.
  *
@@ -16,6 +16,9 @@
 #include <asm/timex.h>
 
 #define TEST_COUNT 10000
+
+/* Hack to disable concurrency tests, it didn't compile on my kernel */
+#undef CONFIG_SMP
 
 #ifdef CONFIG_SMP
 #include <linux/completion.h>
