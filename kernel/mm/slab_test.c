@@ -1,4 +1,4 @@
-/* test_slab.c
+/* slab_test.c
  *
  * Test module for synthetic in kernel slab allocator testing.
  *
@@ -17,8 +17,7 @@
 
 #define TEST_COUNT 10000
 
-/* Hack to disable concurrency tests, it didn't compile on my kernel */
-#undef CONFIG_SMP
+//#undef CONFIG_SMP /* Hack to disable concurrency tests */
 
 #ifdef CONFIG_SMP
 #include <linux/completion.h>
@@ -174,8 +173,8 @@ static int test_func(void *private)
 	struct test_struct *t = private;
 	cpumask_t newmask = CPU_MASK_NONE;
 
-        cpu_set(t->cpu, newmask);
-        set_cpus_allowed(current, newmask);
+	cpu_set(t->cpu, newmask);
+	set_cpus_allowed_ptr(current, &newmask);
 	t->v = kzalloc(t->count * sizeof(void *), GFP_KERNEL);
 
 	atomic_inc(&tests_running);
