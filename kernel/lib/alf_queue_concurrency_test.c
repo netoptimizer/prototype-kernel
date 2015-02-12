@@ -278,6 +278,7 @@ static int __init alf_queue_concurrent_module_init(void)
 		return -ENOMEM;
 
 	init_completion(&dequeue_start);
+	// Do we need to reinit_completion() somewhere?
 
 	consumer.kthread = kthread_run(alf_consumer_thread,
 				       &consumer,
