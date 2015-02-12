@@ -49,6 +49,72 @@ static int time_lock_unlock(
 	return loops_cnt;
 }
 
+static int time_lock_unlock_irqsave(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	unsigned long flags;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		spin_lock_irqsave(&my_lock, flags);
+		loops_cnt++;
+		barrier();
+		spin_unlock_irqrestore(&my_lock, flags);
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+/* Purpose of this func, is to determine of the combined
+ * spin_lock_irqsave() call is more efficient than "manually" irqsave
+ * before calling lock.
+ */
+static int time_irqsave_before_lock(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	unsigned long flags;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		local_irq_save(flags);
+		spin_lock(&my_lock);
+		loops_cnt++;
+		barrier();
+		spin_unlock(&my_lock);
+		local_irq_restore(flags);
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+/* How much is there to save when using non-flags save variant of
+ * disabling interrupts */
+static int time_simple_irq_disable_before_lock(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		local_irq_disable();
+		spin_lock(&my_lock);
+		loops_cnt++;
+		barrier();
+		spin_unlock(&my_lock);
+		local_irq_enable();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 static int time_local_bh(
 	struct time_bench_record *rec, void *data)
 {
@@ -202,6 +268,15 @@ int run_timing_tests(void)
 	 */
 	time_bench_loop(loops, 0, "spin_lock_unlock",
 			NULL, time_lock_unlock);
+
+	time_bench_loop(loops/2, 0, "spin_lock_unlock_irqsave",
+			NULL, time_lock_unlock_irqsave);
+
+	time_bench_loop(loops/2, 0, "irqsave_before_lock",
+			NULL, time_irqsave_before_lock);
+
+	time_bench_loop(loops/2, 0, "simple_irq_disable_before_lock",
+			NULL, time_simple_irq_disable_before_lock);
 
 	/* Cost for local_bh_{disable,enable}
 	 *  7.387 ns with CONFIG_PREEMPT=n PREEMPT_COUNT=n
