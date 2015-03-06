@@ -68,6 +68,24 @@ static int time_lock_unlock_irqsave(
 	return loops_cnt;
 }
 
+static int time_lock_unlock_irq(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		spin_lock_irq(&my_lock);
+		loops_cnt++;
+		barrier();
+		spin_unlock_irq(&my_lock);
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 /* Purpose of this func, is to determine of the combined
  * spin_lock_irqsave() call is more efficient than "manually" irqsave
  * before calling lock.
@@ -274,6 +292,9 @@ int run_timing_tests(void)
 
 	time_bench_loop(loops/2, 0, "irqsave_before_lock",
 			NULL, time_irqsave_before_lock);
+
+	time_bench_loop(loops/2, 0, "spin_lock_unlock_irq",
+			NULL, time_lock_unlock_irq);
 
 	time_bench_loop(loops/2, 0, "simple_irq_disable_before_lock",
 			NULL, time_simple_irq_disable_before_lock);

@@ -68,7 +68,7 @@ alf_mp_enqueue(const u32 n;
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	do {
 		p_head = ACCESS_ONCE(q->producer.head);
-		c_tail = ACCESS_ONCE(q->consumer.tail);
+		c_tail = ACCESS_ONCE(q->consumer.tail);/* as smp_load_aquire */
 
 		space = q->size + c_tail - p_head;
 		if (n > space)
@@ -77,6 +77,9 @@ alf_mp_enqueue(const u32 n;
 		p_next = p_head + n;
 	}
 	while (unlikely(cmpxchg(&q->producer.head, p_head, p_next) != p_head));
+	/* The memory barrier of smp_load_acquire(&q->consumer.tail)
+	 * is satisfied by cmpxchg implicit full memory barrier
+	 */
 
 	/* STORE the elems into the queue array */
 	__helper_alf_enqueue_store(p_head, q, ptr, n);
@@ -123,19 +126,16 @@ alf_mc_dequeue(const u32 n;
 	 */
 	__helper_alf_dequeue_load(c_head, q, ptr, elems);
 
-	/* Archs with weak Memory Ordering need a memory barrier here.
-	 * As the STORE to q->consumer.tail, must happen after the
-	 * dequeue LOADs. Dequeue LOADs have a dependent STORE into
-	 * ptr, thus a smp_wmb() is enough. Paired with enqueue
-	 * implicit full-MB in cmpxchg.
-	 */
-	smp_wmb();
-
 	/* Wait for other concurrent preceding dequeues not yet done */
 	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
 	/* Mark this deq done and avail for producers */
-	ACCESS_ONCE(q->consumer.tail) = c_next;
+	smp_store_release(&q->consumer.tail, c_next);
+	/* Archs with weak Memory Ordering need a memory barrier
+	 * (store_release) here.  As the STORE to q->consumer.tail,
+	 * must happen after the dequeue LOADs.  Paired with enqueue
+	 * implicit full-MB in cmpxchg.
+	 */
 
 	return elems;
 }
