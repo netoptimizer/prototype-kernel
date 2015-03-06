@@ -114,12 +114,135 @@ static int time_memset_128(
 #undef  CONST_CLEAR_SIZE
 }
 
+static int time_memset_199(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 199
+	int i;
+	uint64_t loops_cnt = 0;
 
-/* (currently) 200 is equiv to SKB clear size on 64bit */
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+
+/* Do something aligned to 64*/
+static int time_memset_192(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 192
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+
+/* Do something not aligned */
+static int time_memset_201(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 201
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+/* Do something not 8 bytes aligned */
+static int time_memset_204(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 204
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+
+/* (currently) 200 is equiv to SKB clear size on 64bit
+ * - this does depend on some CONFIG defines
+ */
 static int time_memset_200(
 	struct time_bench_record *rec, void *data)
 {
 #define CONST_CLEAR_SIZE 200
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+/* 208 / 16 bytes = 13 ... which should be more optimal for REP STOS */
+static int time_memset_208(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 208
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+/* 256 / 64 bytes = 4 ... which should be more optimal for REP STOS */
+static int time_memset_256(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 256
 	int i;
 	uint64_t loops_cnt = 0;
 
@@ -227,7 +350,7 @@ static int time_memset_variable_step(
 
 int run_timing_tests(void)
 {
-	uint32_t loops = 100000000;
+	uint32_t loops = 10000000;
 
 	/*  0.360 ns cost overhead of the for loop */
 	time_bench_loop(loops*10, 0, "for_loop", /*  0.360 ns */
@@ -255,6 +378,27 @@ int run_timing_tests(void)
 			NULL, time_memset_200);
 
 	time_bench_loop(loops, 200, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
+	time_bench_loop(loops, 0, "memset_192", /* <= 3 * 64 */
+			NULL, time_memset_192);
+	time_bench_loop(loops, 0, "memset_199",
+			NULL, time_memset_199);
+	time_bench_loop(loops, 0, "memset_201",
+			NULL, time_memset_201);
+	time_bench_loop(loops, 0, "memset_204",
+			NULL, time_memset_204);
+
+	time_bench_loop(loops, 0, "memset_208",
+			NULL, time_memset_208);
+
+	time_bench_loop(loops, 208, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
+	time_bench_loop(loops, 0, "memset_256",
+			NULL, time_memset_256);
+
+	time_bench_loop(loops, 256, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
 	time_bench_loop(loops/10, 0, "memset_1024",
