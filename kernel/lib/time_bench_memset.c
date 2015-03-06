@@ -346,7 +346,80 @@ static int time_memset_variable_step(
 	}
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
+
 }
+
+static inline
+void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int qword)
+//void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int bytes)
+{
+#define VALUE      0x4141414141414141
+#define VALUE_BYTE 0x41
+	/* Clear up to the next quad word */
+	//const unsigned int qword = DIV_ROUND_UP(bytes, 8);
+	int i;
+	int iterations = qword & ~3UL;
+	unsigned long *data = ptr;
+
+	for (i = 0; i < iterations; i+=4) {
+/*
+		data[i+3] = VALUE;
+		data[i+2] = VALUE;
+		data[i+1] = VALUE;
+		data[i]   = VALUE;
+*/
+		/* Const memset 32 is extremely fast! */
+		memset(&data[i], VALUE_BYTE, 32);
+	}
+	/* Remainder qword handling */
+	switch(qword & 0x3) {
+	case 3:
+		data[i+2] = VALUE;
+	case 2:
+		data[i+1] = VALUE;
+	case 1:
+		data[i]   = VALUE;
+	}
+}
+
+static int time_mem_zero_step(
+	struct time_bench_record *rec, void *data)
+{
+	int i, bytes_rounded_up, n = 0;
+	uint64_t loops_cnt = 0;
+	int size = rec->step;
+	size = DIV_ROUND_UP(size, 8); // convert to qwords
+	bytes_rounded_up = size * 8;
+
+	if ((bytes_rounded_up) > GLOBAL_BUF_SIZE)
+		return 0;
+
+	printk(KERN_INFO "Rounded %d up to size:%d\n",
+	       rec->step, bytes_rounded_up);
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier(); /* avoid compiler tricks */
+		mem_zero_crazy_loop_unroll2(&global_buf, size);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+
+	/* Better validate the clearing */
+	for (i = 0; i < GLOBAL_BUF_SIZE; i++) {
+		if (global_buf[i] == VALUE_BYTE) {
+			n++;
+		} else {
+			printk(KERN_INFO "Number of VALUE_BYTE found: %d\n", n);
+			return loops_cnt;
+		}
+	}
+
+	return loops_cnt;
+}
+
 
 int run_timing_tests(void)
 {
@@ -356,32 +429,38 @@ int run_timing_tests(void)
 	time_bench_loop(loops*10, 0, "for_loop", /*  0.360 ns */
 			NULL, time_bench_for_loop);
 
+	time_bench_loop(loops, 16, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
 	time_bench_loop(loops, 0, "memset_32",
 			NULL, time_memset_32);
 
+	time_bench_loop(loops, 32, "mem_zero",
+			NULL,  time_mem_zero_step);
 	time_bench_loop(loops, 32, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
+	time_bench_loop(loops, 64, "mem_zero",
+			NULL,  time_mem_zero_step);
 	time_bench_loop(loops, 0, "memset_64",
 			NULL, time_memset_64);
-
 	time_bench_loop(loops, 64, "memset_variable_step",
-			NULL,   time_memset_variable_step);
+			NULL,  time_memset_variable_step);
 
+	time_bench_loop(loops, 128, "mem_zero",
+			NULL,  time_mem_zero_step);
 	time_bench_loop(loops, 0, "memset_128",
 			NULL, time_memset_128);
-
 	time_bench_loop(loops, 128, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops, 0, "memset_200",
-			NULL, time_memset_200);
-
-	time_bench_loop(loops, 200, "memset_variable_step",
-			NULL,   time_memset_variable_step);
-
+	time_bench_loop(loops, 192, "mem_zero",
+			NULL,   time_mem_zero_step);
 	time_bench_loop(loops, 0, "memset_192", /* <= 3 * 64 */
 			NULL, time_memset_192);
+	time_bench_loop(loops, 192, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
 	time_bench_loop(loops, 0, "memset_199",
 			NULL, time_memset_199);
 	time_bench_loop(loops, 0, "memset_201",
@@ -389,21 +468,31 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "memset_204",
 			NULL, time_memset_204);
 
+	time_bench_loop(loops, 200, "mem_zero",
+			NULL,  time_mem_zero_step);
+	time_bench_loop(loops, 0, "memset_200",
+			NULL, time_memset_200);
+	time_bench_loop(loops, 200, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
+	time_bench_loop(loops, 208, "mem_zero",
+			NULL,   time_mem_zero_step);
 	time_bench_loop(loops, 0, "memset_208",
 			NULL, time_memset_208);
-
 	time_bench_loop(loops, 208, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
+	time_bench_loop(loops, 256, "mem_zero",
+			NULL,   time_mem_zero_step);
 	time_bench_loop(loops, 0, "memset_256",
 			NULL, time_memset_256);
-
 	time_bench_loop(loops, 256, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
+	time_bench_loop(loops/10, 1024, "mem_zero",
+			NULL,   time_mem_zero_step);
 	time_bench_loop(loops/10, 0, "memset_1024",
 			NULL, time_memset_1024);
-
 	time_bench_loop(loops/10, 1024, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
