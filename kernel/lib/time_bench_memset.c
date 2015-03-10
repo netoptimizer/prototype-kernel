@@ -67,6 +67,7 @@ static int time_memset_32(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -87,6 +88,7 @@ static int time_memset_64(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -106,6 +108,7 @@ static int time_memset_128(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -125,6 +128,7 @@ static int time_memset_199(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -146,6 +150,7 @@ static int time_memset_192(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -167,6 +172,7 @@ static int time_memset_201(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -187,6 +193,7 @@ static int time_memset_204(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -210,6 +217,7 @@ static int time_memset_200(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -230,6 +238,7 @@ static int time_memset_208(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -250,6 +259,7 @@ static int time_memset_256(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -269,6 +279,7 @@ static int time_memset_1024(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -289,6 +300,7 @@ static int time_memset_4096(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
@@ -308,6 +320,7 @@ static int time_memset_8192(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 		loops_cnt++;
+		barrier();
 		memset(&global_buf, 0, CONST_CLEAR_SIZE);
 		barrier();
 	}
