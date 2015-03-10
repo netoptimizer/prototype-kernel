@@ -382,7 +382,7 @@ void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int qword)
 	}
 }
 
-static int time_mem_zero_step(
+static int time_mem_zero_hacks(
 	struct time_bench_record *rec, void *data)
 {
 	int i, bytes_rounded_up, n = 0;
@@ -435,27 +435,27 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "memset_32",
 			NULL, time_memset_32);
 
-	time_bench_loop(loops, 32, "mem_zero",
-			NULL,  time_mem_zero_step);
+	time_bench_loop(loops, 32, "mem_zero_hacks",
+			NULL,  time_mem_zero_hacks);
 	time_bench_loop(loops, 32, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops, 64, "mem_zero",
-			NULL,  time_mem_zero_step);
+	time_bench_loop(loops, 64, "mem_zero_hacks",
+			NULL,  time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_64",
 			NULL, time_memset_64);
 	time_bench_loop(loops, 64, "memset_variable_step",
 			NULL,  time_memset_variable_step);
 
-	time_bench_loop(loops, 128, "mem_zero",
-			NULL,  time_mem_zero_step);
+	time_bench_loop(loops, 128, "mem_zero_hacks",
+			NULL,  time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_128",
 			NULL, time_memset_128);
 	time_bench_loop(loops, 128, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops, 192, "mem_zero",
-			NULL,   time_mem_zero_step);
+	time_bench_loop(loops, 192, "mem_zero_hacks",
+			NULL,   time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_192", /* <= 3 * 64 */
 			NULL, time_memset_192);
 	time_bench_loop(loops, 192, "memset_variable_step",
@@ -468,29 +468,29 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "memset_204",
 			NULL, time_memset_204);
 
-	time_bench_loop(loops, 200, "mem_zero",
-			NULL,  time_mem_zero_step);
+	time_bench_loop(loops, 200, "mem_zero_hacks",
+			NULL,  time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_200",
 			NULL, time_memset_200);
 	time_bench_loop(loops, 200, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops, 208, "mem_zero",
-			NULL,   time_mem_zero_step);
+	time_bench_loop(loops, 208, "mem_zero_hacks",
+			NULL,   time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_208",
 			NULL, time_memset_208);
 	time_bench_loop(loops, 208, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops, 256, "mem_zero",
-			NULL,   time_mem_zero_step);
+	time_bench_loop(loops, 256, "mem_zero_hacks",
+			NULL,   time_mem_zero_hacks);
 	time_bench_loop(loops, 0, "memset_256",
 			NULL, time_memset_256);
 	time_bench_loop(loops, 256, "memset_variable_step",
 			NULL,   time_memset_variable_step);
 
-	time_bench_loop(loops/10, 1024, "mem_zero",
-			NULL,   time_mem_zero_step);
+	time_bench_loop(loops/10, 1024, "mem_zero_hacks",
+			NULL,   time_mem_zero_hacks);
 	time_bench_loop(loops/10, 0, "memset_1024",
 			NULL, time_memset_1024);
 	time_bench_loop(loops/10, 1024, "memset_variable_step",
