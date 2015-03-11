@@ -366,6 +366,9 @@ static inline
 void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int qword)
 //void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int bytes)
 {
+/* WARNING: Setting VALUE to zero result in different assembler code,
+ * with slightly less performance, this need more investigation!
+ */
 #define VALUE      0x4141414141414141
 #define VALUE_BYTE 0x41
 	/* Clear up to the next quad word */
