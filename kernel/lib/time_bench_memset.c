@@ -268,6 +268,26 @@ static int time_memset_256(
 #undef  CONST_CLEAR_SIZE
 }
 
+static int time_memset_512(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 512
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
 static int time_memset_1024(
 	struct time_bench_record *rec, void *data)
 {
@@ -357,6 +377,7 @@ static int time_memset_variable_step(
 		memset(&global_buf, 0, size);
 		barrier();
 	}
+
 	time_bench_stop(rec, loops_cnt);
 	return loops_cnt;
 
@@ -504,6 +525,14 @@ int run_timing_tests(void)
 			NULL, time_memset_256);
 	time_bench_loop(loops, 256, "memset_variable_step",
 			NULL,   time_memset_variable_step);
+
+	time_bench_loop(loops, 512, "mem_zero_hacks",
+			NULL,   time_mem_zero_hacks);
+	time_bench_loop(loops, 0, "memset_512",
+			NULL, time_memset_512);
+	time_bench_loop(loops, 512, "memset_variable_step",
+			NULL,   time_memset_variable_step);
+
 
 	time_bench_loop(loops/10, 1024, "mem_zero_hacks",
 			NULL,   time_mem_zero_hacks);
