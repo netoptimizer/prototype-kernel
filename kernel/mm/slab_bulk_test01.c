@@ -217,7 +217,10 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "kmem fastpath reuse", NULL,
 			benchmark_kmem_cache_fastpath_reuse);
 
-	bulk_test(64);
+	bulk_test(1);
+	bulk_test(2);
+	bulk_test(3);
+	bulk_test(4);
 
 	bulk_test(8);
 	bulk_test(16);
