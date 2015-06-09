@@ -173,7 +173,7 @@ static int test_func(void *private)
 	struct test_struct *t = private;
 	cpumask_t newmask = CPU_MASK_NONE;
 
-	cpu_set(t->cpu, newmask);
+	cpumask_set_cpu(t->cpu, &newmask);
 	set_cpus_allowed_ptr(current, &newmask);
 	t->v = kzalloc(t->count * sizeof(void *), GFP_KERNEL);
 
@@ -266,7 +266,7 @@ static void do_concurrent_test(void (*p1)(struct test_struct *),
 	printk("\n");
 	schedule_timeout(200);
 }
-#endif
+#endif /* CONFIG_SMP */
 
 static int slab_test_init(void)
 {
