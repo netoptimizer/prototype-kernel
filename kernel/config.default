@@ -1,0 +1,23 @@
+#
+# This config allow you to selectively choose to disable(=n) or enable(=m)
+# building specific modules.
+#
+# How these are used/interpreted are defined in */Kbuild files
+#
+#
+CONFIG_QMEMPOOL=m
+CONFIG_QMEMPOOL_TESTS=m
+#
+CONFIG_ALF_QUEUE=m
+CONFIG_ALF_QUEUE_TESTS=m
+#
+CONFIG_TIME_BENCH=m
+CONFIG_TIME_BENCH_TESTS=m
+#
+CONFIG_RING_QUEUE=m
+CONFIG_RING_QUEUE_TESTS=m
+#
+# If developing on SLAB BULK API then enable modules using this API by
+# setting CONFIG_SLAB_BULK_API=m
+#
+CONFIG_SLAB_BULK_API=n

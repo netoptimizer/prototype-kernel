@@ -2,11 +2,18 @@
 ccflags-y := -I$(KDIR)/include
 
 # Handle if qmempool is defined in kernel
-ifndef CONFIG_QMEMPOOL
-       CONFIG_QMEMPOOL=m
+ifdef CONFIG_QMEMPOOL
+      CONFIG_QMEMPOOL=n
 endif
-obj-$(CONFIG_QMEMPOOL) += qmempool.o
 
-obj-m += qmempool_test.o
-obj-m += qmempool_bench.o
-obj-m += slab_test.o
+# Local .config settings
+include $(KDIR)/.config
+
+obj-$(CONFIG_QMEMPOOL)       += qmempool.o
+obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_test.o
+obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_bench.o
+
+obj-$(CONFIG_SLAB_TESTS) += slab_test.o
+
+# Only compile BULK-API users if local .config enable it
+obj-$(CONFIG_SLAB_BULK) += slab_bulk_test01.o

@@ -1,21 +1,24 @@
 # Adding include path as desc in Documentation/kbuild/modules.txt
 ccflags-y := -I$(KDIR)/include
 
-obj-m += time_bench.o
-obj-m += time_bench_sample.o
-obj-m += time_bench_kmem_cache1.o
-obj-m += time_bench_memset.o
-
-obj-m += ring_queue.o
-obj-m += ring_queue_test.o
-
 # Handle if alf_queue is defined in kernel
-ifndef CONFIG_ALF_QUEUE
-       CONFIG_ALF_QUEUE=m
+ifdef CONFIG_ALF_QUEUE
+      CONFIG_ALF_QUEUE=n
 endif
-obj-$(CONFIG_ALF_QUEUE) += alf_queue.o
 
-obj-m += alf_queue_test.o
-obj-m += alf_queue_bench.o
-obj-m += alf_queue_concurrency_test.o
-obj-m += alf_queue_disassemble.o
+# Local .config settings
+include $(KDIR)/.config
+
+obj-$(CONFIG_ALF_QUEUE)       += alf_queue.o
+obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_test.o
+obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_bench.o
+obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_concurrency_test.o
+obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_disassemble.o
+
+obj-$(CONFIG_TIME_BENCH)       += time_bench.o
+obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_sample.o
+obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_kmem_cache1.o
+obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_memset.o
+
+obj-$(CONFIG_RING_QUEUE)       += ring_queue.o
+obj-$(CONFIG_RING_QUEUE_TESTS) += ring_queue_test.o

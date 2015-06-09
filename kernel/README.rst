@@ -34,4 +34,13 @@ If you want to run this manually call the script directly::
  ./scripts/push_remote.sh 192.168.122.49
 
 
+Enable/disable modules
+======================
 
+It can be practical to allow manual enable/disable of which modules
+are getting build.  This is supported by locally adjusting .config.
+On first run the content is based on config.default.
+
+This feature is useful when developing against API's that have not
+been included the mainline kernel yet.  See CONFIG_SLAB_BULK_API=m for
+an example.

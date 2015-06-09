@@ -16,7 +16,7 @@ kbuilddir ?= /lib/modules/$(shell uname -r)/build/
 #KBUILD_CFLAGS+=-g -O3
 #KBUILD_CFLAGS+=-g -O2 -fno-inline
 
-all: verify_kernel_source_dir modules
+all: prepare verify_kernel_source_dir modules
 
 verify_kernel_source_dir:
 	@if [ ! -d $(kbuilddir) ]; then \
@@ -48,9 +48,13 @@ clean_remote:
 	fi
 	scripts/push_remote.sh --delete $(HOST)
 
+prepare:
+	@if [ ! -f .config ]; then \
+		cp config.default .config ; \
+	else true; fi
 
-clean:
+clean: prepare
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD clean
 	@rm -f *~
 
-.PHONY: all modules install clean verify_kernel_source_dir
+.PHONY: all prepare modules install clean verify_kernel_source_dir
