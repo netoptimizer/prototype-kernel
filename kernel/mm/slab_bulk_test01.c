@@ -101,7 +101,7 @@ bool my__kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
 static int benchmark_slab_fallback_bulk(
 	struct time_bench_record *rec, void *data)
 {
-#define MAX_BULK 128
+#define MAX_BULK 250
 	void *objs[MAX_BULK];
 	uint64_t loops_cnt = 0;
 	int i;
@@ -150,7 +150,7 @@ out:
 static int benchmark_slab_bulk01(
 	struct time_bench_record *rec, void *data)
 {
-#define MAX_BULK 128
+#define MAX_BULK 250
 	void *objs[MAX_BULK];
 	uint64_t loops_cnt = 0;
 	int i;
@@ -230,6 +230,8 @@ int run_timing_tests(void)
 	bulk_test(48);
 	bulk_test(64);
 	bulk_test(128);
+	bulk_test(128+30);
+	bulk_test(250);
 
 	return 0;
 }
@@ -239,6 +241,10 @@ static int __init slab_bulk_test01_module_init(void)
 {
 	if (verbose)
 		pr_info("Loaded\n");
+
+	preempt_disable();
+	pr_info("DEBUG: cpu:%d\n", smp_processor_id());
+	preempt_enable();
 
 #ifdef CONFIG_DEBUG_PREEMPT
 	pr_warn("WARN: CONFIG_DEBUG_PREEMPT is enabled: this affect results\n");
