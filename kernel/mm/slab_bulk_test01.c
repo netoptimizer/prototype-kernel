@@ -74,8 +74,13 @@ out:
 	return loops_cnt;
 }
 
-/* copy-paste to test fallback version */
-inline
+/* Fallback versions copy-pasted here, as they are defined in
+ * slab_common that we cannot link with.
+ *
+ * Force them to be "noinlined" as current patch for slab_common cause
+ * them to be a function call.  To keep comparison the same.
+ */
+noinline
 void my__kmem_cache_free_bulk(struct kmem_cache *s, size_t nr, void **p)
 {
 	size_t i;
@@ -83,7 +88,7 @@ void my__kmem_cache_free_bulk(struct kmem_cache *s, size_t nr, void **p)
 	for (i = 0; i < nr; i++)
 		kmem_cache_free(s, p[i]);
 }
-inline
+noinline
 bool my__kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
 								void **p)
 {
@@ -98,6 +103,7 @@ bool my__kmem_cache_alloc_bulk(struct kmem_cache *s, gfp_t flags, size_t nr,
 	}
 	return true;
 }
+
 static int benchmark_slab_fallback_bulk(
 	struct time_bench_record *rec, void *data)
 {
