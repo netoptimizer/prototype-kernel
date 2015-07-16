@@ -44,7 +44,7 @@ static uint32_t nmatch = 0;
 module_param(nmatch, uint, 0);
 MODULE_PARM_DESC(nmatch, "Parameter only running one N-page-match test");
 
-static uint32_t try_crash = 1;
+static uint32_t try_crash = 0;
 module_param(try_crash, uint, 0);
 MODULE_PARM_DESC(try_crash, "Enable error cases, like freeing NULL ptrs");
 
