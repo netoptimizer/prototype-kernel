@@ -214,7 +214,6 @@ static __always_inline int __benchmark_slab_bulk(
 	uint64_t loops_cnt = 0;
 	int i, j;
 	bool success;
-	struct kmem_cache *slab;
 	size_t bulk = rec->step;
 	struct my_obj *last_obj = NULL;
 	long int modulo_match = (long int)data;
@@ -241,18 +240,16 @@ static __always_inline int __benchmark_slab_bulk(
 		return 0;
 	}
 
-	slab = kmem_cache_create("slab_bulk_test03", sizeof(struct my_obj),
-				 0, SLAB_HWCACHE_ALIGN, NULL);
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 
 		/* request bulk elems */
 		if (type & BULK) { /* Compiler will optimize branch out */
-			success = kmem_cache_alloc_bulk(slab, GFP_ATOMIC,
+			success = kmem_cache_alloc_bulk(my_slab, GFP_ATOMIC,
 							bulk, GLOBAL_OBJS);
 		} else if (type & FALLBACK_BULK) {
-			success = my__kmem_cache_alloc_bulk(slab, GFP_ATOMIC,
+			success = my__kmem_cache_alloc_bulk(my_slab, GFP_ATOMIC,
 							    bulk, GLOBAL_OBJS);
 		} else {
 			BUILD_BUG();
@@ -294,9 +291,9 @@ static __always_inline int __benchmark_slab_bulk(
 
 		/* bulk return elems */
 		if (type & BULK) {
-			kmem_cache_free_bulk(slab, bulk, GLOBAL_OBJS);
+			kmem_cache_free_bulk(my_slab, bulk, GLOBAL_OBJS);
 		} else if (type & FALLBACK_BULK) {
-			my__kmem_cache_free_bulk(slab, bulk, GLOBAL_OBJS);
+			my__kmem_cache_free_bulk(my_slab, bulk, GLOBAL_OBJS);
 		} else {
 			BUILD_BUG();
 		}
@@ -307,7 +304,6 @@ static __always_inline int __benchmark_slab_bulk(
 out:
 	time_bench_stop(rec, loops_cnt);
 	/* cleanup */
-	kmem_cache_destroy(slab);
 	return loops_cnt;
 }
 /* Compiler should inline optimize other function calls out */
