@@ -388,9 +388,13 @@ void run_try_crash_tests(void)
 	objs[5] = NULL;
 	objs[6] = kmem_cache_alloc(my_slab, GFP_ATOMIC);
 	kmem_cache_free_bulk(my_slab, 42, objs);
+	/* NOTICE: this test/verification is only valid if the bulk
+	 * free call, implements invariance of putting NULLs into
+	 * array... this "feature" is not even accepted upstream
+	 */
 	for (i=0; i < 9; i++) {
 		if (objs[i] != NULL)
-			pr_err("- ERROR: Some objects were not free'ed!\n");
+			pr_err("- ERROR: object[%d] were not free'ed!\n", i);
 	}
 
 	pr_info("Run manual cases exercising API\n");
