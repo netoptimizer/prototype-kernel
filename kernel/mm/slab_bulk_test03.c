@@ -46,7 +46,7 @@ MODULE_PARM_DESC(nmatch, "Parameter only running one N-page-match test");
 
 static uint32_t try_crash = 0;
 module_param(try_crash, uint, 0);
-MODULE_PARM_DESC(try_crash, "Enable error cases, like freeing NULL ptrs");
+MODULE_PARM_DESC(try_crash, "Enable error cases, >=2 freeing NULL ptrs");
 
 struct kmem_cache *my_slab;
 
@@ -355,7 +355,48 @@ int run_timing_tests(void)
 	return 0;
 }
 
-void run_try_crash_tests(void)
+
+void run_try_crash_tests_level1(void)
+{
+#define ARRAY_SZ 64
+	int i;
+	void *objs[ARRAY_SZ];
+
+	pr_info("Run manual cases exercising API\n");
+	for (i=0; i < 42; i++) {
+		objs[i] = NULL;
+	}
+
+	pr_info("- API: case hitting look-ahead\n");
+	objs[0] = objhash_extract(NULL, false);    // page0
+	objs[1] = objhash_extract(objs[0], false); // same-as-page0
+	objs[2] = objhash_extract(objs[0], true);  // diff from page0
+	objs[3] = objhash_extract(objs[0], false); // same-as-page0
+	objs[4] = objhash_extract(objs[0], true);  // diff from page0
+	objs[5] = kmem_cache_alloc(my_slab, GFP_ATOMIC);
+	objs[6] = objhash_extract(objs[0], false); // same-as-page0
+	objs[7] = (void *)0xbeefdead;
+	kmem_cache_free_bulk(my_slab, 7, objs);
+
+	pr_info("- API: case hitting every second elem\n");
+	objs[0] = objhash_extract(NULL, false);    // page0
+	objs[1] = objhash_extract(objs[0], true);  // page1
+	objs[2] = objhash_extract(objs[0], false); // same-as-page0
+	objs[3] = objhash_extract(objs[1], false); // same-as-page1
+	objs[4] = objhash_extract(objs[0], false); // same-as-page0
+	objs[5] = objhash_extract(objs[1], false); // same-as-page1
+	objs[6] = objhash_extract(objs[0], false); // same-as-page0
+	objs[7] = objhash_extract(objs[1], false); // same-as-page1
+	objs[8] = (void *)0xdeaddead;
+	kmem_cache_free_bulk(my_slab, 8, objs);
+
+#undef ARRAY_SZ
+}
+
+/* When kmem cgroups are enabled via option CONFIG_MEMCG_KMEM
+ * then NULL pointer arrays will crash kernel (e.g. this test!)
+ */
+void run_try_crash_tests_level2(void)
 {
 #define ARRAY_SZ 64
 	int i;
@@ -396,34 +437,6 @@ void run_try_crash_tests(void)
 		if (objs[i] != NULL)
 			pr_err("- ERROR: object[%d] were not free'ed!\n", i);
 	}
-
-	pr_info("Run manual cases exercising API\n");
-	for (i=0; i < 42; i++) {
-		objs[i] = NULL;
-	}
-
-	pr_info("- API: case hitting look-ahead\n");
-	objs[0] = objhash_extract(NULL, false);    // page0
-	objs[1] = objhash_extract(objs[0], false); // same-as-page0
-	objs[2] = objhash_extract(objs[0], true);  // diff from page0
-	objs[3] = objhash_extract(objs[0], false); // same-as-page0
-	objs[4] = objhash_extract(objs[0], true);  // diff from page0
-	objs[5] = kmem_cache_alloc(my_slab, GFP_ATOMIC);
-	objs[6] = objhash_extract(objs[0], false); // same-as-page0
-	objs[7] = (void *)0xbeefdead;
-	kmem_cache_free_bulk(my_slab, 7, objs);
-
-	pr_info("- API: case hitting every second elem\n");
-	objs[0] = objhash_extract(NULL, false);    // page0
-	objs[1] = objhash_extract(objs[0], true);  // page1
-	objs[2] = objhash_extract(objs[0], false); // same-as-page0
-	objs[3] = objhash_extract(objs[1], false); // same-as-page1
-	objs[4] = objhash_extract(objs[0], false); // same-as-page0
-	objs[5] = objhash_extract(objs[1], false); // same-as-page1
-	objs[6] = objhash_extract(objs[0], false); // same-as-page0
-	objs[7] = objhash_extract(objs[1], false); // same-as-page1
-	objs[8] = (void *)0xdeaddead;
-	kmem_cache_free_bulk(my_slab, 8, objs);
 
 #undef ARRAY_SZ
 }
@@ -484,9 +497,10 @@ static int __init slab_bulk_test03_module_init(void)
 		bulk_N_same_page(bulksz, nmatch);
 	}
 
-	if (try_crash) {
-		run_try_crash_tests();
-	}
+	if (try_crash >= 1)
+		run_try_crash_tests_level1();
+	if (try_crash >= 2)
+		run_try_crash_tests_level2();
 
 	return 0;
 }
