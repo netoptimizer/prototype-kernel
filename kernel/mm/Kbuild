@@ -15,6 +15,7 @@ obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_bench.o
 
 obj-$(CONFIG_SLAB_TESTS) += slab_test.o
 obj-$(CONFIG_SLAB_TESTS) += slab_test02.o
+obj-$(CONFIG_SLAB_TESTS) += slab_test03.o
 
 # Only compile BULK-API users if local .config enable it
 obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test01.o
