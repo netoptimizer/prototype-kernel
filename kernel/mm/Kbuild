@@ -21,3 +21,4 @@ obj-$(CONFIG_SLAB_TESTS) += slab_test03.o
 obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test01.o
 obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test02.o
 obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test03.o
+obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test04.o
