@@ -18,9 +18,14 @@ static unsigned int bulksz = 16;
 module_param(bulksz, uint, 0);
 MODULE_PARM_DESC(bulksz, "Parameter for setting bulk size to bench");
 
-static uint32_t loops = 10000000;
+#ifdef CONFIG_SLUB_DEBUG_ON
+# define DEFAULT_LOOPS 10000
+#else
+# define DEFAULT_LOOPS 10000000
+#endif
+static uint32_t loops = DEFAULT_LOOPS;
 module_param(loops, uint, 0);
-MODULE_PARM_DESC(bulksz, "Parameter for loops in bench");
+MODULE_PARM_DESC(loops, "Parameter for loops in bench");
 
 struct my_elem {
 	/* element used for benchmark testing */
