@@ -7,9 +7,13 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/delay.h>
+
+static int progress_every_n=100000;
 
 static int verbose=1;
-static int progress_every_n=100000;
+module_param(verbose, uint, 0);
+MODULE_PARM_DESC(verbose, "How verbose a test run");
 
 struct kmem_cache *slab;
 LIST_HEAD(global_list);
@@ -17,6 +21,14 @@ LIST_HEAD(global_list);
 static uint32_t max_objects = 200000;
 module_param(max_objects, uint, 0);
 MODULE_PARM_DESC(max_objects, "max_objects in test");
+
+static uint32_t msdelay = 200;
+module_param(msdelay, uint, 0);
+MODULE_PARM_DESC(msdelay, "delay in N ms after memory exhausted");
+
+static uint32_t retries = 0;
+module_param(retries, uint, 0);
+MODULE_PARM_DESC(retries, "Number of retries af memory");
 
 struct my_elem {
 	struct list_head list;
@@ -49,17 +61,20 @@ bool run_loop(struct kmem_cache *s, struct my_queue *q)
 {
 	bool success = true;
 	struct my_elem *obj, *obj_tmp;
+	u64 still_retry = retries;
 	u64 cnt = 0;
 
 	/* Alloc loop */
-	while (success && max_objects--) {
+	while ((success || still_retry--) && max_objects--) {
 		success = obj_alloc_and_list_add(s, q);
-		if (verbose && ((q->len % progress_every_n)==0))
+		if (verbose > 1 && ((q->len % progress_every_n)==0))
 			pr_info("Progress allocated: %llu objects\n", q->len);
 	}
 	if (verbose)
 		pr_info("Allocated: %llu objects (last success:%d)\n",
 			q->len, success);
+
+	msleep(msdelay);
 
 	/* Free all again */
 	cnt = 0;
@@ -68,7 +83,7 @@ bool run_loop(struct kmem_cache *s, struct my_queue *q)
 		q->len--;
 		kmem_cache_free(s, obj);
 		cnt++;
-		if (verbose && ((cnt % progress_every_n)==0))
+		if (verbose > 1 && ((cnt % progress_every_n)==0))
 			pr_info("Progress free'ed: %llu objects\n", cnt);
 	}
 	if (verbose)
@@ -96,7 +111,7 @@ static int __init slab_test03_module_init(void)
 	}
 
 	/* Alloc and free an object from this kmem_cache */
-	object = kmem_cache_alloc(slab, GFP_ATOMIC);
+	object = kmem_cache_alloc(slab, GFP_KERNEL);
 	if (!object) {
 		pr_err("ERROR: could not alloc object (kmem_cache_alloc)\n");
 		return -ENOBUFS;

@@ -7,6 +7,7 @@
 #include <linux/mm.h>
 #include <linux/slab.h>
 #include <linux/list.h>
+#include <linux/delay.h>
 
 static int progress_every_n=100000;
 
@@ -25,6 +26,14 @@ LIST_HEAD(global_list);
 static uint32_t max_objects = 2000000;
 module_param(max_objects, uint, 0);
 MODULE_PARM_DESC(max_objects, "max_objects in test");
+
+static uint32_t msdelay = 200;
+module_param(msdelay, uint, 0);
+MODULE_PARM_DESC(msdelay, "delay in N ms after memory exhausted");
+
+static uint32_t retries = 0;
+module_param(retries, uint, 0);
+MODULE_PARM_DESC(retries, "Number of retries af memory");
 
 struct my_elem {
 	struct list_head list;
@@ -45,7 +54,7 @@ bool obj_bulk_alloc_and_list_add(struct kmem_cache *s, struct my_queue *q)
 	bool success;
 	int i;
 
-	success = kmem_cache_alloc_bulk(s, GFP_ATOMIC, bulksz, objs);
+	success = kmem_cache_alloc_bulk(s, GFP_KERNEL, bulksz, objs);
 	if (!success) {
 		pr_err("Could not bulk(%d) alloc more objects\n", bulksz);
 		return false;
@@ -65,10 +74,11 @@ bool run_loop(struct kmem_cache *s, struct my_queue *q)
 {
 	bool success = true;
 	struct my_elem *obj, *obj_tmp;
+	u64 still_retry = retries;
 	u64 cnt = 0;
 
 	/* BULK alloc loop */
-	while (success && q->len < max_objects) {
+	while ((success || still_retry--) && q->len < max_objects) {
 		success = obj_bulk_alloc_and_list_add(s, q);
 		if (verbose > 1 && ((q->len % progress_every_n)==0))
 			pr_info("Progress allocated: %llu objects\n", q->len);
@@ -76,6 +86,8 @@ bool run_loop(struct kmem_cache *s, struct my_queue *q)
 	if (verbose)
 		pr_info("Allocated: %llu objects (last success:%d)\n",
 			q->len, success);
+
+	msleep(msdelay);
 
 	/* Free all again: Single free, as bulk free cannot fail and
 	 * it is only alloc_bulk error handling what we want to test...
