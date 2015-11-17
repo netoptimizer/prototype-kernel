@@ -77,7 +77,7 @@ bool obj_bulk_alloc_and_list_add(struct kmem_cache *s, struct my_queue *q)
 	bool success;
 	int i;
 
-	success = kmem_cache_alloc_bulk(s, GFP_KERNEL, bulksz, objs);
+	success = kmem_cache_alloc_bulk(s, GFP_ATOMIC, bulksz, objs);
 	if (!success) {
 		if (verbose)
 			pr_err("Could not bulk(%d) alloc objects\n", bulksz);
