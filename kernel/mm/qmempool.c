@@ -161,7 +161,12 @@ void *__qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	/* Cannot use SLAB that can sleep if (gfp_mask & __GFP_WAIT),
 	 * else preemption disable/enable scheme becomes too complicated
 	 */
+#ifdef __GFP_WAIT
 	BUG_ON(gfp_mask & __GFP_WAIT);
+#else
+	/* 71baba4b92d ("mm, page_alloc: rename __GFP_WAIT to __GFP_RECLAIM") */
+	BUG_ON(gfp_mask & __GFP_RECLAIM);
+#endif
 
 	elem = kmem_cache_alloc(pool->kmem, gfp_mask);
 	if (elem == NULL) /* slab depleted, no reason to call below allocs */
