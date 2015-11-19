@@ -50,7 +50,7 @@ fi
 # Enable "fail_page_alloc" via environment variable
 export FAILCMD_TYPE=fail_page_alloc
 
-$FAILCMD --probability=100 --times=4 \
+$FAILCMD --probability=100 --times=10 \
  --verbose=1 --interval=1 \
  --space=100 \
  --min-order=0 \
