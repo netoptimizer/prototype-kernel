@@ -47,6 +47,15 @@ if [[ ! -x $FAILCMD ]]; then
     exit 3
 fi
 
+# Allow to test normal code path by disabling bulk calls
+EXTRA_PARAMS=""
+if [[ "$1" == "nobulk" ]]; then
+    EXTRA_PARAMS="no_bulk=1"
+    if [[ $VERBOSE > 0 ]]; then
+	echo "Disabled bulk API calls, testing kmem_cache_alloc()"
+    fi
+fi
+
 # Enable "fail_page_alloc" via environment variable
 export FAILCMD_TYPE=fail_page_alloc
 
@@ -54,7 +63,7 @@ $FAILCMD --probability=100 --times=10 \
  --verbose=1 --interval=1 \
  --space=100 \
  --min-order=0 \
- -- modprobe $MODULE verbose=1 max_objects=10000
+ -- modprobe $MODULE verbose=1 max_objects=10000 $EXTRA_PARAMS
 
 # Cleanup: return min-order to default 1,
 #   else it generate too many faults
