@@ -18,7 +18,7 @@ static int verbose=1;
  * between 500 - 1000 times slower.  Thus, adjust the default number
  * of loops in case CONFIG_SLUB_DEBUG_ON=y
  */
-#ifdef CONFIG_SLUB_DEBUG_ON
+#if defined(CONFIG_SLUB_DEBUG_ON) || defined(CONFIG_DEBUG_SLAB)
 # define DEFAULT_LOOPS 10000
 #else
 # define DEFAULT_LOOPS 10000000

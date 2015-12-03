@@ -18,7 +18,7 @@ static unsigned int bulksz = 16;
 module_param(bulksz, uint, 0);
 MODULE_PARM_DESC(bulksz, "Parameter for setting bulk size to bench");
 
-#ifdef CONFIG_SLUB_DEBUG_ON
+#if defined(CONFIG_SLUB_DEBUG_ON) || defined(CONFIG_DEBUG_SLAB)
 # define DEFAULT_LOOPS 10000
 #else
 # define DEFAULT_LOOPS 10000000
