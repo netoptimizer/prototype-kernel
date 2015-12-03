@@ -23,6 +23,9 @@ static int verbose=1;
 #else
 # define DEFAULT_LOOPS 10000000
 #endif
+static uint32_t loops = DEFAULT_LOOPS;
+module_param(loops, uint, 0);
+MODULE_PARM_DESC(loops, "Parameter for loops in bench");
 
 struct my_elem {
 	/* element used for benchmark testing */
@@ -214,8 +217,6 @@ out:
 
 void bulk_test(int bulk)
 {
-	uint32_t loops = DEFAULT_LOOPS;
-
 	time_bench_loop(loops/bulk, bulk, "kmem bulk_fallback", NULL,
 			benchmark_slab_fallback_bulk);
 	cond_resched();
@@ -227,8 +228,6 @@ void bulk_test(int bulk)
 
 int run_timing_tests(void)
 {
-	uint32_t loops = DEFAULT_LOOPS;
-
 	time_bench_loop(loops*10, 0, "for_loop",
 			NULL, time_bench_for_loop);
 
