@@ -218,9 +218,11 @@ void bulk_test(int bulk)
 
 	time_bench_loop(loops/bulk, bulk, "kmem bulk_fallback", NULL,
 			benchmark_slab_fallback_bulk);
+	cond_resched();
 
 	time_bench_loop(loops/bulk, bulk, "kmem bulk_quick_reuse", NULL,
 			benchmark_slab_bulk01);
+	cond_resched();
 }
 
 int run_timing_tests(void)
