@@ -1,6 +1,9 @@
 /*
  * Synthetic micro-benchmarking of slab bulk
  *
+ * This module is for testing my experimental kfree_bulk() API.
+ *
+ * It is a quick hack... which contains work-around for SLOB allocator
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -20,6 +23,11 @@ static int verbose=1;
  */
 #if defined(CONFIG_SLUB_DEBUG_ON) || defined(CONFIG_DEBUG_SLAB)
 # define DEFAULT_LOOPS 10000
+#elif defined(CONFIG_SLOB)
+/* SLOB allocator is significantly slow on large bulks.
+ * Thus, decrease the default loops size a factor 100
+ */
+# define DEFAULT_LOOPS 100000
 #else
 # define DEFAULT_LOOPS 10000000
 #endif
@@ -222,7 +230,11 @@ static int benchmark_slab_bulk_new_API(
 	void *objs[MAX_BULK];
 	uint64_t loops_cnt = 0;
 	int i;
+#ifdef CONFIG_SLOB
+	int n;
+#else
 	bool success;
+#endif
 	struct kmem_cache *slab;
 	size_t bulk = rec->step;
 
@@ -243,15 +255,27 @@ static int benchmark_slab_bulk_new_API(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 
-		/* request bulk elems */
+		/* Bulk request elems.  This violates the API, as we
+		 * must not use kfree_bulk() on memory not originally
+		 * allocated by kmalloc(), because the SLOB allocator
+		 * cannot handle this.
+		 */
+#ifndef CONFIG_SLOB
 		success = kmem_cache_alloc_bulk(slab, GFP_ATOMIC, bulk, objs);
 		if (!success)
 			goto out;
-
+#else
+		for (n=0; n < bulk; n++) {
+			objs[n] = kmalloc(sizeof(struct my_elem), GFP_ATOMIC);
+			if (!objs[n]) {
+				WARN(1, "Alloc fail, bailing, leak mem\n");
+				goto out;
+			}
+		}
+#endif
 		barrier(); /* compiler barrier */
 
-		/* bulk return elems */
-		// kmem_cache_free_bulk(slab, bulk, objs);
+		/* bulk return elems via NEW API */
 		kfree_bulk(bulk, objs);
 
 		/* NOTICE THIS COUNTS (bulk) alloc+free together*/
@@ -326,6 +350,16 @@ static int __init slab_bulk_test05_module_init(void)
 #endif
 #ifdef CONFIG_PREEMPT_COUNT
 	pr_warn("INFO: CONFIG_PREEMPT_COUNT is enabled\n");
+#endif
+	/* Testing different allocators print for recording which */
+#ifdef CONFIG_SLOB
+	pr_warn("INFO: using SLOB allocator\n");
+#endif
+#ifdef CONFIG_SLUB
+	pr_warn("INFO: using SLUB allocator\n");
+#endif
+#ifdef CONFIG_SLAB
+	pr_warn("INFO: using SLAB allocator\n");
 #endif
 
 	if (run_timing_tests() < 0) {
