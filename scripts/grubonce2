@@ -1,0 +1,147 @@
+#!/bin/bash
+#
+# For grub2
+# ---------
+# Script for selecting which kernel to boot on:
+#  but only once (single boot),
+#  useful if kernel will not boot (next power cycle, boot default kernel)
+#
+# Grub2 is a little more tricky than grub1
+# ----------------------------------------
+# [1] https://fedoraproject.org/wiki/GRUB_2?rd=Grub2#Setting_default_entry
+#
+# Due to grub2-mkconfig (and os-prober) we cannot predict the order of
+# the entries in /boot/grub2/grub.cfg, so we set the default by
+# name/title instead.
+#
+# Authors: Jesper Dangaard Brouer <brouer@redhat.com>
+
+# sudo trick
+function root_check_run_with_sudo() {
+    # Trick so, program can be run as normal user, will just use "sudo"
+    #  call as root_check_run_as_sudo "$@"
+    if [ "$EUID" -ne 0 ]; then
+	if [ -x $0 ]; then # Directly executable use sudo
+	    echo "(Not root, running with sudo)"
+            sudo "$0" "$@"
+            exit $?
+	fi
+	echo "cannot perform sudo run of $0"
+	exit 1
+    fi
+}
+root_check_run_with_sudo "$@"
+
+# Source the default grub config
+source /etc/default/grub
+
+# Verify "saved" mode is enabled
+if [[ "$GRUB_DEFAULT" != "saved" ]]; then
+    echo "***ERROR***: Please enable grub2 \"saved\" mode, by adding:"
+    echo " GRUB_DEFAULT=saved to /etc/default/grub"
+    echo "and regenerate grub2 config via cmd:"
+    echo " grub2-mkconfig -o /boot/grub2/grub.cfg"
+    exit 1
+fi
+
+# Verify submenu have been disabled
+if [[ "$GRUB_DISABLE_SUBMENU" != "true" ]]; then
+    echo "***ERROR***: Please disable grub2 \"submenu\" mode, by adding:"
+    echo " GRUB_DISABLE_SUBMENU=true to /etc/default/grub"
+    echo "and regenerate grub2 config via cmd:"
+    echo " grub2-mkconfig -o /boot/grub2/grub.cfg"
+    echo "(This script does not support grub2 submenus)"
+    exit 2
+fi
+
+# Unfortunately output from grubenv or $(grub2-editenv list) cannot
+# directly be sourced as shell variables due to missing quoting.
+# It would have been as easy as:
+#   export $(grub2-editenv list)
+# Instead extract each variable seperately
+function get_grubenv()
+{
+    local key=$1
+    value=$(grub2-editenv list | grep $key | cut -d "=" -f2)
+    echo "$value"
+}
+
+# Get current saved grub env variables
+#  export $(grub2-editenv list)  #cannot be used due to missing quoting
+#  export $(grub2-editenv list | awk -F= '{print $1"=\""$2"\""}')
+#  export $(grub2-editenv list | sed -n 's/\(.*\)=\(.*\)/\1=\x27\2\x27/p')
+saved_entry=$(get_grubenv saved_entry)
+next_entry=$(get_grubenv next_entry)
+
+echo "Select kernel to boot once (on next reboot):"
+
+# Extract the avail kernels from grub.cfg
+IFS=$'\n' KERNELS=( $(grep "^\menuentry" /boot/grub2/grub.cfg | cut -d "'" -f2) )
+
+function select_kernel()
+{
+    local sel
+    cnt=${#KERNELS[@]}
+
+    if [[ -n $1 ]]; then
+	sel=$1
+    else
+	for ((i = 0; i < cnt; i++)); do
+	    flag=' '
+	    [[ "${KERNELS[i]}" == "$saved_entry" ]] && flag='*'
+	    [[ "${KERNELS[i]}" == "$next_entry" ]] && flag='+'
+	    # todo: saved entry could be a number
+	    # (( i == $saved_entry )) && flag='*'
+	    echo "$flag$i: ${KERNELS[i]}" >&2
+	done
+	read -p 'Select a kernel: ' sel
+    fi
+    if (( sel == 0 || sel >= cnt )) && [[ $sel != 0 ]]; then
+	echo "Invalid input" >&2
+	exit 1
+    fi
+    echo "$sel"
+}
+
+# Make sure a default fallback kernel have been selected
+if [[ -z "$saved_entry" ]]; then
+    echo "***WARNING***: You don't have a fallback saved entry"
+    read -p "Do you want to select a fallback now (y/[n])?"
+    if [ "$REPLY" == "y" ]; then
+	fallback=$(select_kernel)
+	if [[ $? -gt 0 ]]; then
+	    echo "***ERROR*** selecting kernel, bailout"
+	    exit 2;
+	fi
+	echo " - Selected fallback kernel: ${KERNELS[fallback]}"
+	grub2-set-default "${KERNELS[fallback]}"
+	saved_entry=$(get_grubenv saved_entry)
+    fi
+    echo "Now: Select kernel to boot once (on next reboot):"
+else
+    echo " - Current fallback saved_entry: $saved_entry"
+fi
+
+if [[ -n "$next_entry" ]]; then
+    echo " - Currently already choose boot next: $next_entry"
+fi
+
+# Allow cmdline selecting kernel by index
+if [[ -n $1 ]]; then
+    cmdline_select=$1
+fi
+
+# Choose kernel
+index=$(select_kernel $cmdline_select)
+if [[ $? -gt 0 ]]; then
+    echo "***ERROR*** selecting kernel, bailout"
+    exit 1;
+fi
+echo " - Selected boot once kernel: $index: \"${KERNELS[index]}\""
+grub2-reboot "${KERNELS[index]}"
+
+
+read -p "Do you want to reboot now (y/[n])?"
+if [[ "$REPLY" == "y" ]]; then
+    reboot
+fi
