@@ -67,6 +67,39 @@ static int time_alloc_pages(
 	return i;
 }
 
+static int time_alloc_pages_with_fallback(
+	struct time_bench_record *rec, void *data)
+{
+	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD);
+	struct page *page;
+	long int tmp = (long int) data;
+	int preferred_order = tmp;
+	int i, order;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+
+		/* Simulate system in mlx4_alloc_pages() */
+		for (order = preferred_order; ;) {
+			gfp_t gfp = gfp_mask;
+
+			if (order)
+				gfp |= __GFP_COMP | __GFP_NOWARN;
+			page = alloc_pages(gfp, order);
+			if (likely(page))
+				break;
+			if (--order < 0)
+				return 0; // -ENOMEM;
+		}
+		if (unlikely(page == NULL))
+			return 0;
+		__free_pages(page, order);
+	}
+	time_bench_stop(rec, i);
+	return i;
+}
+
 int run_timing_tests(void)
 {
 	uint32_t loops = 100000;
@@ -86,6 +119,10 @@ int run_timing_tests(void)
 			(void *)4, time_alloc_pages);
 	time_bench_loop(loops, 0, "alloc_pages_order5",
 			(void *)5, time_alloc_pages);
+
+	time_bench_loop(loops, 0,      "alloc_pages_with_fallback",
+			(void *)5, time_alloc_pages_with_fallback);
+
 	return 0;
 }
 
