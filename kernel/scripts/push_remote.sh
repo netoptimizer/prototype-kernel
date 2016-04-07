@@ -81,7 +81,7 @@ else
     # Push/copy binary modules to remote
     #rsync -avz lib/*.ko ${SSH_HOST}:/${UPLOAD_LIB_MODULES}/ || exit 3
     #
-    dirs_with_modules="lib mm"
+    dirs_with_modules="lib mm mm/bench"
     for dir in $dirs_with_modules; do
 	ssh $SSH_HOST mkdir -p ${UPLOAD_DIR}/$dir || exit 7
 	rsync -avz ${dir}/*.ko ${SSH_HOST}:/${UPLOAD_DIR}/$dir/ || exit 3

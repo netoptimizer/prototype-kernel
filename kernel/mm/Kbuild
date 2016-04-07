@@ -24,3 +24,6 @@ obj-$(CONFIG_SLAB_BULK_API) += slab_bulk_test04_exhaust_mem.o
 #
 # Experimenting with new API, enable explicitly yourself
 obj-$(CONFIG_SLAB_BULK_API2) += slab_bulk_test05_kfree_bulk.o
+
+# Include subdirectory bench/
+obj-m += bench/
