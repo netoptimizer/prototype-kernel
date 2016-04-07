@@ -38,8 +38,7 @@ static int time_alloc_pages(
 	 */
 	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD | __GFP_COMP);
 	struct page *my_page;
-	long int tmp = (long int) data;
-	int order = tmp;
+	int order = rec->step;
 	int i;
 
 	/* Drop WARN on failures, time_bench will invalidate test */
@@ -72,8 +71,7 @@ static int time_alloc_pages_with_fallback(
 {
 	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD);
 	struct page *page;
-	long int tmp = (long int) data;
-	int preferred_order = tmp;
+	int preferred_order = rec->step;
 	int i, order;
 
 	time_bench_start(rec);
@@ -107,21 +105,15 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "single_page_alloc_put",
 			NULL, time_single_page_alloc_put);
 
-	time_bench_loop(loops, 0, "alloc_pages_order0",
-			(void *)0, time_alloc_pages);
-	time_bench_loop(loops, 0, "alloc_pages_order1",
-			(void *)1, time_alloc_pages);
-	time_bench_loop(loops, 0, "alloc_pages_order2",
-			(void *)2, time_alloc_pages);
-	time_bench_loop(loops, 0, "alloc_pages_order3",
-			(void *)3, time_alloc_pages);
-	time_bench_loop(loops, 0, "alloc_pages_order4",
-			(void *)4, time_alloc_pages);
-	time_bench_loop(loops, 0, "alloc_pages_order5",
-			(void *)5, time_alloc_pages);
+	time_bench_loop(loops, 0, "alloc_pages_order0", NULL, time_alloc_pages);
+	time_bench_loop(loops, 1, "alloc_pages_order1", NULL, time_alloc_pages);
+	time_bench_loop(loops, 2, "alloc_pages_order2", NULL, time_alloc_pages);
+	time_bench_loop(loops, 3, "alloc_pages_order3", NULL, time_alloc_pages);
+	time_bench_loop(loops, 4, "alloc_pages_order4", NULL, time_alloc_pages);
+	time_bench_loop(loops, 5, "alloc_pages_order5", NULL, time_alloc_pages);
 
-	time_bench_loop(loops, 0,      "alloc_pages_with_fallback",
-			(void *)5, time_alloc_pages_with_fallback);
+	time_bench_loop(loops, 5, "alloc_pages_with_fallback",
+			NULL, time_alloc_pages_with_fallback);
 
 	return 0;
 }
