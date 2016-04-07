@@ -17,6 +17,8 @@ CONFIG_TIME_BENCH_TESTS=m
 CONFIG_RING_QUEUE=m
 CONFIG_RING_QUEUE_TESTS=m
 #
+CONFIG_BENCH_PAGE=m
+#
 CONFIG_SLAB_TESTS=m
 #
 # If developing on SLAB BULK API then enable modules using this API by

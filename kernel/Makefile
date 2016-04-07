@@ -52,6 +52,10 @@ prepare:
 	@if [ ! -f .config ]; then \
 		cp config.default .config ; \
 	else true; fi
+	@if [ config.default -nt .config ]; then \
+		echo -e "\n**NOTICE**: config.default is newer than .config"; \
+		echo -e " you might miss compiling recently added modules\n"; \
+	fi
 
 clean: prepare
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD clean

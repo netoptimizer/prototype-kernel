@@ -3,3 +3,5 @@ ccflags-y := -I$(KDIR)/include
 
 # Local .config settings
 include $(KDIR)/.config
+
+obj-$(CONFIG_BENCH_PAGE) += page_bench01.o
