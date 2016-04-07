@@ -73,6 +73,7 @@ static int time_alloc_pages_with_fallback(
 	struct page *page;
 	int preferred_order = rec->step;
 	int i, order;
+	int histogram_order[MAX_ORDER] = {0};
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -85,8 +86,10 @@ static int time_alloc_pages_with_fallback(
 			if (order)
 				gfp |= __GFP_COMP | __GFP_NOWARN;
 			page = alloc_pages(gfp, order);
-			if (likely(page))
+			if (likely(page)) {
+				histogram_order[order]++;
 				break;
+			}
 			if (--order < 0)
 				return 0; // -ENOMEM;
 		}
@@ -95,6 +98,18 @@ static int time_alloc_pages_with_fallback(
 		__free_pages(page, order);
 	}
 	time_bench_stop(rec, i);
+
+	/* Display which order sizes that got used */
+	if (verbose) {
+		int j;
+
+		pr_info("Histgram order(max:%d): ", preferred_order);
+		for (j = 0; j <= preferred_order; j++) {
+			printk("[%d]=%d ", j, histogram_order[j]);
+		}
+		printk("\n");
+	}
+
 	return i;
 }
 
