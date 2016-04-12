@@ -126,6 +126,10 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 3, "alloc_pages_order3", NULL, time_alloc_pages);
 	time_bench_loop(loops, 4, "alloc_pages_order4", NULL, time_alloc_pages);
 	time_bench_loop(loops, 5, "alloc_pages_order5", NULL, time_alloc_pages);
+	time_bench_loop(loops, 6, "alloc_pages_order6", NULL, time_alloc_pages);
+	time_bench_loop(loops, 7, "alloc_pages_order7", NULL, time_alloc_pages);
+	time_bench_loop(loops, 8, "alloc_pages_order8", NULL, time_alloc_pages);
+	time_bench_loop(loops, 9, "alloc_pages_order9", NULL, time_alloc_pages);
 
 	time_bench_loop(loops, 5, "alloc_pages_with_fallback",
 			NULL, time_alloc_pages_with_fallback);
