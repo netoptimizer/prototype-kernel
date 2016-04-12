@@ -165,7 +165,7 @@ void *__qmempool_alloc_from_slab(struct qmempool *pool, gfp_t gfp_mask)
 	BUG_ON(gfp_mask & __GFP_WAIT);
 #else
 	/* 71baba4b92d ("mm, page_alloc: rename __GFP_WAIT to __GFP_RECLAIM") */
-	BUG_ON(gfp_mask & __GFP_RECLAIM);
+	BUG_ON(gfp_mask & __GFP_DIRECT_RECLAIM);
 #endif
 
 	elem = kmem_cache_alloc(pool->kmem, gfp_mask);
