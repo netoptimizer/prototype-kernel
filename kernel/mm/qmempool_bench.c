@@ -212,9 +212,10 @@ static int benchmark_kmem_cache_pattern(
 	return loops_cnt;
 }
 
-
-static int benchmark_qmempool_pattern(
-	struct time_bench_record *rec, void *data)
+/* Compiler should inline optimize other function "type" calls out */
+static __always_inline int __benchmark_qmempool_pattern(
+	struct time_bench_record *rec, void *data,
+	enum behavior_type type)
 {
 	uint64_t loops_cnt = 0;
 	int i, n;
@@ -239,14 +240,38 @@ static int benchmark_qmempool_pattern(
 
 		/* alloc N new elems */
 		for (n = 0; n < ARRAY_MAX_ELEMS; n++) {
-			elems[n] = qmempool_alloc(pool, GFP_ATOMIC);
+			if (type == NORMAL) {
+				elems[n] = qmempool_alloc(pool, GFP_ATOMIC);
+			} else if (type == NORMAL_INLINE) {
+				elems[n] = __qmempool_alloc(pool, GFP_ATOMIC);
+			} else if (type == SOFTIRQ) {
+				elems[n] =
+				qmempool_alloc_softirq(pool, GFP_ATOMIC);
+			} else if (type == SOFTIRQ_INLINE) {
+				elems[n] =
+				__qmempool_alloc_softirq(pool, GFP_ATOMIC);
+			} else {
+				BUILD_BUG();
+			}
+			barrier(); /* compiler barrier */
 		}
 
 		barrier(); /* compiler barrier */
 
 		/* free N elems */
 		for (n = 0; n < ARRAY_MAX_ELEMS; n++) {
-			qmempool_free(pool, elems[n]);
+			if (type == NORMAL) {
+				qmempool_free(pool, elems[n]);
+			} else if (type == NORMAL_INLINE) {
+				__qmempool_free(pool, elems[n]);
+			} else if (type == SOFTIRQ) {
+				qmempool_free_softirq(pool, elems[n]);
+			} else if (type == SOFTIRQ_INLINE) {
+				__qmempool_free_softirq(pool, elems[n]);
+			} else {
+				BUILD_BUG();
+			}
+			barrier(); /* compiler barrier */
 			loops_cnt++;
 		}
 	}
@@ -259,6 +284,27 @@ static int benchmark_qmempool_pattern(
 	kmem_cache_destroy(slab);
 	return loops_cnt;
 }
+int benchmark_qmempool_pattern(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_pattern(rec, data, NORMAL);
+}
+int benchmark_qmempool_pattern_inline(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_pattern(rec, data, NORMAL_INLINE);
+}
+int benchmark_qmempool_pattern_softirq(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_pattern(rec, data, SOFTIRQ);
+}
+int benchmark_qmempool_pattern_softirq_inline(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_pattern(rec, data, SOFTIRQ_INLINE);
+}
+
 
 bool run_micro_benchmark_tests(void)
 {
@@ -294,12 +340,15 @@ bool run_micro_benchmark_tests(void)
 	 */
 	time_bench_loop(loops/10, 0, "kmem alloc+free N-pattern", NULL,
 			benchmark_kmem_cache_pattern);
-	/* Results:
-	 *  10.507 ns N=256 with preempt_{disable/enable} CONFIG_PREEMPT=n
-	 *  13.206 ns N=256 with preempt_{disable/enable} CONFIG_PREEMPT=y
-	 */
-	time_bench_loop(loops/10, 0, "qmempool alloc+free N-pattern", NULL,
-			benchmark_qmempool_pattern);
+
+	time_bench_loop(loops/10, 0, "qmempool N-pattern",
+			NULL, benchmark_qmempool_pattern);
+	time_bench_loop(loops/10, 0, "qmempool N-pattern+inline",
+			NULL, benchmark_qmempool_pattern_inline);
+	time_bench_loop(loops/10, 0, "qmempool N-pattern softirq",
+			NULL, benchmark_qmempool_pattern_softirq);
+	time_bench_loop(loops/10, 0, "qmempool N-pattern softirq+inline",
+			NULL, benchmark_qmempool_pattern_softirq_inline);
 
 	return true;
 }
