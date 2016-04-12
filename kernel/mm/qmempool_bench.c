@@ -38,7 +38,9 @@ struct my_elem {
 
 enum behavior_type {
 	NORMAL = 1,
+	NORMAL_INLINE,
 	SOFTIRQ,
+	SOFTIRQ_INLINE,
 };
 
 /* For comparison benchmark against the fastpath of the
@@ -106,10 +108,14 @@ static __always_inline int __benchmark_qmempool_fastpath_reuse(
 	for (i = 0; i < rec->loops; i++) {
 
 		/* request new elem */
-		if (type & NORMAL) {
+		if (type == NORMAL) {
 			elem = qmempool_alloc(pool, GFP_ATOMIC);
-		} else if (type & SOFTIRQ) {
+		} else if (type == NORMAL_INLINE) {
+			elem = __qmempool_alloc(pool, GFP_ATOMIC);
+		} else if (type == SOFTIRQ) {
 			elem = qmempool_alloc_softirq(pool, GFP_ATOMIC);
+		} else if (type == SOFTIRQ_INLINE) {
+			elem = __qmempool_alloc_softirq(pool, GFP_ATOMIC);
 		} else {
 			BUILD_BUG();
 		}
@@ -119,10 +125,14 @@ static __always_inline int __benchmark_qmempool_fastpath_reuse(
 		barrier(); /* compiler barrier */
 
 		/* return elem */
-		if (type & NORMAL) {
+		if (type == NORMAL) {
 			qmempool_free(pool, elem);
-		} else if (type & SOFTIRQ) {
+		} else if (type == NORMAL_INLINE) {
+			__qmempool_free(pool, elem);
+		} else if (type == SOFTIRQ) {
 			qmempool_free_softirq(pool, elem);
+		} else if (type == SOFTIRQ_INLINE) {
+			__qmempool_free_softirq(pool, elem);
 		} else {
 			BUILD_BUG();
 		}
@@ -135,16 +145,26 @@ out:
 	kmem_cache_destroy(slab);
 	return loops_cnt;
 }
-/* Compiler should inline optimize other function calls out */
-static __always_inline int benchmark_qmempool_fastpath_reuse(
+/* Compiler should inline optimize other function "type" calls out */
+int benchmark_qmempool_fastpath_reuse_BH(
 	struct time_bench_record *rec, void *data)
 {
 	return __benchmark_qmempool_fastpath_reuse(rec, data, NORMAL);
 }
-static __always_inline int benchmark_qmempool_fastpath_reuse_softirq(
+int benchmark_qmempool_fastpath_reuse_BH_inline(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_fastpath_reuse(rec, data, NORMAL_INLINE);
+}
+int benchmark_qmempool_fastpath_reuse_softirq(
 	struct time_bench_record *rec, void *data)
 {
 	return __benchmark_qmempool_fastpath_reuse(rec, data, SOFTIRQ);
+}
+int benchmark_qmempool_fastpath_reuse_softirq_inline(
+	struct time_bench_record *rec, void *data)
+{
+	return __benchmark_qmempool_fastpath_reuse(rec, data, SOFTIRQ_INLINE);
 }
 
 /* Keeping elements in a simple array to avoid too much interference
@@ -254,14 +274,16 @@ bool run_micro_benchmark_tests(void)
 	 */
 	time_bench_loop(loops*30, 0, "kmem fastpath reuse", NULL,
 			benchmark_kmem_cache_fastpath_reuse);
-	/* Results:
-	 *   6.993 ns with preempt_{disable/enable} CONFIG_PREEMPT=n
-	 *   9.659 ns with preempt_{disable/enable} CONFIG_PREEMPT=y
-	 */
-	time_bench_loop(loops*30, 0, "qmempool fastpath reuse SOFTIRQ", NULL,
+
+	/* Qmempool fastpath */
+	time_bench_loop(loops*30, 0, "qmempool fastpath BH-disable", NULL,
+			benchmark_qmempool_fastpath_reuse_BH);
+	time_bench_loop(loops*30, 0, "qmempool fastpath BH-disable+inline",
+			NULL, benchmark_qmempool_fastpath_reuse_BH_inline);
+	time_bench_loop(loops*30, 0, "qmempool fastpath SOFTIRQ", NULL,
 			benchmark_qmempool_fastpath_reuse_softirq);
-	time_bench_loop(loops*30, 0, "qmempool fastpath reuse BH-disable", NULL,
-			benchmark_qmempool_fastpath_reuse);
+	time_bench_loop(loops*30, 0, "qmempool fastpath SOFTIRQ+inline", NULL,
+			benchmark_qmempool_fastpath_reuse_softirq_inline);
 
 	pr_info("N-pattern with %d elements\n", ARRAY_MAX_ELEMS);
 
