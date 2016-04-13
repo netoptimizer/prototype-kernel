@@ -129,6 +129,8 @@ void time_bench_print_stats_cpumask(const char *desc,
 				    struct time_bench_cpu *cpu_tasks,
 				    const struct cpumask *mask)
 {
+	int order = 0;
+	uint64_t average = 0;
 	int cpu;
 	int step = 0;
 	struct sum {
@@ -159,8 +161,18 @@ void time_bench_print_stats_cpumask(const char *desc,
 		step = rec->step;
 	}
 
+	if (sum.records) /* avoid div-by-zero */
+		average = sum.tsc_cycles / sum.records;
 	pr_info("Sum Type:%s Average: %llu cycles(tsc) CPUs:%d step:%d\n",
-		desc, sum.tsc_cycles / sum.records, sum.records, step);
+		desc, average, sum.records, step);
+
+	/* Page specific stats, remember to remove */
+	order = step;
+	pr_info("Parallel-CPUs:%d page order:%d(%luB/x%d) ave %llu cycles"
+		" per-%luB %llu cycles\n",
+		sum.records, order, PAGE_SIZE << order, 1 << order,
+		average, PAGE_SIZE, average >> order);
+
 }
 
 void time_bench_run_concurrent(
