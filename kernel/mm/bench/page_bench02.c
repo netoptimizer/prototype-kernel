@@ -157,7 +157,7 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 0, "single_page_alloc_put",
 			NULL, time_single_page_alloc_put);
 	/* For comparison */
-	time_bench_loop(loops, page_order, "alloc_pages_order0", NULL,
+	time_bench_loop(loops, page_order, "alloc_pages_order", NULL,
 			time_alloc_pages);
 
 	/* More advanced use-cases */
