@@ -29,6 +29,26 @@ static int parallel_cpus = 2;
 module_param(parallel_cpus, uint, 0);
 MODULE_PARM_DESC(parallel_cpus, "Parameter for number of parallel CPUs");
 
+/* Quick and dirty way to unselect some of the benchmark tests, by
+ * encoding this in a module parameter flag.  This is useful when
+ * wanting to perf benchmark a specific benchmark test.
+ *
+ * Hint: Bash shells support writing binary number like: $((2#101010))
+ * Use like:
+ *  modprobe page_bench03 page_order=1 parallel_cpus=4 run_flags=$((2#100))
+ */
+static unsigned long long run_flags = 0xFFFFFFFF;
+module_param(run_flags, ullong, 0);
+MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
+/* Count the bit number from the enum */
+enum benchmark_bit {
+	bit_run_bench_compare,
+	bit_run_bench_parallel_all_cpus,
+	bit_run_bench_limited_cpus
+};
+#define bit(b)	(1 << (b))
+#define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
+
 struct time_bench_sync {
 	atomic_t nr_tests_running;
 	struct completion start_event;
@@ -92,8 +112,9 @@ static int invoke_test_on_cpu_func(void *private)
 		pr_err("ERROR: function being timed failed on CPU:%d(%d)\n",
 		       cpu->rec.cpu, smp_processor_id());
 	} else {
-		pr_info("SUCCESS: ran on CPU:%d(%d)\n",
-			cpu->rec.cpu, smp_processor_id());
+		if (verbose)
+			pr_info("SUCCESS: ran on CPU:%d(%d)\n",
+				cpu->rec.cpu, smp_processor_id());
 	}
 	cpu->did_bench_run = true;
 
@@ -109,7 +130,7 @@ void time_bench_print_stats_cpumask(const char *desc,
 				    const struct cpumask *mask)
 {
 	int cpu;
-	int step;
+	int step = 0;
 	struct sum {
 		uint64_t tsc_cycles;
 		int records;
@@ -211,41 +232,66 @@ void time_bench_run_concurrent(
 	time_bench_print_stats_cpumask(desc, cpu_tasks, mask);
 }
 
-int run_timing_tests(void)
+void noinline run_bench_compare(uint32_t loops)
 {
-	uint32_t loops = 100000;
-	struct time_bench_sync sync;
-	struct time_bench_cpu *cpu_tasks;
-	struct cpumask my_cpumask;
-	size_t size;
-	int i;
-
-	/* Allocate records for every CPU */
-	size = sizeof(struct time_bench_cpu) * num_possible_cpus();
-	pr_info("%s() sz:%lu max cpus:%d\n",
-		__func__, size, num_possible_cpus());
-	cpu_tasks = kzalloc(size, GFP_KERNEL);
+	run_or_return(bit_run_bench_compare);
 
 	/* For comparison */
 	time_bench_loop(loops, page_order, "alloc_pages_order_step", NULL,
 			time_alloc_pages);
+}
+
+void noinline run_bench_parallel_all_cpus(uint32_t loops)
+{
+	struct time_bench_sync sync;
+	struct time_bench_cpu *cpu_tasks;
+	size_t size;
+
+	run_or_return(bit_run_bench_parallel_all_cpus);
+
+	/* Allocate records for every CPU */
+	size = sizeof(*cpu_tasks) * num_possible_cpus();
+	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
 	/* Run concurrently */
 	time_bench_run_concurrent(loops, page_order, "parallel-test",
 				  cpu_online_mask, &sync, cpu_tasks,
 				  time_alloc_pages);
+	kfree(cpu_tasks);
+}
+
+void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
+{
+	struct time_bench_sync sync;
+	struct time_bench_cpu *cpu_tasks;
+	struct cpumask my_cpumask;
+	int i;
+
+	run_or_return(bit_run_bench_limited_cpus);
+
+	/* Allocate records for CPUs */
+	cpu_tasks = kzalloc(sizeof(*cpu_tasks) * nr_cpus, GFP_KERNEL);
 
 	/* Reduce number of CPUs to run on */
 	cpumask_clear(&my_cpumask);
-	for (i = 0; i < parallel_cpus ; i++) {
+	for (i = 0; i < nr_cpus ; i++) {
 		cpumask_set_cpu(i, &my_cpumask);
 	}
 	pr_info("Limit to %d parallel CPUs\n", parallel_cpus);
 	time_bench_run_concurrent(loops, page_order, "limited-cpus",
 				  &my_cpumask, &sync, cpu_tasks,
 				  time_alloc_pages);
-
 	kfree(cpu_tasks);
+}
+
+int run_timing_tests(void)
+{
+	uint32_t loops = 100000;
+
+	run_bench_compare(loops);
+	run_bench_parallel_all_cpus(loops);
+	run_bench_limited_cpus(loops, parallel_cpus);
+
 	return 0;
 }
 
