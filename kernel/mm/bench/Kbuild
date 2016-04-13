@@ -6,4 +6,5 @@ include $(KDIR)/.config
 
 obj-$(CONFIG_BENCH_PAGE) += page_bench01.o
 obj-$(CONFIG_BENCH_PAGE) += page_bench02.o
+obj-$(CONFIG_BENCH_PAGE) += page_bench03.o
 
