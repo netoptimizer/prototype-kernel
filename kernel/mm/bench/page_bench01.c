@@ -12,7 +12,7 @@
 
 static int verbose=1;
 
-static int time_single_page_alloc_put(
+static int time_single_page_alloc_free(
 	struct time_bench_record *rec, void *data)
 {
 	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
@@ -66,6 +66,34 @@ static int time_alloc_pages(
 	return i;
 }
 
+static int time_alloc_put_pages(
+	struct time_bench_record *rec, void *data)
+{
+	/* Important to set: __GFP_COMP for compound pages
+	 */
+	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD | __GFP_COMP);
+	struct page *page;
+	int order = rec->step;
+	int i;
+
+	/* Drop WARN on failures, time_bench will invalidate test */
+	gfp_mask |= __GFP_NOWARN;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		page = alloc_pages(gfp_mask, order);
+		if (unlikely(page == NULL))
+			return 0;
+		/* "put_page" instead of free call, most drivers do so
+		 *  Note: page refcnt start at 1
+		 */
+		put_page(page);
+	}
+	time_bench_stop(rec, i);
+	return i;
+}
+
 static int time_alloc_pages_with_fallback(
 	struct time_bench_record *rec, void *data)
 {
@@ -116,20 +144,19 @@ static int time_alloc_pages_with_fallback(
 int run_timing_tests(void)
 {
 	uint32_t loops = 100000;
+	int i;
 
-	time_bench_loop(loops, 0, "single_page_alloc_put",
-			NULL, time_single_page_alloc_put);
+	time_bench_loop(loops, 0, "single_page_alloc_free",
+			NULL, time_single_page_alloc_free);
 
-	time_bench_loop(loops, 0, "alloc_pages_order0", NULL, time_alloc_pages);
-	time_bench_loop(loops, 1, "alloc_pages_order1", NULL, time_alloc_pages);
-	time_bench_loop(loops, 2, "alloc_pages_order2", NULL, time_alloc_pages);
-	time_bench_loop(loops, 3, "alloc_pages_order3", NULL, time_alloc_pages);
-	time_bench_loop(loops, 4, "alloc_pages_order4", NULL, time_alloc_pages);
-	time_bench_loop(loops, 5, "alloc_pages_order5", NULL, time_alloc_pages);
-	time_bench_loop(loops, 6, "alloc_pages_order6", NULL, time_alloc_pages);
-	time_bench_loop(loops, 7, "alloc_pages_order7", NULL, time_alloc_pages);
-	time_bench_loop(loops, 8, "alloc_pages_order8", NULL, time_alloc_pages);
-	time_bench_loop(loops, 9, "alloc_pages_order9", NULL, time_alloc_pages);
+	for (i = 0; i < 10; i++) {
+		time_bench_loop(loops, i, "alloc_pages_order_step", NULL,
+				time_alloc_pages);
+	}
+	for (i = 0; i < 5; i++) {
+		time_bench_loop(loops, i, "put_order_step", NULL,
+				time_alloc_put_pages);
+	}
 
 	time_bench_loop(loops, 5, "alloc_pages_with_fallback",
 			NULL, time_alloc_pages_with_fallback);
