@@ -104,6 +104,44 @@ static int invoke_test_on_cpu_func(void *private)
 	return 0;
 }
 
+void time_bench_print_stats_cpumask(const char *desc,
+				    struct time_bench_cpu *cpu_tasks,
+				    const struct cpumask *mask)
+{
+	int cpu;
+	int step;
+	struct sum {
+		uint64_t tsc_cycles;
+		int records;
+	} sum = {0};
+
+	/* Get stats */
+	for_each_cpu(cpu, mask) {
+		struct time_bench_cpu *c = &cpu_tasks[cpu];
+		struct time_bench_record *rec = &c->rec;
+
+		/* Calculate stats */
+		time_bench_calc_stats(rec);
+
+		pr_info("Type:%s CPU(%d) %llu cycles(tsc) %llu.%03llu ns"
+		" (step:%d)"
+		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
+		" - (invoke count:%llu tsc_interval:%llu)\n",
+		desc, cpu, rec->tsc_cycles,
+		rec->ns_per_call_quotient, rec->ns_per_call_decimal, rec->step,
+		rec->time_sec, rec->time_sec_remainder, rec->time_interval,
+		rec->invoked_cnt, rec->tsc_interval);
+
+		/* Collect average */
+		sum.records++;
+		sum.tsc_cycles += rec->tsc_cycles;
+		step = rec->step;
+	}
+
+	pr_info("Sum Type:%s Average: %llu cycles(tsc) CPUs:%d step:%d\n",
+		desc, sum.tsc_cycles / sum.records, sum.records, step);
+}
+
 void time_bench_run_concurrent(
 		uint32_t loops, int step, const char *desc,
 		const struct cpumask *mask, /* Support masking outsome CPUs*/
@@ -170,23 +208,7 @@ void time_bench_run_concurrent(
 		pr_warn("%s() Finished on CPU:%d)\n",
 			__func__, smp_processor_id());
 
-	/* Get stats */
-	for_each_cpu(cpu, mask) {
-		struct time_bench_cpu *c = &cpu_tasks[cpu];
-		struct time_bench_record *rec = &c->rec;
-
-		/* Calculate stats */
-		time_bench_calc_stats(rec);
-
-		pr_info("Type:%s CPU(%d) %llu cycles(tsc) %llu.%03llu ns"
-		" (step:%d)"
-		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
-		" - (invoke count:%llu tsc_interval:%llu)\n",
-		desc, cpu, rec->tsc_cycles,
-		rec->ns_per_call_quotient, rec->ns_per_call_decimal, rec->step,
-		rec->time_sec, rec->time_sec_remainder, rec->time_interval,
-		rec->invoked_cnt, rec->tsc_interval);
-	}
+	time_bench_print_stats_cpumask(desc, cpu_tasks, mask);
 }
 
 int run_timing_tests(void)
