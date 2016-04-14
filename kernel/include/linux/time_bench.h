@@ -223,6 +223,9 @@ void time_bench_run_concurrent(
 		struct time_bench_cpu *cpu_tasks,
 		int (*func)(struct time_bench_record *record, void *data)
 	);
+void time_bench_print_stats_cpumask(const char *desc,
+				    struct time_bench_cpu *cpu_tasks,
+				    const struct cpumask *mask);
 
 //FIXME: use rec->flags to select measurement, should be MACRO
 static __always_inline void
@@ -245,6 +248,5 @@ time_bench_stop(struct time_bench_record *rec, uint64_t invoked_cnt) {
 	getnstimeofday(&rec->ts_stop);
 	rec->invoked_cnt = invoked_cnt;
 }
-
 
 #endif /* _LINUX_TIME_BENCH_H */

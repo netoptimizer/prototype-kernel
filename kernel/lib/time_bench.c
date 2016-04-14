@@ -340,6 +340,7 @@ void time_bench_print_stats_cpumask(const char *desc,
 		desc, average, sum.records, step);
 
 }
+EXPORT_SYMBOL_GPL(time_bench_print_stats_cpumask);
 
 void time_bench_run_concurrent(
 		uint32_t loops, int step, const char *desc,
@@ -406,8 +407,6 @@ void time_bench_run_concurrent(
 	if (verbose) // DEBUG - happens often, finish on another CPU
 		pr_warn("%s() Finished on CPU:%d)\n",
 			__func__, smp_processor_id());
-
-	time_bench_print_stats_cpumask(desc, cpu_tasks, mask);
 }
 EXPORT_SYMBOL_GPL(time_bench_run_concurrent);
 

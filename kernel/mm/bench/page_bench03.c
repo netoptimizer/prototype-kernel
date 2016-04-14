@@ -44,6 +44,15 @@ enum benchmark_bit {
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
 
+/* Page specific stats */
+/*
+	order = step;
+	pr_info("Parallel-CPUs:%d page order:%d(%luB/x%d) ave %llu cycles"
+		" per-%luB %llu cycles\n",
+		sum.records, order, PAGE_SIZE << order, 1 << order,
+		average, PAGE_SIZE, average >> order);
+*/
+
 static int time_alloc_pages(
 	struct time_bench_record *rec, void *data)
 {
@@ -100,6 +109,7 @@ void noinline run_bench_parallel_all_cpus(uint32_t loops)
 
 void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
 {
+	const char *desc = "limited-cpus";
 	struct time_bench_sync sync;
 	struct time_bench_cpu *cpu_tasks;
 	struct cpumask my_cpumask;
@@ -116,9 +126,10 @@ void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
 		cpumask_set_cpu(i, &my_cpumask);
 	}
 	pr_info("Limit to %d parallel CPUs\n", parallel_cpus);
-	time_bench_run_concurrent(loops, page_order, "limited-cpus",
+	time_bench_run_concurrent(loops, page_order, desc,
 				  &my_cpumask, &sync, cpu_tasks,
 				  time_alloc_pages);
+	time_bench_print_stats_cpumask(desc, cpu_tasks, &my_cpumask);
 	kfree(cpu_tasks);
 }
 
