@@ -19,6 +19,7 @@ obj-$(CONFIG_TIME_BENCH)       += time_bench.o
 obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_sample.o
 obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_kmem_cache1.o
 obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_memset.o
+obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_parallel.o
 
 obj-$(CONFIG_RING_QUEUE)       += ring_queue.o
 obj-$(CONFIG_RING_QUEUE_TESTS) += ring_queue_test.o
