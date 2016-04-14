@@ -158,41 +158,18 @@ static int time_atomic_read_global(
 	return loops_cnt;
 }
 
-static int time_atomic_read_1writer_global(
+static int time_atomic_read_N_writers_global(
 	struct time_bench_record *rec, void *data)
 {
 	uint64_t loops_cnt = 0;
 	bool writer = false;
+	int N = rec->step;
 	int i;
 
-	if (smp_processor_id() == 0)
+	/* Select N CPUs to be come writers, atomic updaters */
+	if (smp_processor_id() < N) {
 		writer = true;
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		if (writer)
-			atomic_inc(&(global_atomic));
-		else
-			atomic_read(&(global_atomic));
-		loops_cnt++;
-		barrier();
 	}
-	time_bench_stop(rec, loops_cnt);
-	return loops_cnt;
-}
-
-static int time_atomic_read_2writer_global(
-	struct time_bench_record *rec, void *data)
-{
-	uint64_t loops_cnt = 0;
-	bool writer = false;
-	int i;
-
-	if (smp_processor_id() == 0)
-		writer = true;
-	if (smp_processor_id() == 1)
-		writer = true;
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -283,6 +260,7 @@ static int time_preempt(
 }
 
 int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
+		 int step,
 		 int (*func)(struct time_bench_record *record, void *data)
 	)
 {
@@ -294,7 +272,7 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 	size = sizeof(*cpu_tasks) * num_possible_cpus();
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
-	time_bench_run_concurrent(loops, 0, cpumask, &sync, cpu_tasks, func);
+	time_bench_run_concurrent(loops, step, cpumask, &sync, cpu_tasks, func);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);
@@ -305,13 +283,13 @@ void noinline run_bench_bh_preempt(uint32_t loops, cpumask_t cpumask)
 {
 	run_or_return(bit_run_bench_bh_preempt);
 
-	run_parallel("time_local_bh", loops, &cpumask,
+	run_parallel("time_local_bh", loops, &cpumask, 0,
 		      time_local_bh);
 	 /* For comparison */
 	time_bench_loop(loops, 0, "time_local_bh",
 			NULL,      time_local_bh);
 
-	run_parallel("time_preempt", loops, &cpumask,
+	run_parallel("time_preempt", loops, &cpumask, 0,
 		      time_preempt);
 	 /* For comparison */
 	time_bench_loop(loops, 0, "time_preempt",
@@ -325,13 +303,13 @@ void noinline run_bench_irq_disable(uint32_t loops, cpumask_t cpumask)
 	/* Experience: local IRQ disable seems to be affected slightly
 	 * when parallel executing on HyperThreading sipling CPUs
 	 */
-	run_parallel("time_local_irq", loops, &cpumask,
+	run_parallel("time_local_irq", loops, &cpumask, 0,
 		      time_local_irq);
 	/* For comparison */
 	time_bench_loop(loops, 0, "time_local_irq",
 			NULL,      time_local_irq);
 
-	run_parallel("time_local_irq_save", loops, &cpumask,
+	run_parallel("time_local_irq_save", loops, &cpumask, 0,
 		      time_local_irq_save);
 	/* For comparison */
 	time_bench_loop(loops, 0, "time_local_irq_save",
@@ -343,9 +321,9 @@ void noinline run_bench_locks(uint32_t loops, cpumask_t cpumask)
 {
 	run_or_return(bit_run_bench_locks);
 
-	run_parallel("time_lock_unlock_local", loops, &cpumask,
+	run_parallel("time_lock_unlock_local", loops, &cpumask, 0,
 		      time_lock_unlock_local);
-	run_parallel("time_lock_unlock_global", loops, &cpumask,
+	run_parallel("time_lock_unlock_global", loops, &cpumask, 0,
 		      time_lock_unlock_global);
 }
 
@@ -353,14 +331,14 @@ void noinline run_bench_atomics(uint32_t loops, cpumask_t cpumask)
 {
 	run_or_return(bit_run_bench_atomics);
 
-	run_parallel("time_atomic_inc_dec_local", loops, &cpumask,
+	run_parallel("time_atomic_inc_dec_local", loops, &cpumask, 0,
 		      time_atomic_inc_dec_local);
-	run_parallel("time_atomic_inc_dec_global", loops, &cpumask,
+	run_parallel("time_atomic_inc_dec_global", loops, &cpumask, 0,
 		      time_atomic_inc_dec_global);
 
-	run_parallel("time_atomic_read_local", loops*100, &cpumask,
+	run_parallel("time_atomic_read_local", loops*100, &cpumask, 0,
 		      time_atomic_read_local);
-	run_parallel("time_atomic_read_global", loops*100, &cpumask,
+	run_parallel("time_atomic_read_global", loops*100, &cpumask, 0,
 		      time_atomic_read_global);
 }
 
@@ -368,10 +346,14 @@ void noinline run_bench_atomics_advanced(uint32_t loops, cpumask_t cpumask)
 {
 	run_or_return(bit_run_bench_atomics_advanced);
 
-	run_parallel("time_atomic_read_1writer_global", loops, &cpumask,
-		      time_atomic_read_1writer_global);
-	run_parallel("time_atomic_read_2writer_global", loops, &cpumask,
-		      time_atomic_read_2writer_global);
+	run_parallel("time_atomic_read_N_writers_global", loops, &cpumask, 1,
+		      time_atomic_read_N_writers_global);
+	run_parallel("time_atomic_read_N_writers_global", loops, &cpumask, 2,
+		      time_atomic_read_N_writers_global);
+	run_parallel("time_atomic_read_N_writers_global", loops, &cpumask, 3,
+		      time_atomic_read_N_writers_global);
+	run_parallel("time_atomic_read_N_writers_global", loops, &cpumask, 4,
+		      time_atomic_read_N_writers_global);
 }
 
 int run_timing_tests(void)
