@@ -60,7 +60,6 @@ struct time_bench_cpu {
 	struct time_bench_record rec;
 	struct time_bench_sync *sync; /* back ptr */
 	struct task_struct *task;
-	struct cpumask mask;
         /* Support masking outsome CPUs, mark if it ran */
 	bool did_bench_run;
 	/* int cpu; // note CPU stored in time_bench_record */
