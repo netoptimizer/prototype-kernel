@@ -7,6 +7,7 @@
 #ifndef _LINUX_TIME_BENCH_H
 #define _LINUX_TIME_BENCH_H
 
+/* Main structure used for recording a benchmark run */
 struct time_bench_record
 {
 	uint32_t version_abi;
@@ -47,6 +48,27 @@ struct time_bench_record
 	uint32_t time_sec_remainder;
 	uint64_t pmc_ipc_quotient, pmc_ipc_decimal; /* inst per cycle */
 };
+
+/* For synchronizing parallel CPUs to run concurrently */
+struct time_bench_sync {
+	atomic_t nr_tests_running;
+	struct completion start_event;
+};
+
+/* Keep track of CPUs executing our bench function.
+ *
+ * Embed a time_bench_record for storing info per cpu
+ */
+struct time_bench_cpu {
+	struct time_bench_record rec;
+	struct time_bench_sync *sync; /* back ptr */
+	struct task_struct *task;
+        /* Support masking outsome CPUs, mark if it ran */
+	bool did_bench_run;
+	/* int cpu; // note CPU stored in time_bench_record */
+	int (*bench_func)(struct time_bench_record *record, void *data);
+};
+
 
 /*
  * Below TSC assembler code is not compatible with other archs, and
@@ -193,6 +215,14 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 		     int (*func)(struct time_bench_record *rec, void *data)
 	);
 bool time_bench_calc_stats(struct time_bench_record *rec);
+
+void time_bench_run_concurrent(
+		uint32_t loops, int step, const char *desc,
+		const struct cpumask *mask, /* Support masking outsome CPUs*/
+		struct time_bench_sync *sync,
+		struct time_bench_cpu *cpu_tasks,
+		int (*func)(struct time_bench_record *record, void *data)
+	);
 
 //FIXME: use rec->flags to select measurement, should be MACRO
 static __always_inline void

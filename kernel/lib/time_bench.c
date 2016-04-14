@@ -12,6 +12,12 @@
 
 #include <linux/perf_event.h> /* perf_event_create_kernel_counter() */
 
+/* For concurrency testing */
+#include <linux/completion.h>
+#include <linux/sched.h>
+#include <linux/workqueue.h>
+#include <linux/kthread.h>
+
 static int verbose=1;
 
 /** TSC (Time-Stamp Counter) based **
@@ -259,6 +265,151 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 	return true;
 }
 EXPORT_SYMBOL_GPL(time_bench_loop);
+
+/* Function getting invoked by kthread */
+static int invoke_test_on_cpu_func(void *private)
+{
+	struct time_bench_cpu *cpu = private;
+	struct time_bench_sync *sync = cpu->sync;
+	cpumask_t newmask = CPU_MASK_NONE;
+
+	/* Restrict CPU */
+	cpumask_set_cpu(cpu->rec.cpu, &newmask);
+	set_cpus_allowed_ptr(current, &newmask);
+
+	/* Synchronize start of concurrency test */
+	atomic_inc(&sync->nr_tests_running);
+	wait_for_completion(&sync->start_event);
+
+	/* Start benchmark function */
+	if (!cpu->bench_func(&cpu->rec, NULL)) {
+		pr_err("ERROR: function being timed failed on CPU:%d(%d)\n",
+		       cpu->rec.cpu, smp_processor_id());
+	} else {
+		if (verbose)
+			pr_info("SUCCESS: ran on CPU:%d(%d)\n",
+				cpu->rec.cpu, smp_processor_id());
+	}
+	cpu->did_bench_run = true;
+
+	/* End test */
+	atomic_dec(&sync->nr_tests_running);
+	set_current_state(TASK_UNINTERRUPTIBLE);
+	schedule();
+	return 0;
+}
+
+void time_bench_print_stats_cpumask(const char *desc,
+				    struct time_bench_cpu *cpu_tasks,
+				    const struct cpumask *mask)
+{
+	uint64_t average = 0;
+	int cpu;
+	int step = 0;
+	struct sum {
+		uint64_t tsc_cycles;
+		int records;
+	} sum = {0};
+
+	/* Get stats */
+	for_each_cpu(cpu, mask) {
+		struct time_bench_cpu *c = &cpu_tasks[cpu];
+		struct time_bench_record *rec = &c->rec;
+
+		/* Calculate stats */
+		time_bench_calc_stats(rec);
+
+		pr_info("Type:%s CPU(%d) %llu cycles(tsc) %llu.%03llu ns"
+		" (step:%d)"
+		" - (measurement period time:%llu.%09u sec time_interval:%llu)"
+		" - (invoke count:%llu tsc_interval:%llu)\n",
+		desc, cpu, rec->tsc_cycles,
+		rec->ns_per_call_quotient, rec->ns_per_call_decimal, rec->step,
+		rec->time_sec, rec->time_sec_remainder, rec->time_interval,
+		rec->invoked_cnt, rec->tsc_interval);
+
+		/* Collect average */
+		sum.records++;
+		sum.tsc_cycles += rec->tsc_cycles;
+		step = rec->step;
+	}
+
+	if (sum.records) /* avoid div-by-zero */
+		average = sum.tsc_cycles / sum.records;
+	pr_info("Sum Type:%s Average: %llu cycles(tsc) CPUs:%d step:%d\n",
+		desc, average, sum.records, step);
+
+}
+
+void time_bench_run_concurrent(
+		uint32_t loops, int step, const char *desc,
+		const struct cpumask *mask, /* Support masking outsome CPUs*/
+		struct time_bench_sync *sync,
+		struct time_bench_cpu *cpu_tasks,
+		int (*func)(struct time_bench_record *record, void *data)
+	)
+{
+	int cpu, running = 0;
+
+	if (verbose) // DEBUG
+		pr_warn("%s() Started on CPU:%d)\n",
+			__func__, smp_processor_id());
+
+	/* Reset sync conditions */
+	atomic_set(&sync->nr_tests_running, 0);
+	init_completion(&sync->start_event);
+
+	/* Spawn off jobs on all CPUs */
+	for_each_cpu(cpu, mask) {
+		struct time_bench_cpu *c = &cpu_tasks[cpu];
+
+		running++;
+		c->sync = sync; /* Send sync variable along */
+
+		/* Init benchmark record */
+		memset(&c->rec, 0, sizeof(struct time_bench_record));
+		c->rec.version_abi = 1;
+		c->rec.loops       = loops;
+		c->rec.step        = step;
+		c->rec.flags       = (TIME_BENCH_LOOP|TIME_BENCH_TSC|
+				      TIME_BENCH_WALLCLOCK);
+		c->rec.cpu = cpu;
+		c->bench_func = func;
+		c->task = kthread_run(invoke_test_on_cpu_func, c,
+				      "time_bench%d", cpu);
+		if (IS_ERR(c->task)) {
+			pr_err("%s(): Failed to start test func\n", __func__);
+			return;
+		}
+	}
+
+	/* Wait until all processes are running */
+	while (atomic_read(&sync->nr_tests_running) < running) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(10);
+	}
+	/* Kick off all CPU concurrently on completion event */
+	complete_all(&sync->start_event);
+
+	/* Wait for CPUs to finish */
+	while (atomic_read(&sync->nr_tests_running)) {
+		set_current_state(TASK_UNINTERRUPTIBLE);
+		schedule_timeout(10);
+	}
+
+	/* Stop the kthreads */
+	for_each_cpu(cpu, mask) {
+		struct time_bench_cpu *c = &cpu_tasks[cpu];
+		kthread_stop(c->task);
+	}
+
+	if (verbose) // DEBUG - happens often, finish on another CPU
+		pr_warn("%s() Finished on CPU:%d)\n",
+			__func__, smp_processor_id());
+
+	time_bench_print_stats_cpumask(desc, cpu_tasks, mask);
+}
+EXPORT_SYMBOL_GPL(time_bench_run_concurrent);
 
 static int __init time_bench_module_init(void)
 {
