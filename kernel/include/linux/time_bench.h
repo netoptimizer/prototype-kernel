@@ -19,7 +19,7 @@ struct time_bench_record
 #define TIME_BENCH_WALLCLOCK	(1<<2)
 #define TIME_BENCH_PMU		(1<<3)
 
-	uint32_t cpu; //FIXME USE THIS
+	uint32_t cpu; /* Used when embedded in time_bench_cpu */
 
 	/* Records */
 	uint64_t invoked_cnt; 	/* Returned actual invocations */
@@ -47,6 +47,16 @@ struct time_bench_record
 	uint32_t time_sec_remainder;
 	uint64_t pmc_ipc_quotient, pmc_ipc_decimal; /* inst per cycle */
 };
+
+/*
+ * Below TSC assembler code is not compatible with other archs, and
+ * can also fail on guests if cpu-flags are not correct.
+ *
+ * The way TSC reading is used, many iterations, does not require as
+ * high accuracy as described below (in Intel Doc #324264).
+ *
+ * Considering changing to use get_cycles() (#include <asm/timex.h>).
+ */
 
 /** TSC (Time-Stamp Counter) based **
  * Recommend reading, to understand details of reading TSC accurately:
