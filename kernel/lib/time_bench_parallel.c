@@ -18,6 +18,30 @@ static int parallel_cpus = 0;
 module_param(parallel_cpus, uint, 0);
 MODULE_PARM_DESC(parallel_cpus, "Number of parallel CPUs (default ALL)");
 
+/* Quick and dirty way to unselect some of the benchmark tests, by
+ * encoding this in a module parameter flag.  This is useful when
+ * wanting to perf benchmark a specific benchmark test.
+ *
+ * Hint: Bash shells support writing binary number like: $((2#101010))
+ * Use like:
+ *  modprobe $MODULE parallel_cpus=4 run_flags=$((2#101))
+ */
+static unsigned long long run_flags = 0xFFFFFFFF;
+module_param(run_flags, ullong, 0);
+MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
+/* Count the bit number from the enum */
+enum benchmark_bit {
+	bit_run_bench_bh_preempt,
+	bit_run_bench_irq_disable,
+	bit_run_bench_locks,
+	bit_run_bench_atomics,
+	bit_run_bench_atomics_advanced,
+};
+#define bit(b)	(1 << (b))
+#define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
+
+
+
 /* Some global variable to use for contention points */
 static DEFINE_SPINLOCK(global_lock);
 static atomic_t global_atomic;
@@ -227,6 +251,69 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 	return 1;
 }
 
+void noinline run_bench_bh_preempt(uint32_t loops, cpumask_t cpumask)
+{
+	run_or_return(bit_run_bench_bh_preempt);
+
+	run_parallel("time_local_bh", loops, &cpumask,
+		      time_local_bh);
+	 /* For comparison */
+	time_bench_loop(loops, 0, "time_local_bh",
+			NULL,      time_local_bh);
+
+	run_parallel("time_preempt", loops, &cpumask,
+		      time_preempt);
+	 /* For comparison */
+	time_bench_loop(loops, 0, "time_preempt",
+			NULL,      time_preempt);
+}
+
+void noinline run_bench_irq_disable(uint32_t loops, cpumask_t cpumask)
+{
+	run_or_return(bit_run_bench_irq_disable);
+
+	/* Experience: local IRQ disable seems to be affected slightly
+	 * when parallel executing on HyperThreading sipling CPUs
+	 */
+	run_parallel("time_local_irq", loops, &cpumask,
+		      time_local_irq);
+	/* For comparison */
+	time_bench_loop(loops, 0, "time_local_irq",
+			NULL,      time_local_irq);
+
+	run_parallel("time_local_irq_save", loops, &cpumask,
+		      time_local_irq_save);
+	/* For comparison */
+	time_bench_loop(loops, 0, "time_local_irq_save",
+			NULL,      time_local_irq_save);
+
+}
+
+void noinline run_bench_atomics(uint32_t loops, cpumask_t cpumask)
+{
+	run_or_return(bit_run_bench_atomics);
+
+	run_parallel("time_atomic_inc_dec_local", loops, &cpumask,
+		      time_atomic_inc_dec_local);
+	run_parallel("time_atomic_inc_dec_global", loops, &cpumask,
+		      time_atomic_inc_dec_global);
+
+	run_parallel("time_atomic_read_local", loops*100, &cpumask,
+		      time_atomic_read_local);
+	run_parallel("time_atomic_read_global", loops*100, &cpumask,
+		      time_atomic_read_global);
+}
+
+void noinline run_bench_locks(uint32_t loops, cpumask_t cpumask)
+{
+	run_or_return(bit_run_bench_locks);
+
+	run_parallel("time_lock_unlock_local", loops, &cpumask,
+		      time_lock_unlock_local);
+	run_parallel("time_lock_unlock_global", loops, &cpumask,
+		      time_lock_unlock_global);
+}
+
 int run_timing_tests(void)
 {
 	uint32_t loops = 1000000;
@@ -246,41 +333,11 @@ int run_timing_tests(void)
 		}
 	}
 
-	run_parallel("time_local_bh", loops, &cpumask,
-		      time_local_bh);
-	 /* For comparison */
-	time_bench_loop(loops, 0, "time_local_bh",
-			NULL,      time_local_bh);
-
-	run_parallel("time_preempt", loops, &cpumask,
-		      time_preempt);
-	 /* For comparison */
-	time_bench_loop(loops, 0, "time_preempt",
-			NULL,      time_preempt);
-
-	/* Experience: local IRQ disable seems to be affected slightly
-	 * when parallel executing on HyperThreading sipling CPUs
-	 */
-	run_parallel("time_local_irq", loops, &cpumask,
-		      time_local_irq);
-	run_parallel("time_local_irq_save", loops, &cpumask,
-		      time_local_irq_save);
-
-	/* Atomic related */
-	run_parallel("time_lock_unlock_local", loops, &cpumask,
-		      time_lock_unlock_local);
-	run_parallel("time_lock_unlock_global", loops, &cpumask,
-		      time_lock_unlock_global);
-
-	run_parallel("time_atomic_inc_dec_local", loops, &cpumask,
-		      time_atomic_inc_dec_local);
-	run_parallel("time_atomic_inc_dec_global", loops, &cpumask,
-		      time_atomic_inc_dec_global);
-
-	run_parallel("time_atomic_read_local", loops*100, &cpumask,
-		      time_atomic_read_local);
-	run_parallel("time_atomic_read_global", loops*100, &cpumask,
-		      time_atomic_read_global);
+	/* Selectable test types, see run_flags module parameter */
+	run_bench_bh_preempt(loops, cpumask);
+	run_bench_irq_disable(loops, cpumask);
+	run_bench_atomics(loops, cpumask);
+	run_bench_locks(loops, cpumask);
 
 	return 0;
 }
