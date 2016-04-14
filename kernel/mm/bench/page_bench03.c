@@ -44,15 +44,6 @@ enum benchmark_bit {
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
 
-/* Page specific stats */
-/*
-	order = step;
-	pr_info("Parallel-CPUs:%d page order:%d(%luB/x%d) ave %llu cycles"
-		" per-%luB %llu cycles\n",
-		sum.records, order, PAGE_SIZE << order, 1 << order,
-		average, PAGE_SIZE, average >> order);
-*/
-
 static int time_alloc_pages(
 	struct time_bench_record *rec, void *data)
 {
@@ -78,7 +69,6 @@ static int time_alloc_pages(
 	return i;
 }
 
-
 void noinline run_bench_compare(uint32_t loops)
 {
 	run_or_return(bit_run_bench_compare);
@@ -88,8 +78,56 @@ void noinline run_bench_compare(uint32_t loops)
 			time_alloc_pages);
 }
 
+/* Page specific stats:
+ * --------------------
+ * A trick used by many drivers is to allocate a larger order page,
+ * and partition this larger page into smaller pieces, sometimes
+ * called page fragements.
+ *
+ * Here the calculation show that the CPU cycles cost is per 4K
+ * page-size block.  As this normalize the result to 4K page-size, for
+ * easier comparison.
+ */
+void page_bench_print_stats_cpumask(const char *desc,
+				    struct time_bench_cpu *cpu_tasks,
+				    const struct cpumask *mask)
+{
+	uint64_t average = 0;
+	int order = 0;
+	int cpu;
+	struct sum {
+		uint64_t tsc_cycles;
+		int records;
+	} sum = {0};
+
+	/* Get stats */
+	for_each_cpu(cpu, mask) {
+		struct time_bench_cpu *c = &cpu_tasks[cpu];
+		struct time_bench_record *rec = &c->rec;
+
+		/* Calculate stats */
+		time_bench_calc_stats(rec);
+
+		/* Collect average */
+		sum.records++;
+		sum.tsc_cycles += rec->tsc_cycles;
+
+		/* order was specified in rec->step */
+		order = rec->step;
+	}
+
+	if (sum.records) /* avoid div-by-zero */
+		average = sum.tsc_cycles / sum.records;
+
+	pr_info("Parallel-CPUs:%d page order:%d(%luB/x%d) ave %llu cycles"
+		" per-%luB %llu cycles\n",
+		sum.records, order, PAGE_SIZE << order, 1 << order,
+		average, PAGE_SIZE, average >> order);
+}
+
 void noinline run_bench_parallel_all_cpus(uint32_t loops)
 {
+	const char * desc = "parallel-all-CPUs";
 	struct time_bench_sync sync;
 	struct time_bench_cpu *cpu_tasks;
 	size_t size;
@@ -101,9 +139,12 @@ void noinline run_bench_parallel_all_cpus(uint32_t loops)
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
 	/* Run concurrently */
-	time_bench_run_concurrent(loops, page_order, "parallel-test",
+	time_bench_run_concurrent(loops, page_order, desc,
 				  cpu_online_mask, &sync, cpu_tasks,
 				  time_alloc_pages);
+	time_bench_print_stats_cpumask(desc, cpu_tasks, cpu_online_mask);
+	page_bench_print_stats_cpumask(desc, cpu_tasks, cpu_online_mask);
+
 	kfree(cpu_tasks);
 }
 
@@ -130,6 +171,7 @@ void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
 				  &my_cpumask, &sync, cpu_tasks,
 				  time_alloc_pages);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, &my_cpumask);
+	page_bench_print_stats_cpumask(desc, cpu_tasks, &my_cpumask);
 	kfree(cpu_tasks);
 }
 
