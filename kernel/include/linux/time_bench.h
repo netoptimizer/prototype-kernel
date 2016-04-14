@@ -217,7 +217,7 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 bool time_bench_calc_stats(struct time_bench_record *rec);
 
 void time_bench_run_concurrent(
-		uint32_t loops, int step, const char *desc,
+		uint32_t loops, int step,
 		const struct cpumask *mask, /* Support masking outsome CPUs*/
 		struct time_bench_sync *sync,
 		struct time_bench_cpu *cpu_tasks,

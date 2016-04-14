@@ -343,7 +343,7 @@ void time_bench_print_stats_cpumask(const char *desc,
 EXPORT_SYMBOL_GPL(time_bench_print_stats_cpumask);
 
 void time_bench_run_concurrent(
-		uint32_t loops, int step, const char *desc,
+		uint32_t loops, int step,
 		const struct cpumask *mask, /* Support masking outsome CPUs*/
 		struct time_bench_sync *sync,
 		struct time_bench_cpu *cpu_tasks,
