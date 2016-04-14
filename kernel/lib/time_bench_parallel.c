@@ -158,6 +158,56 @@ static int time_atomic_read_global(
 	return loops_cnt;
 }
 
+static int time_atomic_read_1writer_global(
+	struct time_bench_record *rec, void *data)
+{
+	uint64_t loops_cnt = 0;
+	bool writer = false;
+	int i;
+
+	if (smp_processor_id() == 0)
+		writer = true;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		if (writer)
+			atomic_inc(&(global_atomic));
+		else
+			atomic_read(&(global_atomic));
+		loops_cnt++;
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+static int time_atomic_read_2writer_global(
+	struct time_bench_record *rec, void *data)
+{
+	uint64_t loops_cnt = 0;
+	bool writer = false;
+	int i;
+
+	if (smp_processor_id() == 0)
+		writer = true;
+	if (smp_processor_id() == 1)
+		writer = true;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		if (writer)
+			atomic_inc(&(global_atomic));
+		else
+			atomic_read(&(global_atomic));
+		loops_cnt++;
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 
 static int time_local_bh(
 	struct time_bench_record *rec, void *data)
@@ -289,6 +339,16 @@ void noinline run_bench_irq_disable(uint32_t loops, cpumask_t cpumask)
 
 }
 
+void noinline run_bench_locks(uint32_t loops, cpumask_t cpumask)
+{
+	run_or_return(bit_run_bench_locks);
+
+	run_parallel("time_lock_unlock_local", loops, &cpumask,
+		      time_lock_unlock_local);
+	run_parallel("time_lock_unlock_global", loops, &cpumask,
+		      time_lock_unlock_global);
+}
+
 void noinline run_bench_atomics(uint32_t loops, cpumask_t cpumask)
 {
 	run_or_return(bit_run_bench_atomics);
@@ -304,14 +364,14 @@ void noinline run_bench_atomics(uint32_t loops, cpumask_t cpumask)
 		      time_atomic_read_global);
 }
 
-void noinline run_bench_locks(uint32_t loops, cpumask_t cpumask)
+void noinline run_bench_atomics_advanced(uint32_t loops, cpumask_t cpumask)
 {
-	run_or_return(bit_run_bench_locks);
+	run_or_return(bit_run_bench_atomics_advanced);
 
-	run_parallel("time_lock_unlock_local", loops, &cpumask,
-		      time_lock_unlock_local);
-	run_parallel("time_lock_unlock_global", loops, &cpumask,
-		      time_lock_unlock_global);
+	run_parallel("time_atomic_read_1writer_global", loops, &cpumask,
+		      time_atomic_read_1writer_global);
+	run_parallel("time_atomic_read_2writer_global", loops, &cpumask,
+		      time_atomic_read_2writer_global);
 }
 
 int run_timing_tests(void)
@@ -336,8 +396,9 @@ int run_timing_tests(void)
 	/* Selectable test types, see run_flags module parameter */
 	run_bench_bh_preempt(loops, cpumask);
 	run_bench_irq_disable(loops, cpumask);
-	run_bench_atomics(loops, cpumask);
 	run_bench_locks(loops, cpumask);
+	run_bench_atomics(loops, cpumask);
+	run_bench_atomics_advanced(loops, cpumask);
 
 	return 0;
 }
