@@ -63,6 +63,10 @@ struct time_bench_cpu {
 	struct time_bench_record rec;
 	struct time_bench_sync *sync; /* back ptr */
 	struct task_struct *task;
+	/* "data" opaque could have been placed in time_bench_sync,
+	 * but to avoid any false sharing, place it per CPU
+	 */
+	void *data;
         /* Support masking outsome CPUs, mark if it ran */
 	bool did_bench_run;
 	/* int cpu; // note CPU stored in time_bench_record */
@@ -217,7 +221,7 @@ bool time_bench_loop(uint32_t loops, int step, char *txt, void *data,
 bool time_bench_calc_stats(struct time_bench_record *rec);
 
 void time_bench_run_concurrent(
-		uint32_t loops, int step,
+		uint32_t loops, int step, void* data,
 		const struct cpumask *mask, /* Support masking outsome CPUs*/
 		struct time_bench_sync *sync,
 		struct time_bench_cpu *cpu_tasks,

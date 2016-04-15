@@ -139,7 +139,7 @@ void noinline run_bench_parallel_all_cpus(uint32_t loops)
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
 	/* Run concurrently */
-	time_bench_run_concurrent(loops, page_order,
+	time_bench_run_concurrent(loops, page_order, NULL,
 				  cpu_online_mask, &sync, cpu_tasks,
 				  time_alloc_pages);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpu_online_mask);
@@ -167,7 +167,7 @@ void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
 		cpumask_set_cpu(i, &my_cpumask);
 	}
 	pr_info("Limit to %d parallel CPUs\n", parallel_cpus);
-	time_bench_run_concurrent(loops, page_order,
+	time_bench_run_concurrent(loops, page_order, NULL,
 				  &my_cpumask, &sync, cpu_tasks,
 				  time_alloc_pages);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, &my_cpumask);

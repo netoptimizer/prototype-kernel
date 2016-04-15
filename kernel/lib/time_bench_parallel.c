@@ -272,7 +272,8 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 	size = sizeof(*cpu_tasks) * num_possible_cpus();
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
-	time_bench_run_concurrent(loops, step, cpumask, &sync, cpu_tasks, func);
+	time_bench_run_concurrent(loops, step, NULL,
+				  cpumask, &sync, cpu_tasks, func);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);

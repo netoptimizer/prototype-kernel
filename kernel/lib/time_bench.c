@@ -272,6 +272,7 @@ static int invoke_test_on_cpu_func(void *private)
 	struct time_bench_cpu *cpu = private;
 	struct time_bench_sync *sync = cpu->sync;
 	cpumask_t newmask = CPU_MASK_NONE;
+	void *data = cpu->data;
 
 	/* Restrict CPU */
 	cpumask_set_cpu(cpu->rec.cpu, &newmask);
@@ -282,7 +283,7 @@ static int invoke_test_on_cpu_func(void *private)
 	wait_for_completion(&sync->start_event);
 
 	/* Start benchmark function */
-	if (!cpu->bench_func(&cpu->rec, NULL)) {
+	if (!cpu->bench_func(&cpu->rec, data)) {
 		pr_err("ERROR: function being timed failed on CPU:%d(%d)\n",
 		       cpu->rec.cpu, smp_processor_id());
 	} else {
@@ -343,7 +344,7 @@ void time_bench_print_stats_cpumask(const char *desc,
 EXPORT_SYMBOL_GPL(time_bench_print_stats_cpumask);
 
 void time_bench_run_concurrent(
-		uint32_t loops, int step,
+		uint32_t loops, int step, void *data,
 		const struct cpumask *mask, /* Support masking outsome CPUs*/
 		struct time_bench_sync *sync,
 		struct time_bench_cpu *cpu_tasks,
@@ -366,6 +367,7 @@ void time_bench_run_concurrent(
 
 		running++;
 		c->sync = sync; /* Send sync variable along */
+		c->data = data; /* Send opaque along */
 
 		/* Init benchmark record */
 		memset(&c->rec, 0, sizeof(struct time_bench_record));
@@ -380,7 +382,7 @@ void time_bench_run_concurrent(
 				      "time_bench%d", cpu);
 		if (IS_ERR(c->task)) {
 			pr_err("%s(): Failed to start test func\n", __func__);
-			return;
+			return; /* Argh, what about cleanup?! */
 		}
 	}
 
