@@ -12,6 +12,7 @@ include $(KDIR)/.config
 obj-$(CONFIG_QMEMPOOL)       += qmempool.o
 obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_test.o
 obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_bench.o
+obj-$(CONFIG_QMEMPOOL_TESTS) += qmempool_bench_parallel.o
 
 obj-$(CONFIG_SLAB_TESTS) += slab_test.o
 obj-$(CONFIG_SLAB_TESTS) += slab_test02.o
