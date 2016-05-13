@@ -188,7 +188,6 @@ static int test_func(void *private)
 	if (t->test_p2)
 		t->test_p2(t);
 	t->stop2 = get_cycles();
-	kfree(t->v);
 	atomic_dec(&tests_running);
 	set_current_state(TASK_UNINTERRUPTIBLE);
 	schedule();
@@ -245,8 +244,10 @@ static void do_concurrent_test(void (*p1)(struct test_struct *),
 		schedule_timeout(10);
 	}
 
-	for_each_online_cpu(cpu)
+	for_each_online_cpu(cpu) {
 		kthread_stop(test[cpu].task);
+		kfree(test[cpu].v);
+	}
 
 	printk(KERN_ALERT "%s(%d):", name, size);
 	for_each_online_cpu(cpu) {
