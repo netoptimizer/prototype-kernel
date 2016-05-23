@@ -25,3 +25,6 @@ CONFIG_SLAB_TESTS=m
 # setting CONFIG_SLAB_BULK_API=m
 #
 CONFIG_SLAB_BULK_API=n
+
+# Testing some of MST's skb_array code
+CONFIG_SKB_ARRAY_TESTS=m

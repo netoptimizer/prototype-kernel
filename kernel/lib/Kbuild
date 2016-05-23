@@ -23,3 +23,5 @@ obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_parallel.o
 
 obj-$(CONFIG_RING_QUEUE)       += ring_queue.o
 obj-$(CONFIG_RING_QUEUE_TESTS) += ring_queue_test.o
+
+obj-$(CONFIG_SKB_ARRAY_TESTS) += skb_array_test01.o
