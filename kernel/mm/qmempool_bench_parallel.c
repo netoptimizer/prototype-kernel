@@ -25,8 +25,8 @@ MODULE_PARM_DESC(parallel_cpus, "Number of parallel CPUs (default ALL)");
  * Use like:
  *  modprobe $MODULE parallel_cpus=4 run_flags=$((2#101))
  */
-static unsigned long long run_flags = 0xFFFFFFFF;
-module_param(run_flags, ullong, 0);
+static unsigned long run_flags = 0xFFFFFFFF;
+module_param(run_flags, ulong, 0);
 MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
 /* Count the bit number from the enum */
 enum benchmark_bit {
