@@ -14,6 +14,7 @@ obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_test.o
 obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_bench.o
 obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_concurrency_test.o
 obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_disassemble.o
+obj-$(CONFIG_ALF_QUEUE_TESTS) += alf_queue_parallel01.o
 
 obj-$(CONFIG_TIME_BENCH)       += time_bench.o
 obj-$(CONFIG_TIME_BENCH_TESTS) += time_bench_sample.o
