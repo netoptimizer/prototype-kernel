@@ -166,4 +166,10 @@ static inline void skb_array_cleanup(struct skb_array *a)
 	ptr_ring_cleanup(&a->ring, __skb_array_destroy_skb);
 }
 
+#else  /* !_LINUX_SKB_ARRAY_H  */
+/* If this happens then skb_array likely got included in the mainline
+ * kernel that your are compiling against.  The kernel kbuilddir takes
+ * precedence when compiling.
+ */
+#warning "NOTICE: Kernel tree took over skb_array.h"
 #endif /* _LINUX_SKB_ARRAY_H  */
