@@ -15,6 +15,10 @@ static int parallel_cpus = 4;
 module_param(parallel_cpus, uint, 0);
 MODULE_PARM_DESC(parallel_cpus, "Number of parallel CPUs (default 4)");
 
+static int bulk = 8;
+module_param(bulk, uint, 0);
+MODULE_PARM_DESC(bulk, "For bulking test adjust bulk size (default 8)");
+
 #define ALF_FLAG_MP 0x1  /* Multi  Producer */
 #define ALF_FLAG_MC 0x2  /* Multi  Consumer */
 #define ALF_FLAG_SP 0x4  /* Single Producer */
@@ -110,6 +114,107 @@ static int time_bench_CPU_enq_or_deq_spsc(
 {
 	return time_bench_CPU_enq_or_deq(rec, data, SPSC);
 }
+
+/* Below bulk variant */
+static __always_inline int time_bench_CPU_BULK_enq_or_deq(
+	struct time_bench_record *rec, void *data,
+	enum queue_behavior_type type)
+{
+#define MAX_BULK 64
+	uint64_t loops_cnt = 0;
+	int *deq_objs[MAX_BULK];
+	int *objs[MAX_BULK];
+	int bulk = rec->step;
+	struct alf_queue* queue = (struct alf_queue*)data;
+	bool enq_CPU = false;
+	int i;
+
+	if (queue == NULL) {
+		pr_err("Need alf_queue as input\n");
+		return -1;
+	}
+	if (bulk > MAX_BULK) {
+		pr_warn("%s() bulk(%d) request too big cap at %d\n",
+			__func__, bulk, MAX_BULK);
+		bulk = MAX_BULK;
+		rec->step = MAX_BULK;
+	}
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * bulk *2) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+
+	/* Split CPU between enq/deq based on even/odd */
+	if ((smp_processor_id() % 2)== 0)
+		enq_CPU = true;
+
+	/* fake init pointers to a number */
+	for (i = 0; i < MAX_BULK; i++)
+		objs[i] = (void *)(unsigned long)(i+20);
+
+	time_bench_start(rec);
+
+	/** Loop to measure **/
+	// for (i = 0; i < rec->loops; i++) {
+	for (i = 0; loops_cnt < rec->loops; i++) {
+
+		if (enq_CPU) { /* Enqueue side */
+			/* Compile will hopefully optimized this out */
+			if (type & ALF_FLAG_SP) {
+				if (alf_sp_enqueue(queue,
+						   (void**)objs, bulk) != bulk)
+					goto finish_early;
+			} else if (type & ALF_FLAG_MP) {
+				if (alf_mp_enqueue(queue,
+						   (void**)objs, bulk) != bulk)
+					goto finish_early;
+			} else {
+				BUILD_BUG();
+			}
+		} else { /* Dequeue side */
+			if (type & ALF_FLAG_SC) {
+				if (alf_sc_dequeue(queue, (void **)deq_objs,
+						   bulk) != bulk)
+					goto finish_early;
+			} else if (type & ALF_FLAG_MC) {
+				if (alf_mc_dequeue(queue, (void **)deq_objs,
+						   bulk) != bulk)
+					goto finish_early;
+			} else {
+				BUILD_BUG();
+			}
+		}
+		barrier(); /* compiler barrier */
+		loops_cnt +=bulk;
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+
+finish_early:
+	time_bench_stop(rec, loops_cnt);
+	if (enq_CPU) {
+		pr_err("%s() WARN: enq fullq(CPU:%d) i:%d bulk:%d\n",
+		       __func__, smp_processor_id(), i, bulk);
+	} else {
+		pr_err("%s() WARN: deq emptyq (CPU:%d) i:%d bulk:%d\n",
+		       __func__, smp_processor_id(), i, bulk);
+	}
+	return loops_cnt;
+#undef MAX_BULK
+}
+/* Compiler should inline optimize other function calls out */
+static int time_bench_CPU_BULK_enq_or_deq_mpmc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_bench_CPU_BULK_enq_or_deq(rec, data, MPMC);
+}
+static int time_bench_CPU_BULK_enq_or_deq_spsc(
+	struct time_bench_record *rec, void *data)
+{
+	return time_bench_CPU_BULK_enq_or_deq(rec, data, SPSC);
+}
+
 
 int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 		 int step, void *data,
@@ -240,6 +345,50 @@ out:
 	alf_queue_free(queue);
 }
 
+static void run_parallel_many_CPUs_bulk(enum queue_behavior_type type,
+					uint32_t loops, int q_size, int prefill,
+					int CPUs, int bulk)
+{
+	struct alf_queue *queue = NULL;
+	cpumask_t cpumask;
+	int i;
+
+	if (CPUs == 0)
+		return;
+
+	if (!(queue = alloc_and_init_queue(q_size, prefill)))
+		return; /* fail */
+
+	/* Restrict the CPUs to run on
+	 */
+	if (verbose)
+		pr_info("Limit to %d parallel CPUs (bulk:%d)\n", CPUs, bulk);
+	cpumask_clear(&cpumask);
+	for (i = 0; i < CPUs ; i++) {
+		cpumask_set_cpu(i, &cpumask);
+	}
+
+	if (type & SPSC) {
+		if (CPUs > 2) {
+			pr_err("%s() ERR SPSC does not support CPUs > 2\n",
+			       __func__);
+			goto out;
+		}
+		run_parallel("alf_queue_BULK_SPSC_parallel_many_CPUs",
+			     loops, &cpumask, bulk, queue,
+			     time_bench_CPU_BULK_enq_or_deq_spsc);
+	} else if (type & MPMC) {
+		run_parallel("alf_queue_BULK_MPMC_parallel_many_CPUs",
+			     loops, &cpumask, bulk, queue,
+			     time_bench_CPU_BULK_enq_or_deq_mpmc);
+	} else {
+		pr_err("%s() WRONG TYPE!!! FIX\n", __func__);
+	}
+out:
+	alf_queue_free(queue);
+}
+
+
 int run_benchmark_tests(void)
 {
       //uint32_t loops = 1000000;
@@ -252,6 +401,11 @@ int run_benchmark_tests(void)
 
 	run_parallel_many_CPUs(MPMC, loops, q_size, prefill, parallel_cpus);
 	//run_parallel_many_CPUs(SPSC, loops, q_size, prefill, parallel_cpus);
+
+
+	run_parallel_many_CPUs_bulk(
+		MPMC, loops, q_size, prefill, parallel_cpus, bulk);
+	//run_parallel_many_CPUs_bulk(SPSC, loops, q_size, prefill, 2, 8);
 
 	return 0;
 }
