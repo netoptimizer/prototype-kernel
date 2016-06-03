@@ -18,7 +18,7 @@ static bool basic_init_and_cleanup(void)
 	if (result < 0)
 		return false;
 	/* MST argued size should not be rounded up */
-	if (queue.size != 42)
+	if (queue.ring.size != 42)
 		return false;
 
 	skb_array_cleanup(&queue);
@@ -126,7 +126,6 @@ out:
 	return result;
 #undef Q_SIZE
 }
-
 
 static bool test_queue_resize(void)
 {
