@@ -42,13 +42,13 @@ static int time_bench_one_enq_deq(
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
 
-		if (skb_array_produce_bh(queue, skb) < 0) /* enqueue */
+		if (skb_array_produce(queue, skb) < 0) /* enqueue */
 			goto fail;
 
 		loops_cnt++;
 		barrier(); /* compiler barrier */
 
-		nskb = skb_array_consume_bh(queue);	/* dequeue */
+		nskb = skb_array_consume(queue);	/* dequeue */
 		if (skb != nskb)			/* validate object */
 			goto fail;
 
@@ -125,7 +125,7 @@ void noinline run_bench_prefillq(uint32_t loops, int q_size, int prefill)
 	 * fake objects we don''t need to clean them up later.
 	 */
 	for (i = 0; i < prefill; i++) {
-		if (skb_array_produce_bh(queue, skb) < 0) {
+		if (skb_array_produce(queue, skb) < 0) {
 			pr_err("%s() err cannot prefill:%d sz:%d\n",
 			       __func__, prefill, q_size);
 			goto out;

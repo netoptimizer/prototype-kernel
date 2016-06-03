@@ -57,14 +57,14 @@ static int time_bench_CPU_enq_or_deq(
 
 		if (enq_CPU) {
 			/* enqueue side */
-			if (skb_array_produce_bh(queue, skb) < 0) {
+			if (skb_array_produce(queue, skb) < 0) {
 				pr_err("%s() WARN: enq fullq(CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
 		} else {
 			/* dequeue side */
-			nskb = skb_array_consume_bh(queue);
+			nskb = skb_array_consume(queue);
 			if (nskb == NULL) {
 				pr_err("%s() WARN: deq emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
@@ -223,7 +223,8 @@ int run_benchmark_tests(void)
 	 * indicating how many interations were completed.  Thus, you
 	 * can judge if the results are valid.
 	 */
-	uint32_t loops = 1000000;
+	// uint32_t loops = 1000000;
+	uint32_t loops = 200000;
 	int prefill = 32000;
 	int q_size = 64000;
 
