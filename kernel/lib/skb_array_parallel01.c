@@ -102,6 +102,18 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 	return 1;
 }
 
+/* Helper for emptying the queue before calling skb_array_cleanup(),
+ * because we are using fake SKB pointers, which will Oops the kernel
+ * if the destructor kfree_skb() is invoked.
+ */
+void helper_empty_queue(struct skb_array *queue)
+{
+	struct sk_buff *skb;
+
+	while ((skb = skb_array_consume(queue)))
+		/* Emptying fake SKB pointers */;
+}
+
 bool init_queue(struct skb_array *queue, int q_size, int prefill)
 {
 	struct sk_buff *skb;
@@ -126,6 +138,7 @@ bool init_queue(struct skb_array *queue, int q_size, int prefill)
 		if (skb_array_produce_bh(queue, skb) < 0) {
 			pr_err("%s() err cannot prefill:%d sz:%d\n",
 			       __func__, prefill, q_size);
+			helper_empty_queue(queue);
 			skb_array_cleanup(queue);
 			return false;
 		}
@@ -154,6 +167,7 @@ void noinline run_parallel_two_CPUs(uint32_t loops, int q_size, int prefill)
 		     loops, &cpumask, 0, queue,
 		     time_bench_CPU_enq_or_deq);
 
+	helper_empty_queue(queue); /* dequeue fake pointers before cleanup */
 	skb_array_cleanup(queue);
 fail:
 	kfree(queue);
@@ -188,6 +202,7 @@ void noinline run_parallel_many_CPUs(uint32_t loops, int q_size, int prefill)
 		     loops, &cpumask, 0, queue,
 		     time_bench_CPU_enq_or_deq);
 
+	helper_empty_queue(queue); /* dequeue fake pointers before cleanup */
 	skb_array_cleanup(queue);
 fail:
 	kfree(queue);
