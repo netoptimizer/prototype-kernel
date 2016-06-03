@@ -64,6 +64,18 @@ fail:
 	return 0;
 }
 
+/* Helper for emptying the queue before calling skb_array_cleanup(),
+ * because we are using fake SKB pointers, which will Oops the kernel
+ * if the destructor kfree_skb() is invoked.
+ */
+void helper_empty_queue(struct skb_array *queue)
+{
+	struct sk_buff *skb;
+
+	while ((skb = skb_array_consume(queue)))
+		/* Emptying fake SKB pointers */;
+}
+
 void noinline run_bench_min_overhead(uint32_t loops, int q_size)
 {
 	struct skb_array *queue;
@@ -81,6 +93,7 @@ void noinline run_bench_min_overhead(uint32_t loops, int q_size)
 	time_bench_loop(loops, q_size, "skb_array_min_overhead", queue,
 			time_bench_one_enq_deq);
 
+	helper_empty_queue(queue);
 	skb_array_cleanup(queue);
 	kfree(queue);
 }
@@ -122,6 +135,7 @@ void noinline run_bench_prefillq(uint32_t loops, int q_size, int prefill)
 	time_bench_loop(loops, prefill, "skb_array_prefilled", queue,
 			time_bench_one_enq_deq);
 out:
+	helper_empty_queue(queue);
 	skb_array_cleanup(queue);
 	kfree(queue);
 }
