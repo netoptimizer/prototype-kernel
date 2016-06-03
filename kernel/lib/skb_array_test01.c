@@ -5,9 +5,7 @@
 
 #include <linux/module.h>
 #include <linux/skb_array.h>
-
-//#include <linux/skbuff.h>
-struct sk_buff;
+#include <linux/skbuff.h>
 
 static int verbose=1;
 
@@ -33,8 +31,7 @@ static bool basic_add_and_remove_object(void)
 	struct sk_buff *skb, *nskb;
 	int result, r;
 
-	/* Fake pointer value to enqueue */
-	skb = (struct sk_buff *)(unsigned long)42;
+	skb = alloc_skb(1024, GFP_KERNEL);
 
 	result = skb_array_init(&queue, 123, GFP_KERNEL);
 	if (result < 0)
@@ -51,6 +48,7 @@ static bool basic_add_and_remove_object(void)
 	else
 		result = true;
 out:
+	consume_skb(skb);
 	skb_array_cleanup(&queue);
 	return result;
 }
@@ -63,18 +61,18 @@ static bool test_queue_full_condition(void)
 	int i;
 #define Q_SIZE 33
 
-	/* Fake pointer value to enqueue */
-	skb = (struct sk_buff *)(unsigned long)42;
-
 	result = skb_array_init(&queue, Q_SIZE, GFP_KERNEL);
 	if (result < 0)
 		return false;
 
 	/* Try to enq more elements than queue size */
 	for (i = 0; i < (Q_SIZE * 2); i++) {
+		skb = alloc_skb(1024, GFP_KERNEL);
 		r = skb_array_produce_bh(&queue, skb);	/* enqueue */
-		if (r < 0) /* -ENOSPC = queue condition full is reached */
+		if (r < 0) { /* -ENOSPC = queue condition full is reached */
+			consume_skb(skb);
 			break;
+		}
 	}
 
 	if (i == Q_SIZE)
@@ -82,6 +80,7 @@ static bool test_queue_full_condition(void)
 	else
 		result = false;
 
+	/* The cleanup call should invoke kfree_skb() */
 	skb_array_cleanup(&queue);
 	return result;
 #undef Q_SIZE
