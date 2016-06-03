@@ -1,127 +1,143 @@
 /*
+ *	Definitions for the 'struct skb_array' datastructure.
+ *
  *	Author:
  *		Michael S. Tsirkin <mst@redhat.com>
+ *
+ *	Copyright (C) 2016 Red Hat, Inc.
  *
  *	This program is free software; you can redistribute it and/or modify it
  *	under the terms of the GNU General Public License as published by the
  *	Free Software Foundation; either version 2 of the License, or (at your
  *	option) any later version.
  *
- *	This is a limited-size FIFO maintaining sk_buff structures in FIFO
- *	order, with one CPU producing entries and another consuming entries
- *	from a FIFO.
- *
- *	This implementation tries to minimize cache-contention when there is a
- *	single producer and a single consumer CPU.
+ *	Limited-size FIFO of skbs. Can be used more or less whenever
+ *	sk_buff_head can be used, except you need to know the queue size in
+ *	advance.
+ *	Implemented as a type-safe wrapper around ptr_ring.
  */
 
 #ifndef _LINUX_SKB_ARRAY_H
 #define _LINUX_SKB_ARRAY_H 1
 
 #ifdef __KERNEL__
-#include <linux/spinlock.h>
-#include <linux/cache.h>
-#include <linux/types.h>
-#include <linux/compiler.h>
-#include <linux/cache.h>
-#include <linux/slab.h>
-#include <asm/errno.h>
+#include <linux/ptr_ring.h>
+#include <linux/skbuff.h>
 #endif
 
-struct sk_buff;
-
 struct skb_array {
-	int producer ____cacheline_aligned_in_smp;
-	spinlock_t producer_lock;
-	int consumer ____cacheline_aligned_in_smp;
-	spinlock_t consumer_lock;
-	/* Shared consumer/producer data */
-	int size ____cacheline_aligned_in_smp; /* max entries in queue */
-	struct sk_buff **queue;
+	struct ptr_ring ring;
 };
 
-/* Note: callers invoking this in a loop must use a compiler barrier,
- * for example cpu_relax().
+/* Might be slightly faster than skb_array_full below, but callers invoking
+ * this in a loop must use a compiler barrier, for example cpu_relax().
  */
 static inline bool __skb_array_full(struct skb_array *a)
 {
-	return a->queue[a->producer];
+	return __ptr_ring_full(&a->ring);
 }
 
-/* Note: callers invoking this in a loop must use a compiler barrier,
- * for example cpu_relax().
+static inline bool skb_array_full(struct skb_array *a)
+{
+	return ptr_ring_full(&a->ring);
+}
+
+static inline int skb_array_produce(struct skb_array *a, struct sk_buff *skb)
+{
+	return ptr_ring_produce(&a->ring, skb);
+}
+
+static inline int skb_array_produce_irq(struct skb_array *a, struct sk_buff *skb)
+{
+	return ptr_ring_produce_irq(&a->ring, skb);
+}
+
+static inline int skb_array_produce_bh(struct skb_array *a, struct sk_buff *skb)
+{
+	return ptr_ring_produce_bh(&a->ring, skb);
+}
+
+static inline int skb_array_produce_any(struct skb_array *a, struct sk_buff *skb)
+{
+	return ptr_ring_produce_any(&a->ring, skb);
+}
+
+/* Might be slightly faster than skb_array_empty below, but callers invoking
+ * this in a loop must take care to use a compiler barrier, for example
+ * cpu_relax().
  */
-static inline int __skb_array_produce(struct skb_array *a,
-				       struct sk_buff *skb)
+static inline bool __skb_array_empty(struct skb_array *a)
 {
-	if (__skb_array_full(a))
-		return -ENOSPC;
-
-	a->queue[a->producer++] = skb;
-	if (unlikely(a->producer >= a->size))
-		a->producer = 0;
-	return 0;
+	return !__ptr_ring_peek(&a->ring);
 }
 
-static inline int skb_array_produce_bh(struct skb_array *a,
-				       struct sk_buff *skb)
+static inline bool skb_array_empty(struct skb_array *a)
 {
-	int ret;
-
-	spin_lock_bh(&a->producer_lock);
-	ret = __skb_array_produce(a, skb);
-	spin_unlock_bh(&a->producer_lock);
-
-	return ret;
+	return ptr_ring_empty(&a->ring);
 }
 
-/* Note: callers invoking this in a loop must use a compiler barrier,
- * for example cpu_relax().
- */
-static inline struct sk_buff *__skb_array_peek(struct skb_array *a)
+static inline struct sk_buff *skb_array_consume(struct skb_array *a)
 {
-	return a->queue[a->consumer];
+	return ptr_ring_consume(&a->ring);
 }
 
-/* Must only be called after __skb_array_peek returned !NULL */
-static inline void __skb_array_consume(struct skb_array *a)
+static inline struct sk_buff *skb_array_consume_irq(struct skb_array *a)
 {
-	a->queue[a->consumer++] = NULL;
-	if (unlikely(a->consumer >= a->size))
-		a->consumer = 0;
+	return ptr_ring_consume_irq(&a->ring);
+}
+
+static inline struct sk_buff *skb_array_consume_any(struct skb_array *a)
+{
+	return ptr_ring_consume_any(&a->ring);
 }
 
 static inline struct sk_buff *skb_array_consume_bh(struct skb_array *a)
 {
-	struct sk_buff *skb;
+	return ptr_ring_consume_bh(&a->ring);
+}
 
-	spin_lock_bh(&a->consumer_lock);
-	skb = __skb_array_peek(a);
-	if (skb)
-		__skb_array_consume(a);
-	spin_unlock_bh(&a->consumer_lock);
+static inline int __skb_array_len_with_tag(struct sk_buff *skb)
+{
+	if (likely(skb)) {
+		int len = skb->len;
 
-	return skb;
+		if (skb_vlan_tag_present(skb))
+			len += VLAN_HLEN;
+
+		return len;
+	} else {
+		return 0;
+	}
+}
+
+static inline int skb_array_peek_len(struct skb_array *a)
+{
+	return PTR_RING_PEEK_CALL(&a->ring, __skb_array_len_with_tag);
+}
+
+static inline int skb_array_peek_len_irq(struct skb_array *a)
+{
+	return PTR_RING_PEEK_CALL_IRQ(&a->ring, __skb_array_len_with_tag);
+}
+
+static inline int skb_array_peek_len_bh(struct skb_array *a)
+{
+	return PTR_RING_PEEK_CALL_BH(&a->ring, __skb_array_len_with_tag);
+}
+
+static inline int skb_array_peek_len_any(struct skb_array *a)
+{
+	return PTR_RING_PEEK_CALL_ANY(&a->ring, __skb_array_len_with_tag);
 }
 
 static inline int skb_array_init(struct skb_array *a, int size, gfp_t gfp)
 {
-	a->queue = kzalloc(ALIGN(size * sizeof *(a->queue), SMP_CACHE_BYTES),
-			   gfp);
-	if (!a->queue)
-		return -ENOMEM;
-
-	a->size = size;
-	a->producer = a->consumer = 0;
-	spin_lock_init(&a->producer_lock);
-	spin_lock_init(&a->consumer_lock);
-
-	return 0;
+	return ptr_ring_init(&a->ring, size, gfp);
 }
 
 static inline void skb_array_cleanup(struct skb_array *a)
 {
-	kfree(a->queue);
+	ptr_ring_cleanup(&a->ring);
 }
 
 #endif /* _LINUX_SKB_ARRAY_H  */
