@@ -127,6 +127,45 @@ out:
 #undef Q_SIZE
 }
 
+
+static bool test_queue_resize(void)
+{
+	struct skb_array queue;
+	struct sk_buff *skb;
+	int result, r;
+	int i;
+#define Q_SIZE 34
+
+	result = skb_array_init(&queue, Q_SIZE, GFP_KERNEL);
+	if (result < 0)
+		return false;
+
+	/* Fill up queue */
+	for (i = 0; i < Q_SIZE; i++) {
+		skb = alloc_skb(1024, GFP_KERNEL);
+		r = skb_array_produce(&queue, skb);	/* enqueue */
+		if (r < 0) { /* -ENOSPC = queue condition full is reached */
+			consume_skb(skb);
+			result = false;
+			goto out;
+		}
+	}
+
+	/* Resize "shrink" queue, should cause destructor freeing SKBs */
+	r = skb_array_resize(&queue, Q_SIZE / 2, GFP_KERNEL);
+	if (r < 0) {
+		result = false;
+	} else {
+		result = true;
+	}
+out:
+	/* The cleanup call should invoke kfree_skb() */
+	skb_array_cleanup(&queue);
+	return result;
+#undef Q_SIZE
+}
+
+
 #define TEST_FUNC(func) 					\
 do {								\
 	if (!(func)) {						\
@@ -146,6 +185,7 @@ int run_basic_tests(void)
 	TEST_FUNC(basic_add_and_remove_object());
 	TEST_FUNC(test_queue_full_condition());
 	TEST_FUNC(test_queue_empty_condition());
+	TEST_FUNC(test_queue_resize());
 
 	return passed_count;
 }
