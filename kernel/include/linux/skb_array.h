@@ -23,6 +23,7 @@
 #ifdef __KERNEL__
 #include <linux/ptr_ring.h>
 #include <linux/skbuff.h>
+#include <linux/if_vlan.h>
 #endif
 
 struct skb_array {
