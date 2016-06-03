@@ -278,9 +278,9 @@ static inline void *ptr_ring_consume_bh(struct ptr_ring *r)
 {
 	void *ptr;
 
-	spin_lock(&r->consumer_lock);
+	spin_lock_bh(&r->consumer_lock);
 	ptr = __ptr_ring_consume(r);
-	spin_unlock(&r->consumer_lock);
+	spin_unlock_bh(&r->consumer_lock);
 
 	return ptr;
 }
