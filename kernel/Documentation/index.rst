@@ -6,11 +6,21 @@
 Welcome to Prototype Kernel's documentation!
 ============================================
 
+This project and GitHub_ repository is meant for speeding up Linux
+Kernel developement work, this also includes Documentation.  The
+directory layout tries to keep close to the Kernel directory layout.
+This helps when/if upstreaming the work.
+
+.. _GitHub: https://github.com/netoptimizer/prototype-kernel
+
+
 Contents:
 
 .. toctree::
    :maxdepth: 2
 
+   prototype-kernel/index
+   networking/XDP/index
 
 
 Indices and tables
