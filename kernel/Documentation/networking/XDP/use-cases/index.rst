@@ -9,4 +9,6 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
-   xdp_use_case_ddos_scrubber.rst
+   xdp_use_case_ddos
+   xdp_use_case_ddos_scrubber
+
