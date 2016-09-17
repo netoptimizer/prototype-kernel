@@ -11,4 +11,4 @@ Contents:
 
    introduction
    disclaimer
-
+   use-cases/index.rst
