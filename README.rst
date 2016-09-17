@@ -19,5 +19,4 @@ to generate pretty documentation).
 .. _Read The Docs: https://prototype-kernel.readthedocs.io
 .. _auto-generated: https://prototype-kernel.readthedocs.io
 .. _Sphinx: http://www.sphinx-doc.org/
-.. _reStructuredText: http://docutils.sourceforge.net/rst.html
-
+.. _reStructuredText: http://docutils.sourceforge.net/docs/user/rst/quickref.html
