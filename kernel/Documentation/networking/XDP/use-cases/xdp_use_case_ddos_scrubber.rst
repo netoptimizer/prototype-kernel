@@ -2,6 +2,7 @@
 Use-case: DDoS scrubber
 =======================
 :Version: 0.2
+:Status: Proposal, need some new XDP features
 
 This document investigate if XDP can be used for implementing a
 machine that does traffic scrubbing at the edge of the network.

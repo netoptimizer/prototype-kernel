@@ -35,5 +35,3 @@ the XDP filter, still have all features for further filtering that the
 kernel normally provide.  It works in concert with the regular network
 stack.
 
-
-
