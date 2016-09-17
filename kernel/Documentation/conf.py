@@ -125,7 +125,21 @@ todo_include_todos = True
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'alabaster'
+
+# The Read the Docs theme is available from
+# - https://github.com/snide/sphinx_rtd_theme
+# - https://pypi.python.org/pypi/sphinx_rtd_theme
+# - python-sphinx-rtd-theme package (on Debian)
+try:
+    import sphinx_rtd_theme
+    html_theme = 'sphinx_rtd_theme'
+    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
+except ImportError:
+    sys.stderr.write('Warning: The Sphinx \'sphinx_rtd_theme\' HTML theme was not found. Make sure you have the theme installed to produce pretty HTML output. Falling back to the default theme.\n')
+
+# Help website readthedocs.io to use new theme
+#  http://ericholscher.com/blog/2013/nov/4/new-theme-read-the-docs/
+RTD_NEW_THEME = True
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the
