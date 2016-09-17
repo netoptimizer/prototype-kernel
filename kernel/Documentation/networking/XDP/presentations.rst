@@ -23,3 +23,11 @@ packet-pages directly out of the driver RX ring queue.
 .. _September 2016:
    http://people.netfilter.org/hawk/presentations/xdp2016/xdp_intro_and_use_cases_sep2016.pdf
 
+Press coverage
+--------------
+
+List of press coverage:
+
+ * `April 2016`_ - LWN.net covered the very early patches
+
+.. _`April 2016`: http://lwn.net/Articles/682538/
