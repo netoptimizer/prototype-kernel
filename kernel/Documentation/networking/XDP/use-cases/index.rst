@@ -11,4 +11,5 @@ Contents:
 
    xdp_use_case_ddos
    xdp_use_case_ddos_scrubber
+   xdp_use_case_load_balancer
 
