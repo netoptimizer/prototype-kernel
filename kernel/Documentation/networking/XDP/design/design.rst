@@ -68,3 +68,8 @@ the XDP_DROP facility.  The reason is that XDP_TX would requires
 changing too much driver code, which is a concern for an old stable
 and time-proven driver.
 
+Data plane split
+================
+
+.. See: Packet I/O methods by Ben Pfaff
+

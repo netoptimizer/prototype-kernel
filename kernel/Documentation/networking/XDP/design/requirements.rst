@@ -68,6 +68,7 @@ reserve.
 Page per packet
 ===============
 
+.. memory model
 
 Packet forwarding
 =================
@@ -80,3 +81,4 @@ against DPDK, XDP also need a forwarding capability.
 RX bulking
 ==========
 
+.. desc why RX bulking is key
