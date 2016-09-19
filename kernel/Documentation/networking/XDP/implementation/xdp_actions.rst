@@ -10,7 +10,7 @@ XDP actions
 
 .. TODO:: Describe the action currently implemented here. For now this
           was primairly created to allow referencing these actions
-          with link
+          with links
 
 .. _XDP_PASS:
 
@@ -46,7 +46,15 @@ XDP_TX
 XDP_ABORTED
 ===========
 
-.. (ebpf program error case)
+The XDP_ABORTED action is not something a functional program should
+ever use as a return code.  This return code is something an ``eBPF``
+program returns in case of an eBPF program error.  For this reason
+XDP_ABORTED will always be the value zero.
+
+.. warning :: (v4.8-rc6)
+   I noticed mlx4 driver just drop packet with XDP_ABORTED.  The
+   semantics should likely be to, generating an error message of
+   invalid action like the fall-through.
 
 Fall-through
 ------------
@@ -59,6 +67,8 @@ In that case the packets is dropped and a warning is generated (once)
 about the invalid XDP program action code, by calling::
 
  bpf_warn_invalid_xdp_action(action_code);
+
+This implies: *Unknown return codes will result in packet drop*.
 
 
 Code example
@@ -77,10 +87,10 @@ statement as below.
 				goto consumed;
 			goto xdp_drop; /* Drop on xmit failure */
 		default:
-			bpf_warn_invalid_xdp_action(action);
 		case XDP_ABORTED:
+			bpf_warn_invalid_xdp_action(action);
 		case XDP_DROP:
-		xdp_drop:
+	xdp_drop:
 			if (driver_recycle(page, ring))
 				goto consumed;
 			goto next; /* Drop */
