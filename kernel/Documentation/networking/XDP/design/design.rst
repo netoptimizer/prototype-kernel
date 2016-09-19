@@ -25,6 +25,7 @@ API as a capability or features (see section `Capabilities
 negotiation`_).  This functions as a common capabilities API that
 vendors can choose implement (based on customer demand).
 
+.. _ref_prog_negotiation:
 
 Capabilities negotiation
 ========================

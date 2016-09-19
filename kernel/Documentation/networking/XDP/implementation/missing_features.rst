@@ -19,3 +19,7 @@ Needed by :doc:`../use-cases/xdp_use_case_ddos_scrubber`
 Missing: Multi-port TX
 ======================
 
+Missing: Capabilities negotiation
+=================================
+
+See: :ref:`ref_prog_negotiation`
