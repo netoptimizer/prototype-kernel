@@ -13,4 +13,5 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+   xdp_actions
    missing-features

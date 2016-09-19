@@ -11,5 +11,6 @@ Contents:
 
    introduction
    disclaimer
+   design/index.rst
    implementation/index.rst
    use-cases/index.rst
