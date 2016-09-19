@@ -19,6 +19,7 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+   README
    prototype-kernel/index
    networking/XDP/index
 

@@ -12,8 +12,8 @@ outside the normal kernel git tree, but still using the kernels make
 system.
 
 The purpose is getting a seperate git developement tree for developing
-and refining your kernel module over time, before pushing it upstream
-for the Linux Kernel.
+and refining your kernel module or Documentation over time, before
+pushing it upstream for the Linux Kernel.
 
 
 Contents:
