@@ -14,4 +14,5 @@ Contents:
    :maxdepth: 2
 
    xdp_actions
+   userspace_api
    missing_features
