@@ -60,3 +60,36 @@ The features that need this is:
    struct change and have even benchmarked that it does not hurt
    performance).
 
+
+.. _`Troubleshooting and Monitoring`:
+
+Troubleshooting and Monitoring
+==============================
+
+Users need the ability to both monitor and troubleshoot an XDP
+program. Partigular in case of error events like :ref:`XDP_ABORTED`,
+and in case a XDP programs starts to return invalid and unsupported
+action code (caught by the :ref:`action fall-through`).
+
+.. Warning::
+
+   The current (4.8-rc6) implementation is not optimal in this area.
+   In case of the :ref:`action fall-through` packets is dropped and a
+   warning is generated **only once** about the invalid XDP program
+   action code, by calling: bpf_warn_invalid_xdp_action(action_code);
+
+The facilities and behavior need to be improved in this area.
+
+Two options are on the table currently:
+
+* Counters.
+
+  Simply add counters to track these events.  This allow admins and
+  monitor tools to catch and count these events.  This does requires
+  standardizing these counters to help monitor tools.
+
+* Tracepoints.
+
+  Another option is adding tracepoint to these situations.  It is much
+  more flexible than counters.  The downside is that these error
+  events might never be caught, if the tracepoint isn't active.
