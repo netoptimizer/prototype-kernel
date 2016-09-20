@@ -93,3 +93,11 @@ Two options are on the table currently:
   Another option is adding tracepoint to these situations.  It is much
   more flexible than counters.  The downside is that these error
   events might never be caught, if the tracepoint isn't active.
+
+An important design consideration is the monitor facility must not be
+too expensive to execute, even-though events like :ref:`XDP_ABORTED`
+and :ref:`action fall-through` should be very rare events.  This is
+because an external attacker (given the DDoS uses-cases) might find a
+way to trigger these events, which would then serve as an attack
+vector against XDP.
+
