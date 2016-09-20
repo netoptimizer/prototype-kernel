@@ -23,3 +23,7 @@ Missing: XDP program per RX queue
 =================================
 
 Changes to the userspace API is needed to add this feature.
+
+Missing: Cache prefetching
+==========================
+
