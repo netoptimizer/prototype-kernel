@@ -10,7 +10,7 @@ network data path in the Linux kernel. XDP provides bare metal packet
 processing at the lowest point in the software stack.  Much of the
 huge speed gain comes from processing RX packet-pages directly out of
 drivers RX ring queue, before any allocations of meta-data structures
-like SKB's occurs.
+like SKBs occurs.
 
 The IO Visor Project have an `introduction to XDP`_.
 
