@@ -2,9 +2,9 @@
 Drivers
 =======
 
-XDP have a dependency on drivers implementing the RX hook and setup
-API.  Adding driver support is fairly easy, unless it requires
-changing the drivers memory model (which is often the case).
+XDP depends on drivers implementing the RX hook and set-up API.
+Adding driver support is fairly easy, unless it requires changing the
+driver's memory model (which is often the case).
 
 
 Mellanox: mlx4
