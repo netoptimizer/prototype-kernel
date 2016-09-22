@@ -4,13 +4,13 @@ Userspace API
 
 .. Warning::
 
-   The userspace API specification should have to be defined properly
-   before code was accepted upstream.  Concerns have been raise about
+   The userspace API specification should have been defined properly
+   before code was accepted upstream.  Concerns have been raised about
    the current API upstream.  Users should expect this first API
-   attempt will need adjustments. This cannot be considered a stable
+   attempt will need adjustments; this cannot be considered a stable
    API yet.
 
-   Most importantly is the missing capabilities negotiation,
+   Most importantly, capabilities negotiation is missing;
    see :ref:`ref_prog_negotiation`.
 
 
@@ -32,32 +32,32 @@ Struct xdp_prog
 ---------------
 
 Currently (4.8-rc6) the XDP program is simply a bpf_prog pointer.
-While it is good for simplicity, it is limiting extendability for
+While this is good for simplicity, it limits extendability for
 upcoming features.
 
-Introducing a new ``struct xdp_prog``, that can carry information
-related to the XDP program.  Notice this approach does not affect
-performance (tested and benchmarked), because the extra dereference
-for the eBPF program only happens once per 64 packets in the poll
-function.
+Maybe we should introduce a new ``struct xdp_prog`` that can carry
+information related to the XDP program.  Notice this approach does
+not affect performance (tested and benchmarked), because the extra
+dereference for the eBPF program only happens once per 64 packets in
+the poll function.
 
-The features that need this is:
+The features that need this are:
 
 * Multi-port TX:
   Need to know own port index and port lookup table.
 
 * XDP program per RX queue:
   Need setup info about program type, global or specific, due to
-  replace semantics.
+  program-replacement semantics.
 
 * Capabilities negotiation:
-  Need to store information about features program want to use,
-  in-order to validate this.
+  Need to store information about features program wants to use,
+  in order to validate this.
 
 .. TODO:: How kernel devel works: This new ``struct xdp_prog``
-   features cannot go into the kernel before one of the three users of
-   the struct is also implemented. (Note, Jesper have implemented this
-   struct change and have even benchmarked that it does not hurt
+   feature cannot go into the kernel before one of the three users of
+   the struct is also implemented.  (Note, Jesper has implemented this
+   struct change and has even benchmarked that it does not hurt
    performance).
 
 
@@ -67,14 +67,14 @@ Troubleshooting and Monitoring
 ==============================
 
 Users need the ability to both monitor and troubleshoot an XDP
-program. Partigular in case of error events like :ref:`XDP_ABORTED`,
-and in case a XDP programs starts to return invalid and unsupported
-action code (caught by the :ref:`action fall-through`).
+program; particularly so in case of error events like :ref:`XDP_ABORTED`,
+and in case an XDP program starts to return invalid and unsupported
+action codes (caught by the :ref:`action fall-through`).
 
 .. Warning::
 
    The current (4.8-rc6) implementation is not optimal in this area.
-   In case of the :ref:`action fall-through` packets is dropped and a
+   In the :ref:`action fall-through` case, the packet is dropped and a
    warning is generated **only once** about the invalid XDP program
    action code, by calling: bpf_warn_invalid_xdp_action(action_code);
 
@@ -84,19 +84,19 @@ Two options are on the table currently:
 
 * Counters.
 
-  Simply add counters to track these events.  This allow admins and
-  monitor tools to catch and count these events.  This does requires
+  Simply add counters to track these events.  This allows admins and
+  monitoring tools to catch and count these events.  This does require
   standardizing these counters to help monitor tools.
 
 * Tracepoints.
 
-  Another option is adding tracepoint to these situations.  It is much
-  more flexible than counters.  The downside is that these error
+  Another option is adding tracepoints to these situations.  These are
+  much more flexible than counters.  The downside is that these error
   events might never be caught, if the tracepoint isn't active.
 
-An important design consideration is the monitor facility must not be
-too expensive to execute, even-though events like :ref:`XDP_ABORTED`
-and :ref:`action fall-through` should be very rare events.  This is
+An important design consideration is that the monitor facility must
+not be too expensive to execute, even though events like :ref:`XDP_ABORTED`
+and :ref:`action fall-through` should normally be very rare.  This is
 because an external attacker (given the DDoS uses-cases) might find a
 way to trigger these events, which would then serve as an attack
 vector against XDP.

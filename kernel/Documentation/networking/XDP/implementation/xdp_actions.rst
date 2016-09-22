@@ -8,16 +8,16 @@
 XDP actions
 ===========
 
-.. TODO:: Missing desc for XDP_TX.
+.. TODO:: Missing description for XDP_TX.
 
 .. _XDP_PASS:
 
 XDP_PASS
 ========
 
-XDP_PASS means the XDP program choose to pass the packet to the normal
-network stack for processing.  Do notice that the XDP program is
-allowed to have modified the packet-data.
+XDP_PASS means the XDP program chose to pass the packet to the normal
+network stack for processing.  Note that the XDP program is allowed to
+have modified the packet-data.
 
 
 .. _XDP_DROP:
@@ -49,7 +49,7 @@ ever use as a return code.  This return code is something an ``eBPF``
 program returns in case of an eBPF program error, e.g. division by
 zero.  For this reason XDP_ABORTED will always be the value zero.
 
- This XDP_ABORTED action results in the packet getting dropped.
+This XDP_ABORTED action results in the packet getting dropped.
 
 For how to troubleshoot this kind of unlikely error event, see the
 section :ref:`Troubleshooting and Monitoring`.
@@ -63,7 +63,7 @@ There must also be a fall-through ``default:`` case, which is hit if
 the program returns an unknown action code (e.g. future action this
 driver does not support).
 
- These unknown return codes will result in packet drop.
+These unknown return codes will result in packet drop.
 
 See the section :ref:`Troubleshooting and Monitoring` for how to catch
 these kind of situations.
@@ -95,6 +95,6 @@ statement as below.
 		}
 	}
 
-.. Warning:: It is still undecided if the ``action`` code need to be
-             partitioned into opcodes and some of the upper-bits use
-             as values for the given opcode.
+.. Warning:: It is still undecided whether the ``action`` code needs
+             to be partitioned into opcodes, with some of the upper
+             bits used as values for the given opcode.

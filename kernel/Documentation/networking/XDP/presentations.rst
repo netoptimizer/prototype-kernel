@@ -8,7 +8,7 @@ List of XDP focused presentations:
  * `September 2016`_ - Red Hat Inc. (Jesper Brouer)
 
 Historically the `Network Performance BoF`_ at NetDev 1.1 (Feb 2016)
-were the first presentation to propose the idea of processing RX
+was the first presentation to propose the idea of processing RX
 packet-pages directly out of the driver RX ring queue.
 
 .. _Network Performance BoF:

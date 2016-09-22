@@ -4,7 +4,7 @@ Use-case: DDoS scrubber
 :Version: 0.2
 :Status: Proposal, need some new XDP features
 
-This document investigate if XDP can be used for implementing a
+This document investigates whether XDP can be used for implementing a
 machine that does traffic scrubbing at the edge of the network.
 
 DDoS volume attacks
@@ -15,9 +15,9 @@ traffic scrubbing or cleaning when getting attacked by DDoS volume
 attacks.  They have much larger pipes to the Internet than their
 internal backbone can actually handle.
 
-Usually a specific IP-address is attacked.  Then that happens the
-IP-address is placed into a MPLS-VRF alternative route-tables, that
-gets routed through/passed some scrubbing servers.
+Usually a specific IP address is attacked.  When that happens, the IP
+address is placed into MPLS-VRF alternative routing tables, so the
+traffic gets routed through some scrubbing servers.
 
 The purpose of the scrubbing servers is to reduce (or drop) enough
 traffic, such that the DoS volume attack is less than the capacity of
@@ -26,12 +26,13 @@ the internal backbone.
 Forward clean traffic
 =====================
 
-The clean/good traffic need to be forwarded towards backbone.
+The clean/good traffic needs to be forwarded towards the internal
+backbone.
 
-To get around the XDP limitation of only sending back-out the same
-NIC.  They want to add a VLAN header to the packet before calling
-XDP_TX, as this allows them to catch the traffic and re-steer it back
-into the main MPLS-VRF routing table.
+To get around the XDP limitation of only sending back out the same
+NIC, they want to add a VLAN header to the packet before calling
+XDP_TX, allowing them to catch the traffic and re-steer it back into
+the main MPLS-VRF routing table.
 
 
 Need: traffic sampling XDP_DROP
@@ -42,20 +43,21 @@ false positives.  This could be implemented by sampling the drop
 traffic, by returning XDP_PASS a percentage of the times, and then
 have a userspace tcpdump running.
 
-To communicate which eBPF rule that caused the drop, they were
-thinking of modifying the packet header adding a VLAN id.  That way
-the tcpdump could run on a net_device with a given VLAN.
+To indicate which eBPF rule caused the drop, they were thinking of
+modifying the packet header by adding a VLAN id.  That way the tcpdump
+could run on a net_device with a given VLAN.
 
 .. note::
 
-   **NEW-ACTION**: The sampling could be implemented more effecient,
-   if implementing a XDP_DUMP facility for AF_PACKET.
+   **NEW-ACTION**: The sampling could be implemented more efficiently,
+   if there were a XDP_DUMP action which sent the sampled packets to
+   an AF_PACKET socket.
 
 Need: traffic sampling XDP_TX
 =============================
 
 If the scrubber filter is not good enough, then too much bad traffic
-is allowed through.  This is usually the basecase, once the attack
+is allowed through.  This is usually the base case, once the attack
 starts.
 
 Thus, they have need for analysing the traffic that gets forwarded
@@ -63,35 +65,35 @@ with XDP_TX. (ISSUE) The is currently no way to sample or dump the
 XDP_TX traffic.
 
 A physical solution could be to do switch-port mirroring of the
-traffic, and then have another machine (of even the same machine)
-receive traffic for analyzing.  They were talking about just using the
-same machine (as there usually are two NIC ports). (Worry that this
-would cost double the PCIe bandwidth),
+traffic, and then have another machine (or even the same machine)
+receive traffic for analysis.  They were talking about just using the
+same machine (as there usually are two NIC ports), but the worry is
+that this would cost double the PCIe bandwidth.
 
 .. warning::
 
    **NEW-FEATURE:** A software solution could be a combination of
-   XDP_TX and XDP_DUMP.  Both doing XDP_TX and XDP_DUMP would only
+   XDP_TX and XDP_DUMP.  Doing both XDP_TX and XDP_DUMP would only
    cost an extra page refcnt.  They only need sampling.  The XDP_DUMP
-   should be implemented such that it have a limited queue size and
-   simply drops on queue full.
+   should be implemented such that it has a limited queue size, and
+   simply drops if the queue is full.
 
 
 Need: smaller eBPF programs
 ---------------------------
 
 They experience different DDoS attacks.  They don't want to have one
-big eBPF program that need to handle every kind of attack.  This
+big eBPF program that needs to handle every kind of attack.  This
 program would also get too slow once the size increase.
 
 DDoS attacks are usually very specific, and are often stopped by
 spotting a very specific pattern in the packet that is constant enough
-to identify the bad traffic. It is key that they can quicky constuct a
-XDP program matching this very specific pattern without risking
+to identify the bad traffic.  It is key that they can quicky construct
+an XDP program matching this very specific pattern, without risking
 affecting the stability of other XDP filters.
 
 They also have a need to handle several simultaneous attacks, usually
-happens against different destination IP-addresses.
+targeting different destination IP addresses.
 
 .. warning::
 
@@ -103,7 +105,7 @@ happens against different destination IP-addresses.
 Ethtool filters for mlx4
 ------------------------
 
-The HW filter capabilities is highly dependend on the HW, and limited
+The HW filter capabilities are highly dependent on the HW, and limited
 by what can be expressed by ethtool.
 
 From below documentation, it looks like mlx4 have the filters needed

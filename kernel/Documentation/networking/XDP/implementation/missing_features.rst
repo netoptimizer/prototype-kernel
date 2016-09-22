@@ -22,7 +22,7 @@ See: :ref:`ref_prog_negotiation`
 Missing: XDP program per RX queue
 =================================
 
-Changes to the userspace API is needed to add this feature.
+Changes to the user space API are needed to add this feature.
 
 Missing: Cache prefetching
 ==========================

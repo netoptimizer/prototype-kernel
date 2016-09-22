@@ -2,7 +2,7 @@
 Use-cases
 =========
 
-XDP use-cases, some are only proposals.
+XDP use-cases; some are only proposals.
 
 Contents:
 
