@@ -60,6 +60,25 @@ The features that need this are:
    struct change and has even benchmarked that it does not hurt
    performance).
 
+XDP meta-data
+-------------
+
+The ``struct xdp_md`` carry XDP meta-data ("_md").  It is still
+extensible because it have an internal BPF insn rewriter.
+
+.. Daniel: extensibility wrt struct xdp_md, then it's done the same
+   way as done for tc with 'shadow' struct __sk_buff. The concept of
+   having this internal BPF insn rewriter is working quite well for
+   this, and it is extendable with new meta data
+
+.. Daniel: Wrt return codes we're flexible to add new ones once agreed upon
+
+.. Daniel: The whole XDP config is done via netlink, nested in
+   IFLA_XDP container, so it can be extended in future with other
+   attrs, flags, etc, for setup and dumping.
+
+.. include/uapi/linux/bpf.h should have been xdp.h
+
 
 .. _`Troubleshooting and Monitoring`:
 
