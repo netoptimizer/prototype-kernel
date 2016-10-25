@@ -15,7 +15,7 @@ absorb traffic bursts when the TX device is too slow, packets will
 simply be dropped.  Don't use XDP in situations where the RX device
 is faster than the TX device, as there is no back-pressure to save
 the packet from being dropped.  There is no qdisc layer or BQL (Byte
-Queue Limit) to save your from introducing massive bufferbloat.
+Queue Limit) to save you from introducing massive bufferbloat.
 
 Using XDP is about specialization. Crafting a solution towards a very
 specialized purpose, that will require selecting and dimensioning the
