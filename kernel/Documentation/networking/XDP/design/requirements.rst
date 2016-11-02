@@ -69,6 +69,27 @@ Page per packet
 
 .. memory model
 
+On RX many NIC drivers splitup a memory page, to share it for multiple
+packets, in-order to conserve memory.  Doing so complicates handling
+and accounting of these memory pages, which affects performance.
+Particularly the extra atomic refcnt handling needed for the page can
+hurt performance.
+
+XDP defines upfront a memory model where there is only one packet per
+page.  This simplifies page handling and open up for future
+extensions.
+
+This requirement also (upfront) result in choosing not to support
+things like, jumpo-frames, LRO and generally packets split over
+multiple pages.
+
+In the future, this strict memory model might be relaxed, but for now
+it is a strict requirement.  With a more flexible
+:ref:`ref_prog_negotiation` is might be possible to negotiate another
+memory model. Given some specific XDP use-case might not require this
+strict memory model.
+
+
 Packet forwarding
 =================
 
