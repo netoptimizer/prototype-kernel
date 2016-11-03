@@ -88,7 +88,7 @@ program would also get too slow once the size increase.
 
 DDoS attacks are usually very specific, and are often stopped by
 spotting a very specific pattern in the packet that is constant enough
-to identify the bad traffic.  It is key that they can quicky construct
+to identify the bad traffic.  It is key that they can quickly construct
 an XDP program matching this very specific pattern, without risking
 affecting the stability of other XDP filters.
 

@@ -2,7 +2,7 @@
 Missing Features
 ================
 
-Record missing implemenation features here.
+Record missing implementation features here.
 
 
 Missing: Push/pop headers

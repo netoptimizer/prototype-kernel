@@ -7,7 +7,7 @@ Welcome to Prototype Kernel's documentation!
 ============================================
 
 This project and GitHub_ repository is meant for speeding up Linux
-Kernel developement work, this also includes Documentation.  The
+Kernel development work, this also includes Documentation.  The
 directory layout tries to keep close to the Kernel directory layout.
 This helps when/if upstreaming the work.
 

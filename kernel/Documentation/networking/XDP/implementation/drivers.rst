@@ -27,7 +27,7 @@ The Mellanox driver ``mlx5`` will soon get support, as infrastructure
 developers are already playing with RFC patches implementing XDP.
 
 These NICs run Ethernet at 10G, 25G, 40G, 50G and 100Gbit/s. They are
-called `ConnectX-4`_ and `ConnectX-4-Lx`_ (Lx is imited to max 50G or
+called `ConnectX-4`_ and `ConnectX-4-Lx`_ (Lx is limited to max 50G or
 2x 25G).
 
 .. _`ConnectX-4`:
