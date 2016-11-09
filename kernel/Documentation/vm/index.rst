@@ -10,3 +10,4 @@ Contents:
 .. toctree::
    :maxdepth: 2
 
+   page_pool/index
