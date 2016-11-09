@@ -22,6 +22,7 @@ Contents:
    README
    prototype-kernel/index
    networking/index
+   vm/index
 
 
 Indices and tables
