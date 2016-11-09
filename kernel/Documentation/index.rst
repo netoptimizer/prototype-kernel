@@ -21,7 +21,7 @@ Contents:
 
    README
    prototype-kernel/index
-   networking/XDP/index
+   networking/index
 
 
 Indices and tables
