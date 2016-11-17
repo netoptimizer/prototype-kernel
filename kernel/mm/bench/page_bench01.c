@@ -86,7 +86,8 @@ static int time_alloc_put_pages(
 		if (unlikely(page == NULL))
 			return 0;
 		/* "put_page" instead of free call, most drivers do so
-		 *  Note: page refcnt start at 1
+		 * Note: page refcnt start at 1, code see:
+		 * prep_new_page() -> post_alloc_hook() -> set_page_refcounted()
 		 */
 		put_page(page);
 	}
