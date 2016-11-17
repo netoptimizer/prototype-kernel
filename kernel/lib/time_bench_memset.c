@@ -566,6 +566,25 @@ static int time_memset_mmx_256(struct time_bench_record *rec, void *data)
 #undef  CONST_CLEAR_SIZE
 }
 
+static void fast_clear_movq_192(void *page)
+{
+	int i;
+
+	for (i = 0; i < 192/64; i++) {
+		__asm__ __volatile__(
+		"  movq $0, (%0)\n"
+		"  movq $0, 8(%0)\n"
+		"  movq $0, 16(%0)\n"
+		"  movq $0, 24(%0)\n"
+		"  movq $0, 32(%0)\n"
+		"  movq $0, 40(%0)\n"
+		"  movq $0, 48(%0)\n"
+		"  movq $0, 56(%0)\n"
+		: : "r" (page) : "memory");
+		page += 64;
+	}
+}
+
 static void fast_clear_movq_256(void *page)
 {
 	int i;
@@ -583,6 +602,24 @@ static void fast_clear_movq_256(void *page)
 		: : "r" (page) : "memory");
 		page += 64;
 	}
+}
+
+static int time_memset_movq_192(struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		fast_clear_movq_192(global_buf);
+		barrier();
+	}
+
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
 }
 
 static int time_memset_movq_256(struct time_bench_record *rec, void *data)
@@ -642,6 +679,8 @@ int run_timing_tests(void)
 			NULL, time_memset_192);
 	time_bench_loop(loops, 192, "memset_variable_step",
 			NULL,   time_memset_variable_step);
+	time_bench_loop(loops, 0, "memset_MOVQ_192",
+			NULL, time_memset_movq_192);
 
 	time_bench_loop(loops, 0, "memset_199",
 			NULL, time_memset_199);
