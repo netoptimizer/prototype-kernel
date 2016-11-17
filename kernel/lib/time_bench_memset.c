@@ -34,6 +34,10 @@
 
 static int verbose=1;
 
+extern bool irq_fpu_usable(void);
+extern void kernel_fpu_begin(void);
+extern void kernel_fpu_end(void);
+
 #define GLOBAL_BUF_SIZE 8192
 static char global_buf[GLOBAL_BUF_SIZE];
 
@@ -497,6 +501,65 @@ static int time_mem_zero_hacks(
 	return loops_cnt;
 }
 
+static void fast_clear_mmx_256(void *page)
+{
+	int i;
+
+	kernel_fpu_begin();
+
+	__asm__ __volatile__ (
+		"  pxor %%mm0, %%mm0\n" : :
+	);
+
+	for (i = 0; i < 256/128; i++) {
+		__asm__ __volatile__ (
+		"  movq %%mm0, (%0)\n"
+		"  movq %%mm0, 8(%0)\n"
+		"  movq %%mm0, 16(%0)\n"
+		"  movq %%mm0, 24(%0)\n"
+		"  movq %%mm0, 32(%0)\n"
+		"  movq %%mm0, 40(%0)\n"
+		"  movq %%mm0, 48(%0)\n"
+		"  movq %%mm0, 56(%0)\n"
+		"  movq %%mm0, 64(%0)\n"
+		"  movq %%mm0, 72(%0)\n"
+		"  movq %%mm0, 80(%0)\n"
+		"  movq %%mm0, 88(%0)\n"
+		"  movq %%mm0, 96(%0)\n"
+		"  movq %%mm0, 104(%0)\n"
+		"  movq %%mm0, 112(%0)\n"
+		"  movq %%mm0, 120(%0)\n"
+			: : "r" (page) : "memory");
+		page += 128;
+	}
+
+	kernel_fpu_end();
+}
+
+static int time_memset_mmx_256(struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 256
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		if (likely(irq_fpu_usable()))
+			fast_clear_mmx_256(global_buf);
+		else
+			memset(global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+
 
 int run_timing_tests(void)
 {
@@ -565,6 +628,8 @@ int run_timing_tests(void)
 			NULL, time_memset_256);
 	time_bench_loop(loops, 256, "memset_variable_step",
 			NULL,   time_memset_variable_step);
+	time_bench_loop(loops, 0, "memset_mmx_256",
+			NULL, time_memset_mmx_256);
 
 	time_bench_loop(loops, 512, "mem_zero_hacks",
 			NULL,   time_mem_zero_hacks);
@@ -617,7 +682,7 @@ int run_timing_tests(void)
 static int __init time_bench_sample_module_init(void)
 {
 	if (verbose)
-		pr_info("Loaded\n");
+		pr_info("Loaded: fpu_usable %d\n", irq_fpu_usable());
 
 	if (run_timing_tests() < 0) {
 		return -ECANCELED;
