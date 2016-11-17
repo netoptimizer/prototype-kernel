@@ -640,6 +640,53 @@ static int time_memset_movq_256(struct time_bench_record *rec, void *data)
 	return loops_cnt;
 }
 
+inline static void alternative_clear_movq_256(void *page)
+{
+	int i;
+
+	for (i = 0; i < 256/128; i++) {
+		__asm__ __volatile__(
+			"  movq $0, (%0)\n"   //A
+		"  movq $0, 64(%0)\n"
+			"  movq $0, 8(%0)\n"  //A
+		"  movq $0, 72(%0)\n"
+			"  movq $0, 16(%0)\n" //A
+		"  movq $0, 80(%0)\n"
+			"  movq $0, 24(%0)\n" //A
+		"  movq $0, 88(%0)\n"
+			"  movq $0, 32(%0)\n" //A
+		"  movq $0, 96(%0)\n"
+			"  movq $0, 40(%0)\n" //A
+		"  movq $0, 104(%0)\n"
+			"  movq $0, 48(%0)\n" //A
+		"  movq $0, 112(%0)\n"
+			"  movq $0, 56(%0)\n" //A
+		"  movq $0, 120(%0)\n"
+		: : "r" (page) : "memory");
+		page += 128;
+	}
+
+}
+
+static int time_alternative_movq_256(struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		alternative_clear_movq_256(global_buf);
+		barrier();
+	}
+
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+
 int run_timing_tests(void)
 {
 	uint32_t loops = 10000000;
@@ -713,6 +760,8 @@ int run_timing_tests(void)
 			NULL, time_memset_mmx_256);
 	time_bench_loop(loops, 0, "memset_MOVQ_256",
 			NULL, time_memset_movq_256);
+	time_bench_loop(loops, 0, "alternative_MOVQ_256",
+			NULL, time_alternative_movq_256);
 
 	time_bench_loop(loops, 512, "mem_zero_hacks",
 			NULL,   time_mem_zero_hacks);
