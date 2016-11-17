@@ -434,8 +434,12 @@ void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int qword)
 /* WARNING: Setting VALUE to zero result in different assembler code,
  * with slightly less performance, this need more investigation!
  */
-#define VALUE      0x4141414141414141
-#define VALUE_BYTE 0x41
+//#define VALUE      0x4141414141414141
+//#define VALUE_BYTE 0x41
+//#define VALIDATE_CLEARING 1
+#define VALUE      0x0000000000000000
+#define VALUE_BYTE 0x00
+
 	/* Clear up to the next quad word */
 	//const unsigned int qword = DIV_ROUND_UP(bytes, 8);
 	int i;
@@ -466,7 +470,7 @@ void mem_zero_crazy_loop_unroll2(void *ptr, const unsigned int qword)
 static int time_mem_zero_hacks(
 	struct time_bench_record *rec, void *data)
 {
-	int i, bytes_rounded_up, n = 0;
+	int i, bytes_rounded_up;
 	uint64_t loops_cnt = 0;
 	int size = rec->step;
 	size = DIV_ROUND_UP(size, 8); // convert to qwords
@@ -488,8 +492,11 @@ static int time_mem_zero_hacks(
 	}
 	time_bench_stop(rec, loops_cnt);
 
+#ifdef VALIDATE_CLEARING
 	/* Better validate the clearing */
 	for (i = 0; i < GLOBAL_BUF_SIZE; i++) {
+		int n = 0;
+
 		if (global_buf[i] == VALUE_BYTE) {
 			n++;
 		} else {
@@ -497,7 +504,7 @@ static int time_mem_zero_hacks(
 			return loops_cnt;
 		}
 	}
-
+#endif
 	return loops_cnt;
 }
 
