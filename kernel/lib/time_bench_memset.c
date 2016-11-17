@@ -32,6 +32,8 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 
+// #include <asm/mmx.h> // mmx_clear_page -> fast_clear_page
+
 static int verbose=1;
 
 extern bool irq_fpu_usable(void);
@@ -686,6 +688,65 @@ static int time_alternative_movq_256(struct time_bench_record *rec, void *data)
 	return loops_cnt;
 }
 
+/* Copied from arch/x86/lib/mmx_32.c:
+ *	Generic MMX implementation without K7 specific streaming
+ */
+static void fast_clear_page(void *page)
+{
+	int i;
+
+	kernel_fpu_begin();
+
+	__asm__ __volatile__ (
+		"  pxor %%mm0, %%mm0\n" : :
+	);
+
+	for (i = 0; i < 4096/128; i++) {
+		__asm__ __volatile__ (
+		"  movq %%mm0, (%0)\n"
+		"  movq %%mm0, 8(%0)\n"
+		"  movq %%mm0, 16(%0)\n"
+		"  movq %%mm0, 24(%0)\n"
+		"  movq %%mm0, 32(%0)\n"
+		"  movq %%mm0, 40(%0)\n"
+		"  movq %%mm0, 48(%0)\n"
+		"  movq %%mm0, 56(%0)\n"
+		"  movq %%mm0, 64(%0)\n"
+		"  movq %%mm0, 72(%0)\n"
+		"  movq %%mm0, 80(%0)\n"
+		"  movq %%mm0, 88(%0)\n"
+		"  movq %%mm0, 96(%0)\n"
+		"  movq %%mm0, 104(%0)\n"
+		"  movq %%mm0, 112(%0)\n"
+		"  movq %%mm0, 120(%0)\n"
+			: : "r" (page) : "memory");
+		page += 128;
+	}
+
+	kernel_fpu_end();
+}
+
+static int time_fast_clear_page(struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	if (!irq_fpu_usable())
+		return 0;
+
+	time_bench_start(rec);
+
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		// mmx_clear_page(global_buf); // #include <asm/mmx.h>
+		fast_clear_page(global_buf);
+		barrier();
+	}
+
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
 
 int run_timing_tests(void)
 {
@@ -802,6 +863,8 @@ int run_timing_tests(void)
 			NULL, time_memset_4096);
 	time_bench_loop(loops/100, 4096, "memset_variable_step",
 			NULL,   time_memset_variable_step);
+	time_bench_loop(loops/100, 4096, "fast_clear_page",
+			NULL,   time_fast_clear_page);
 
 	time_bench_loop(loops/200, 0, "memset_8192",
 			NULL, time_memset_8192);
