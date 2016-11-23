@@ -31,7 +31,7 @@ Memory model
 ============
 
 Once drivers are converted to using page_pool API, then it will become
-easier change the underlying memory model backing the driver with
+easier to change the underlying memory model backing the driver with
 pages (without changing the driver).
 
 One prime use-case is NIC zero-copy RX into userspace.  As DaveM
@@ -39,7 +39,7 @@ describes in his `Google-plus post`_, the mapping and unmapping
 operations in the address space of the process has a cost that cancels
 out most of the gains of such zero-copy schemes.
 
-This mapping cost can solved the same way as the keeping DMA mapped
+This mapping cost can be solved the same way as the keeping DMA mapped
 trick.  By keeping the pages VM-mapped to userspace.  This is a layer
 that can be added later to the page_pool.  It will likely be
 beneficial to also consider using huge-pages (as backing) to reduce
@@ -54,7 +54,7 @@ Advantages
 Advantages of a recycling page pool as bullet points:
 
 1) Faster than going through page-allocator.  Given a specialized
-   allocator require less checks, and can piggyback on drivers
+   allocator require less checks, and can piggyback on driver's
    resource protection (for alloc-side).
 
 2) DMA IOMMU mapping cost is removed by keeping pages mapped.
