@@ -8,3 +8,4 @@ Design documentation for the page_pool.
    :maxdepth: 2
 
    design
+   memory_model_nic
