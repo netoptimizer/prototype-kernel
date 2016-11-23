@@ -19,16 +19,10 @@ performance gains and benefits that local driver recycling hacks
 cannot realize.
 
 A fundamental property is that pages are returned to the page_pool.
-This property allow a certain class of optimizations, which is to move
-setup and tear-down operations out of the fast-path, sometimes known as
-constructor/destruction operations.  DMA map/unmap is one example of
-operations this applies to.  Certain page alloc/free validations can
-also be avoided in the fast-path.  Another example could be
-pre-mapping pages into userspace, and clearing them (memset-zero)
-outside the fast-path.
+This property allow a certain class of :ref:`optimization principle`.
 
 Memory model
-============
+------------
 
 Once drivers are converted to using page_pool API, then it will become
 easier to change the underlying memory model backing the driver with
