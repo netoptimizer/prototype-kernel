@@ -92,8 +92,73 @@ XDP can be used for controlling which pages that gets RX zero-copied
 to userspace.  The page is still writable for the XDP program, but
 read-only for normal stack delivery.
 
-Userspace delivery
-------------------
+
+Kernel safety
+-------------
+
+For the paranoid, how do we protect the kernel from a malicious
+userspace program.  Sure there will be a communication interface
+between kernel and userspace, that synchronize ownership of pages.
+But a userspace program can violate this interface, given pages are
+kept VMA mapped, the program can in principle access all the memory
+pages in the given page_pool.  This opens up for a malicious (or
+defect) program modifying memory pages concurrently with the kernel
+and DMA engine using them.
+
+An easy way to get around userspace modifying page data contents is
+simply to map pages read-only into userspace.
+
+.. Note:: The first implementation target is read-only zero-copy RX
+          page to userspace and require driver to use SKB-read-only
+          mode.
+
+Advanced: Allowing userspace write access?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What if userspace need write access? Flipping the page permissions per
+transfer will likely kill performance (as this likely affects the
+TLB-cache).
+
+I will argue that giving userspace write access is still possible,
+without risking a kernel crash.  This is related to the SKB-read-only
+mode that copies the packet headers (in to another memory area,
+inaccessible to userspace).  The attack angle is to modify packet
+headers after they passed some kernel network stack validation step
+(as once headers are copied they are out of "reach").
+
+Situation classes where memory page can be modified concurrently:
+
+1) When DMA engine owns the page.  Not a problem, as DMA engine will
+   simply overwrite data.
+
+2) Just after DMA engine finish writing.  Not a problem, the packet
+   will go through netstack validation and be rejected.
+
+3) While XDP reads data. This can lead to XDP/eBPF program goes into a
+   wrong code branch, but the eBPF virtual machine should not be able
+   to crash the kernel. The worst outcome is a wrong or invalid XDP
+   return code.
+
+4) Before SKB with read-only page is constructed. Not a problem, the
+   packet will go through netstack validation and be rejected.
+
+5) After SKB with read-only page has been constructed.  Remember the
+   packet headers were copied into a separate memory area, and the
+   page data is pointed to with an offset passed the copied headers.
+   Thus, userspace cannot modify the headers used for netstack
+   validation.  It can only modify packet data contents, which is less
+   critical as it cannot crash the kernel, and eventually this will be
+   caught by packet checksum validation.
+
+6) After netstack delivered packet to another userspace process. Not a
+   problem, as it cannot crash the kernel.  It might corrupt
+   packet-data being read by another userspace process, which one
+   argument for requiring elevated privileges to get write access
+   (like NET_CAP_ADMIN).
+
+
+Userspace delivery and OOM
+--------------------------
 
 These RX pages are likely mapped to userspace via mmap(), so-far so
 good.  It is key to performance to get an efficient way of signaling
@@ -168,69 +233,6 @@ appropriate knowledge of what it relevant to drop(?).
           (out of scope for the page_pool)
 
 
-Kernel safety
--------------
-
-For the paranoid, how do we protect the kernel from a malicious
-userspace program.  Sure there will be a communication interface
-between kernel and userspace, that synchronize ownership of pages.
-But a userspace program can violate this interface, given pages are
-kept VMA mapped, the program can in principle access all the memory
-pages in the given page_pool.  This opens up for a malicious (or
-defect) program modifying memory pages concurrently with the kernel
-and DMA engine using them.
-
-An easy way to get around userspace modifying page data contents is
-simply to map pages read-only into userspace. And require using
-SKB-read-only mode to not leak sensitive data.
-
-.. Note:: The first implementation target is read-only zero-copy RX
-          page to userspace and require driver to use SKB-read-only
-          mode.
-
-Advanced: Allowing userspace write access?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-What if userspace need write access? Flipping the page permissions per
-transfer will likely kill performance (as this likely affects the
-TLB-cache).
-
-I will argue that giving userspace write access is still possible,
-without risking a kernel crash.  This is related to the SKB-read-only
-mode that copies the packet headers (in to another memory area,
-inaccessible to userspace).  The attack angle is to modify packet
-headers after they passed some kernel network stack validation step
-(as once headers are copied they are out of "reach").
-
-Situation classes where memory page can be modified concurrently:
-
-1) When DMA engine owns the page.  Not a problem, as DMA engine will
-   simply overwrite data.
-
-2) Just after DMA engine finish writing.  Not a problem, the packet
-   will go through netstack validation and be rejected.
-
-3) While XDP reads data. This can lead to XDP/eBPF program goes into a
-   wrong code branch, but the eBPF virtual machine should not be able
-   to crash the kernel. The worst outcome is a wrong or invalid XDP
-   return code.
-
-4) Before SKB with read-only page is constructed. Not a problem, the
-   packet will go through netstack validation and be rejected.
-
-5) After SKB with read-only page has been constructed.  Remember the
-   packet headers were copied into a separate memory area, and the
-   page data is pointed to with an offset passed the copied headers.
-   Thus, userspace cannot modify the headers used for netstack
-   validation.  It can only modify packet data contents, which is less
-   critical as it cannot crash the kernel, and eventually this will be
-   caught by packet checksum validation.
-
-6) After netstack delivered packet to another userspace process. Not a
-   problem, as it cannot crash the kernel.  It might corrupt
-   packet-data being read by another userspace process, which one
-   argument for requiring elevated privileges to get write access
-   (like NET_CAP_ADMIN).
 
 
 Early demux problem
