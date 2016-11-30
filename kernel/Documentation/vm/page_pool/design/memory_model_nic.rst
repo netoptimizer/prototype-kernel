@@ -181,15 +181,26 @@ defect) program modifying memory pages concurrently with the kernel
 and DMA engine using them.
 
 An easy way to get around userspace modifying page data contents is
-simply to map pages read-only into userspace.  What if userspace need
-write access? Flipping the page permissions per transfer will likely
-kill performance (as this likely affects the TLB-cache).
+simply to map pages read-only into userspace. And require using
+SKB-read-only mode to not leak sensitive data.
+
+.. Note:: The first implementation target is read-only zero-copy RX
+          page to userspace and require driver to use SKB-read-only
+          mode.
+
+Advanced: Allowing userspace write access?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+What if userspace need write access? Flipping the page permissions per
+transfer will likely kill performance (as this likely affects the
+TLB-cache).
 
 I will argue that giving userspace write access is still possible,
 without risking a kernel crash.  This is related to the SKB-read-only
 mode that copies the packet headers (in to another memory area,
 inaccessible to userspace).  The attack angle is to modify packet
-headers after they passed some kernel network stack validation step.
+headers after they passed some kernel network stack validation step
+(as once headers are copied they are out of "reach").
 
 Situation classes where memory page can be modified concurrently:
 
@@ -216,8 +227,10 @@ Situation classes where memory page can be modified concurrently:
    caught by packet checksum validation.
 
 6) After netstack delivered packet to another userspace process. Not a
-   problem, as the page-data would have been copied, and the original
-   page-data is not longer used.
+   problem, as it cannot crash the kernel.  It might corrupt
+   packet-data being read by another userspace process, which one
+   argument for requiring elevated privileges to get write access
+   (like NET_CAP_ADMIN).
 
 
 Early demux problem
