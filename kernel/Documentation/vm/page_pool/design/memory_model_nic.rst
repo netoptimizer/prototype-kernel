@@ -2,8 +2,26 @@
 Memory Model for Networking
 ===========================
 
-This describes how the page_pool change the memory model for
+This design describes how the page_pool change the memory model for
 networking in the NIC (Network Interface Card) drivers.
+
+.. Note:: The catch for driver developers is that, once an application
+          request zero-copy RX, then the driver must use a specific
+          SKB allocation mode and might have to reconfigure the
+          RX-ring.
+
+
+Design target
+=============
+
+Allow the NIC to function as a normal Linux NIC and be shared in a
+safe manor, between the kernel network stack and an accelerated
+userspace application using RX zero-copy delivery.
+
+Target is to provide the basis for building RX zero-copy solutions in
+a memory safe manor.  An efficient communication channel for userspace
+delivery is out of scope for this document, but OOM considerations are
+discussed below (`Userspace delivery and OOM`_).
 
 Background
 ==========
