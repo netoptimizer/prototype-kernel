@@ -26,7 +26,7 @@ Traditionally a service load balancer (like IPVS) has more NICs
 (Network Interface Cards), and forwards traffic to the back-end
 servers (called "real server" for IPVS).
 
-The current XDP implementation (**XDP_TX** in kernel 4.8) can only
+The current XDP implementation (:ref:`XDP_TX` in kernel 4.8) can only
 forward packets back out the same NIC they arrived on.  This makes XDP
 unsuited for implementing a traditional multi-NIC load balancer.
 

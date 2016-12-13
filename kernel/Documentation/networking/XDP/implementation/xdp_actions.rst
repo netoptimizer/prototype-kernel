@@ -8,8 +8,6 @@
 XDP actions
 ===========
 
-.. TODO:: Missing description for XDP_TX.
-
 .. _XDP_PASS:
 
 XDP_PASS
@@ -38,6 +36,14 @@ driver hardware test feature.
 XDP_TX
 ======
 
+The XDP_TX action result in TX bouncing the received packet-page back
+out the same NIC it arrived on.  This is usually combined with
+modifying the packet contents before returning action XDP_TX.
+
+The XDP_TX feature can be used for implementing a special kind of
+one-legged Load-Balancer as described in
+:doc:`../use-cases/xdp_use_case_load_balancer`.
+
 
 .. _XDP_ABORTED:
 
@@ -53,6 +59,7 @@ This XDP_ABORTED action results in the packet getting dropped.
 
 For how to troubleshoot this kind of unlikely error event, see the
 section :ref:`Troubleshooting and Monitoring`.
+
 
 .. _`action fall-through`:
 
@@ -97,4 +104,5 @@ statement as below.
 
 .. Warning:: It is still undecided whether the ``action`` code needs
              to be partitioned into opcodes, with some of the upper
-             bits used as values for the given opcode.
+             bits used as values for the given opcode. This can be
+             extended later.
