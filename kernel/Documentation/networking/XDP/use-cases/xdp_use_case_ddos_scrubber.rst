@@ -31,8 +31,8 @@ backbone.
 
 To get around the XDP limitation of only sending back out the same
 NIC, they want to add a VLAN header to the packet before calling
-XDP_TX, allowing them to catch the traffic and re-steer it back into
-the main MPLS-VRF routing table.
+:ref:`XDP_TX`, allowing them to catch the traffic and re-steer it back
+into the main MPLS-VRF routing table.
 
 
 Need: traffic sampling XDP_DROP
@@ -61,8 +61,8 @@ is allowed through.  This is usually the base case, once the attack
 starts.
 
 Thus, they have need for analysing the traffic that gets forwarded
-with XDP_TX. (ISSUE) The is currently no way to sample or dump the
-XDP_TX traffic.
+with :ref:`XDP_TX`. (ISSUE) The is currently no way to sample or dump
+the :ref:`XDP_TX` traffic.
 
 A physical solution could be to do switch-port mirroring of the
 traffic, and then have another machine (or even the same machine)
@@ -73,10 +73,10 @@ that this would cost double the PCIe bandwidth.
 .. warning::
 
    **NEW-FEATURE:** A software solution could be a combination of
-   XDP_TX and XDP_DUMP.  Doing both XDP_TX and XDP_DUMP would only
-   cost an extra page refcnt.  They only need sampling.  The XDP_DUMP
-   should be implemented such that it has a limited queue size, and
-   simply drops if the queue is full.
+   :ref:`XDP_TX` and XDP_DUMP.  Doing both XDP_TX and XDP_DUMP would
+   only cost an extra page refcnt.  They only need sampling.  The
+   XDP_DUMP should be implemented such that it has a limited queue
+   size, and simply drops if the queue is full.
 
 
 Need: smaller eBPF programs

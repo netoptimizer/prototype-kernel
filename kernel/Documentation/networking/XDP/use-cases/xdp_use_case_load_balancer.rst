@@ -104,7 +104,7 @@ As mentioned under :doc:`../disclaimer`, it is very important to
 understand hardware environment this kind of setup works within.
 
 When using the same network segment for the load balancing traffic
-(due to XDP_TX limitations), extra care need to be taken when
+(due to :ref:`XDP_TX` limitations), extra care need to be taken when
 dimensioning the network capacity.
 
 One can create a cluster of servers, all connected to the same
@@ -117,7 +117,7 @@ over the Ethernet switch fabric, thus RX capacity of the
 "service-server" is still 10G.  Sending traffic back to the uplink
 happens via "direct-return" from the "service-server", still have 10G
 capacity left in the Ethernet switch fabric.  Thus, with a proper HW
-setup the XDP_TX limitation can be dealt with.
+setup the :ref:`XDP_TX` limitation can be dealt with.
 
 
 Need: RX HW hash
