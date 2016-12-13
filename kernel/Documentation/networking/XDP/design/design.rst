@@ -2,6 +2,8 @@
 Overall design
 ==============
 
+Requirements defined in document :doc:`requirements`.
+
 Programmability
 ===============
 
