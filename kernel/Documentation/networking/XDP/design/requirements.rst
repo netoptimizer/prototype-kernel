@@ -43,6 +43,8 @@ also store ``skb_shared_info``.  Then the remaining payload (pointing
 past the headers just copied) is attached as (read-only) paged data.
 
 
+.. _adjust_header:
+
 Header push and pop
 ===================
 
