@@ -17,6 +17,10 @@ static int page_order = DEFAULT_ORDER;
 module_param(page_order, uint, 0);
 MODULE_PARM_DESC(page_order, "Parameter page order to use in bench");
 
+static uint32_t loops = 100000;
+module_param(loops, uint, 0);
+MODULE_PARM_DESC(loops, "Iteration loops");
+
 /* Temp store for "outstanding" pages */
 #define MAX_STORE 8192
 void *store[MAX_STORE];
@@ -151,8 +155,6 @@ out:
 
 int run_timing_tests(void)
 {
-	uint32_t loops = 100000;
-
 	/* For comparison */
 	time_bench_loop(loops, 0, "single_page_alloc_put",
 			NULL, time_single_page_alloc_put);
