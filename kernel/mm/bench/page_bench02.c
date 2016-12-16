@@ -12,6 +12,27 @@
 
 static int verbose=1;
 
+/* Quick and dirty way to unselect some of the benchmark tests, by
+ * encoding this in a module parameter flag.  This is useful when
+ * wanting to perf benchmark a specific benchmark test.
+ *
+ * Hint: Bash shells support writing binary number like: $((2#101010))
+ * Use like:
+ *  modprobe page_bench02 loops=$((10**7))  run_flags=$((2#010))
+ */
+static unsigned long run_flags = 0xFFFFFFFF;
+module_param(run_flags, ulong, 0);
+MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
+/* Count the bit number from the enum */
+enum benchmark_bit {
+	bit_run_bench_order0_compare,
+	bit_run_bench_orderN,
+	bit_run_bench_outstanding
+};
+#define bit(b)	(1 << (b))
+#define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
+
+
 #define DEFAULT_ORDER 0
 static int page_order = DEFAULT_ORDER;
 module_param(page_order, uint, 0);
@@ -152,17 +173,25 @@ out:
 	return 0;
 }
 
-
-int run_timing_tests(void)
+void noinline run_bench_order0_compare(uint32_t loops)
 {
-	/* For comparison */
+	run_or_return(bit_run_bench_order0_compare);
+	/* For comparison: order-0 */
 	time_bench_loop(loops, 0, "single_page_alloc_put",
 			NULL, time_single_page_alloc_put);
-	/* For comparison */
+}
+
+void noinline run_bench_orderN(uint32_t loops)
+{
+	run_or_return(bit_run_bench_orderN);
+	/* For comparison: single page specific order */
 	time_bench_loop(loops, page_order, "alloc_pages_order", NULL,
 			time_alloc_pages);
+}
 
-	/* More advanced use-cases */
+void noinline run_bench_bench_outstanding(uint32_t loops)
+{
+	run_or_return(bit_run_bench_outstanding);
 
 	/* The basic question to answer here is whether allocating and
 	 * keeping N number of pages outstanding, before free'ing them
@@ -197,7 +226,13 @@ int run_timing_tests(void)
 	time_bench_loop(loops, 8192, "step_outstanding_pages", NULL,
 			time_alloc_pages_outstanding);
 
+}
 
+int run_timing_tests(void)
+{
+	run_bench_order0_compare(loops);
+	run_bench_orderN(loops);
+	run_bench_bench_outstanding(loops);
 	return 0;
 }
 
