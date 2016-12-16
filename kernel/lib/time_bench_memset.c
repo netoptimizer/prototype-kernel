@@ -649,20 +649,20 @@ inline static void alternative_clear_movq_256(void *page)
 	for (i = 0; i < 256/128; i++) {
 		__asm__ __volatile__(
 			"  movq $0, (%0)\n"   //A
-		"  movq $0, 64(%0)\n"
 			"  movq $0, 8(%0)\n"  //A
+		"  movq $0, 64(%0)\n"
 		"  movq $0, 72(%0)\n"
 			"  movq $0, 16(%0)\n" //A
-		"  movq $0, 80(%0)\n"
 			"  movq $0, 24(%0)\n" //A
+		"  movq $0, 80(%0)\n"
 		"  movq $0, 88(%0)\n"
 			"  movq $0, 32(%0)\n" //A
-		"  movq $0, 96(%0)\n"
 			"  movq $0, 40(%0)\n" //A
+		"  movq $0, 96(%0)\n"
 		"  movq $0, 104(%0)\n"
 			"  movq $0, 48(%0)\n" //A
-		"  movq $0, 112(%0)\n"
 			"  movq $0, 56(%0)\n" //A
+		"  movq $0, 112(%0)\n"
 		"  movq $0, 120(%0)\n"
 		: : "r" (page) : "memory");
 		page += 128;
