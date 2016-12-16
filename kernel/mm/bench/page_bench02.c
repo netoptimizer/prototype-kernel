@@ -39,7 +39,7 @@ static int time_single_page_alloc_put(
 		my_page = alloc_page(gfp_mask);
 		if (unlikely(my_page == NULL))
 			return 0;
-		__free_page(my_page);
+		put_page(my_page);
 	}
 	time_bench_stop(rec, i);
 	return i;
