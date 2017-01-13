@@ -9,6 +9,7 @@
 #include <linux/time_bench.h>
 #include <linux/spinlock.h>
 #include <linux/mm.h>
+#include <linux/list.h>
 
 static int verbose=1;
 
@@ -26,6 +27,7 @@ MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
 /* Count the bit number from the enum */
 enum benchmark_bit {
 	bit_run_bench_order0_compare,
+	bit_run_bench_page_bulking,
 };
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
@@ -60,6 +62,53 @@ static int time_single_page_alloc_put(
 	return i;
 }
 
+#define MAX_BULK 32768
+
+static int time_bulk_page_alloc_free(
+	struct time_bench_record *rec, void *data)
+{
+	gfp_t gfp = (GFP_ATOMIC | ___GFP_NORETRY);
+	uint64_t loops_cnt = 0;
+	int order=0;
+	int i;
+
+	/* Bulk size setup from "step" */
+	size_t bulk = rec->step;
+
+	if (bulk > MAX_BULK) {
+		pr_warn("%s() bulk(%lu) request too big cap at %d\n",
+			__func__, bulk, MAX_BULK);
+		bulk = MAX_BULK;
+	}
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * bulk *2) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		struct list_head list;
+		unsigned long n;
+		INIT_LIST_HEAD(&list);
+
+		n = alloc_pages_bulk(gfp, order, bulk, &list);
+
+		if (verbose && (n < bulk))
+			pr_warn("%s(): got less pages: %lu/%lu\n",
+				__func__, n, bulk);
+		barrier();
+		free_pages_bulk(&list);
+
+		/* NOTICE THIS COUNTS (bulk) alloc+free together */
+		loops_cnt+= n;
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+
 void noinline run_bench_order0_compare(uint32_t loops)
 {
 	run_or_return(bit_run_bench_order0_compare);
@@ -68,9 +117,26 @@ void noinline run_bench_order0_compare(uint32_t loops)
 			NULL, time_single_page_alloc_put);
 }
 
+void noinline run_bench_page_bulking(uint32_t loops, int bulk)
+{
+	run_or_return(bit_run_bench_page_bulking);
+	time_bench_loop(loops, bulk, "time_bulk_page_alloc_free",
+			NULL,         time_bulk_page_alloc_free);
+}
+
+
 int run_timing_tests(void)
 {
 	run_bench_order0_compare(loops);
+
+	run_bench_page_bulking(loops,  1);
+	run_bench_page_bulking(loops,  2);
+	run_bench_page_bulking(loops,  4);
+	run_bench_page_bulking(loops,  8);
+	run_bench_page_bulking(loops, 16);
+	run_bench_page_bulking(loops, 32);
+	run_bench_page_bulking(loops, 64);
+	//run_bench_page_bulking(loops/100, 1024);
 	return 0;
 }
 
