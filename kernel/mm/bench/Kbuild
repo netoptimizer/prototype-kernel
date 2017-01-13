@@ -8,3 +8,5 @@ obj-$(CONFIG_BENCH_PAGE) += page_bench01.o
 obj-$(CONFIG_BENCH_PAGE) += page_bench02.o
 obj-$(CONFIG_BENCH_PAGE) += page_bench03.o
 
+# Depend on non-upstream kernel patches
+obj-$(CONFIG_PAGE_BULK_API) += page_bench04_bulk.o
