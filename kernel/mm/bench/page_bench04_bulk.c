@@ -38,7 +38,7 @@ static int page_order = DEFAULT_ORDER;
 module_param(page_order, uint, 0);
 MODULE_PARM_DESC(page_order, "Parameter page order to use in bench");
 
-static uint32_t loops = 100000;
+static uint32_t loops = 1000000;
 module_param(loops, uint, 0);
 MODULE_PARM_DESC(loops, "Iteration loops");
 
@@ -120,6 +120,12 @@ void noinline run_bench_order0_compare(uint32_t loops)
 void noinline run_bench_page_bulking(uint32_t loops, int bulk)
 {
 	run_or_return(bit_run_bench_page_bulking);
+	/*
+	 * Adjust loops here, according to bulk value, as each test
+	 * should run approx same amount of time.  time_bench_loop()
+	 * will complain if adjusting inside test func.
+	 */
+	loops = loops / bulk;
 	time_bench_loop(loops, bulk, "time_bulk_page_alloc_free",
 			NULL,         time_bulk_page_alloc_free);
 }
@@ -131,12 +137,14 @@ int run_timing_tests(void)
 
 	run_bench_page_bulking(loops,  1);
 	run_bench_page_bulking(loops,  2);
+	run_bench_page_bulking(loops,  3);
 	run_bench_page_bulking(loops,  4);
 	run_bench_page_bulking(loops,  8);
 	run_bench_page_bulking(loops, 16);
 	run_bench_page_bulking(loops, 32);
 	run_bench_page_bulking(loops, 64);
-	//run_bench_page_bulking(loops/100, 1024);
+	run_bench_page_bulking(loops,128);
+	run_bench_page_bulking(loops,256);
 	return 0;
 }
 
