@@ -13,7 +13,7 @@ The `prototype-kernel project`_ is meant for compiling kernel modules
 outside the normal kernel git tree, but still using the kernels make
 system.
 
-The purpose is getting a seperate git developement tree for developing
+The purpose is getting a separate git development tree for developing
 and refining your kernel module or Documentation over time, before
 pushing it upstream for the Linux Kernel.
 

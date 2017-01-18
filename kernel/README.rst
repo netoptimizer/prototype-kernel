@@ -11,7 +11,7 @@ system.
    available for compiling against (or install your distributions
    kernel-devel package).
 
-The purpose is getting a seperate git developement tree for developing
+The purpose is getting a separate git development tree for developing
 and refining your kernel module over time, before pushing it upstream
 for the Linux Kernel.
 
