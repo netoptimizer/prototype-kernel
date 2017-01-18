@@ -14,3 +14,4 @@ Contents:
    design/index.rst
    implementation/index.rst
    use-cases/index.rst
+   end-user/index.rst
