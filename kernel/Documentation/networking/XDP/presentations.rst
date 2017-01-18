@@ -44,6 +44,7 @@ List of related presentations or write-ups:
  * (Aug 2016): `What Can BPF Do For You`_ (LinuxCon_)
  * (Sep 2016): `Dive into BPF`_: a list of reading material
  * (Oct 2016): `XDP in OpenStack (video)`_ for DDoS protection
+ * (Oct 2016): `NetDev 1.2 video`_ by `David Miller`_
 
 
 .. _Linux Network Stack:
@@ -64,3 +65,9 @@ List of related presentations or write-ups:
 
 .. _XDP in OpenStack (video):
    https://www.youtube.com/watch?v=1oAsRzrwAAw
+
+.. _NetDev 1.2 video:
+   https://www.youtube.com/watch?v=NlMQ0i09HMU&feature=youtu.be&t=3m3s
+
+.. _David Miller:
+   https://en.wikipedia.org/wiki/David_S._Miller
