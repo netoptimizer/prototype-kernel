@@ -35,3 +35,24 @@ called `ConnectX-4`_ and `ConnectX-4-Lx`_ (Lx is limited to max 50G or
 
 .. _`ConnectX-4-Lx`:
    http://www.mellanox.com/page/products_dyn?product_family=219&mtag=connectx_4_lx_en_card
+
+
+Netronome: nfp
+==============
+
+Driver: nfp
+Kernel release: v4.10
+
+
+Cavium/Qlogic: qede
+===================
+
+Driver: qede
+Kernel release: v4.10
+
+
+virtio-net
+==========
+
+Driver: virtio-net
+Kernel release: v4.10
