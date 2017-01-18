@@ -28,6 +28,11 @@ also have some entertaining `API examples`_.
 
 .. _Michael Kerrisk: http://man7.org/
 
+.. Note:: With XDP_FLAGS in `commit 85de8576a0b1`_ (Daniel) prepared
+          add/replace/delete logic for XDP programs.
+
+.. _commit 85de8576a0b1: https://git.kernel.org/davem/net-next/c/85de8576a0b1
+
 Struct xdp_prog
 ---------------
 
