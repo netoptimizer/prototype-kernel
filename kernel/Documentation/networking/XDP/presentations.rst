@@ -43,6 +43,7 @@ List of related presentations or write-ups:
  * (Juli 2016): CETH_ Common Ethernet Driver Framework (Huawei)
  * (Aug 2016): `What Can BPF Do For You`_ (LinuxCon_)
  * (Sep 2016): `Dive into BPF`_: a list of reading material
+ * (Oct 2016): `XDP in OpenStack (video)`_ for DDoS protection
 
 
 .. _Linux Network Stack:
@@ -60,3 +61,6 @@ List of related presentations or write-ups:
 
 .. _Dive into BPF:
    https://qmonnet.github.io/whirl-offload/2016/09/01/dive-into-bpf/
+
+.. _XDP in OpenStack (video):
+   https://www.youtube.com/watch?v=1oAsRzrwAAw
