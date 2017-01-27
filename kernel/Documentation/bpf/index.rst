@@ -33,7 +33,7 @@ the `bpf(2)`_ syscall.
 .. toctree::
    :maxdepth: 2
 
-
+   ebpf_maps
 
 .. links:
 
