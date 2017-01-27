@@ -6,9 +6,9 @@ Tool chain
 ==========
 
 The XDP program running (in the driver hook point) is an eBPF program
-(short for Extended Berkeley Packet Filters). Unless you want to write
-eBPF machine-code like instruction by hand, you likely want to install
-some front-ends, that allow you to write some pseudo C-code.
+(see :doc:`../../../bpf/index`). Unless you want to write eBPF
+machine-code like instruction by hand, you likely want to install some
+front-ends, that allow you to write some pseudo C-code.
 
 Tools for compiling `kernel bpf samples`_ requires having installed:
  * clang >= version 3.4.0
