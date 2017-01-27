@@ -23,6 +23,7 @@ Contents:
    prototype-kernel/index
    networking/index
    vm/index
+   bpf/index
 
 
 Indices and tables
