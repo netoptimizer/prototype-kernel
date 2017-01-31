@@ -28,7 +28,7 @@ Types of maps
 
 There are diffent types of maps available.  The defines needed when
 creating the maps are defined in include/uapi/linux/bpf.h as
-``enum bpf_map_type_``.
+``enum bpf_map_type``.
 
 Example of `bpf_map_type`_ from kernel 4.9, but remember to `lookup
 latest`_ available maps in the source code ::
