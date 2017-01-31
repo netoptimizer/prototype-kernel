@@ -23,6 +23,8 @@ Documentation
 The primary user documentation for extended BPF is in the man-page for
 the `bpf(2)`_ syscall.
 
+This documentation is focused on the kernel trees sample/bpf and tools/lib/
+
 .. Comments / Notes:
    Sections:
    * Areas using BPF
@@ -31,7 +33,7 @@ the `bpf(2)`_ syscall.
    * Maps
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
    ebpf_maps
 
