@@ -17,6 +17,13 @@ instruction set is quite different, see description in section "BPF
 kernel internals" of `Documentation/networking/filter.txt`_ or look at
 `presentation by Alexei`_.
 
+Areas using eBPF:
+ * :doc:`../networking/XDP/index`
+ * Tracing
+ * Tracepoints
+ * kprobe (dynamic tracing of a kernel function call)
+ * Sockets
+
 Documentation
 =============
 
@@ -27,7 +34,6 @@ This documentation is focused on the kernel trees sample/bpf and tools/lib/
 
 .. Comments / Notes:
    Sections:
-   * Areas using BPF
    * Build environment
    * Coding
    * Maps
