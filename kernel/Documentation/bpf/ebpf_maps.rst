@@ -3,8 +3,8 @@ eBPF maps
 =========
 
 Using eBPF maps is a method to keep state between invocations of the
-eBPF program, and also share state between different eBPF programs and
-userspace.
+eBPF program, and allow sharing of data between eBPF kernel programs,
+and also between kernel and user-space applications.
 
 Key/value store with arbitrary structure (from man-page `bpf(2)`_):
 
