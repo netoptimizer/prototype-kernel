@@ -19,10 +19,13 @@ this `presentation by Alexei`_.
 
 Areas using eBPF:
  * :doc:`../networking/XDP/index`
+ * `Traffic control`_
+ * Sockets
+ * Firewalling (``xt_bpf`` module)
  * Tracing
  * Tracepoints
  * kprobe (dynamic tracing of a kernel function call)
- * Sockets
+ * cgroups
 
 Documentation
 =============
@@ -65,3 +68,5 @@ covered by this documentation.
 
 .. _tools/lib/bpf/:
    https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/
+
+.. _Traffic control: http://man7.org/linux/man-pages/man8/tc-bpf.8.html
