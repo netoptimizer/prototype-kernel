@@ -2,9 +2,9 @@
 BCC (BPF Compiler Collection)
 =============================
 
-BCC is a toolkit to makes eBPF programs easier to write, with
-front-ends in Python and lua.  BCC requires LLVM and clang (in correct
-versions) available on target, because BCC programs does runtime
+BCC is a toolkit to make eBPF programs easier to write, with
+front-ends in Python and Lua.  BCC requires LLVM and clang (in correct
+versions) to be available on target, because BCC programs do runtime
 compilation of the pseudo-C code into eBPF instructions.
 
 BBC includes several useful tools_ and examples_, developed by
