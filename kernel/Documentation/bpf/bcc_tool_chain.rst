@@ -5,7 +5,7 @@ BCC (BPF Compiler Collection)
 BCC is a toolkit to make eBPF programs easier to write, with
 front-ends in Python and Lua.  BCC requires LLVM and clang (in version
 3.7.1 or newer) to be available on target, because BCC programs do
-runtime compilation of the pseudo-C code into eBPF instructions.
+runtime compilation of the restricted-C code into eBPF instructions.
 
 BBC includes several useful tools_ and examples_, developed by
 recognized performance analyst `Brendan Gregg`_ and covered with a
