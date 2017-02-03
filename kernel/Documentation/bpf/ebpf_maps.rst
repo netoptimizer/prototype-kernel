@@ -3,7 +3,7 @@ eBPF maps
 =========
 
 Using eBPF maps is a method to keep state between invocations of the
-eBPF program, and allow sharing of data between eBPF kernel programs,
+eBPF program, and allows sharing data between eBPF kernel programs,
 and also between kernel and user-space applications.
 
 Key/value store with arbitrary structure (from man-page `bpf(2)`_):
@@ -26,10 +26,10 @@ and accessed by multiple programs (from man-page `bpf(2)`_):
 Creating a map
 ==============
 
-A maps is created based on a request from userspace, via the `bpf`_
-syscall (`bpf_cmd`_ BPF_MAP_CREATE), and returns a new file descriptor
-that refers to the map. These are the setup arguments when creating a
-map.
+A map is created based on a request from userspace, via the `bpf`_
+syscall (`bpf_cmd`_ BPF_MAP_CREATE), which returns a new file descriptor
+that refers to the map. These are the setup arguments to use when
+creating a map.
 
 .. code-block:: c
 
@@ -43,11 +43,11 @@ map.
 
 For programs under samples/bpf/ the ``load_bpf_file()`` call (from
 `samples/bpf/bpf_load`_) takes care of parsing elf file compiled by
-LLVM, pickup 'maps' section and creates maps via BPF syscall.  This is
+LLVM, pickups 'maps' section and creates maps via BPF syscall.  This is
 done by defining a ``struct bpf_map_def`` with an elf section
 __attribute__ ``SEC("maps")``, in the xxx_kern.c file.  The maps file
 descriptor is available in the userspace xxx_user.c file, via global
-array variable ``map_fd[]``, and the array map index correspons to the
+array variable ``map_fd[]``, and the array map index corresponds to the
 order the maps sections were defined in elf file of xxx_kern.c file.
 
 .. code-block:: c
@@ -75,10 +75,10 @@ order the maps sections were defined in elf file of xxx_kern.c file.
 Interacting with maps
 =====================
 
-Interacting with an eBPF maps from **userspace**, happens through the
+Interacting with an eBPF map from **userspace**, happens through the
 `bpf`_ syscall and a file descriptor.  The kernel
-`tools/lib/bpf/bpf.h`_ define some ``bpf_map_*()`` helper functions
-for wrapping the `bpf_cmd`_ relating to manipulating the map elements.
+`tools/lib/bpf/bpf.h`_ defines some ``bpf_map_*()`` helper functions
+for wrapping the `bpf_cmd`_ related to manipulating the map elements.
 
 .. code-block:: c
 
@@ -99,18 +99,18 @@ for wrapping the `bpf_cmd`_ relating to manipulating the map elements.
 Notice from userspace, there is no call to atomically increment or
 decrement the value 'in-place'. The bpf_map_update_elem() call will
 overwrite the existing value.  The flags argument allows
-bpf_map_update_elem() define semantics on weather the element exist:
+bpf_map_update_elem() to define semantics on whether the element exists:
 
 .. code-block:: c
 
   /* File: include/uapi/linux/bpf.h */
   /* flags for BPF_MAP_UPDATE_ELEM command */
   #define BPF_ANY	0 /* create new element or update existing */
-  #define BPF_NOEXIST	1 /* create new element if it didn't exist */
-  #define BPF_EXIST	2 /* update existing element */
+  #define BPF_NOEXIST	1 /* create new element only if it didn't exist */
+  #define BPF_EXIST	2 /* only update existing element */
 
-The eBPF-program running "kernel-side" have almost the same primitives
-(lookup/update/delete) for interacting with the map, but it interact
+The eBPF-program running "kernel-side" has almost the same primitives
+(lookup/update/delete) for interacting with the map, but it interacts
 more directly with the map data structures. For example the call
 ``bpf_map_lookup_elem()`` returns a direct pointer to the 'value'
 memory-element inside the kernel (while userspace gets a copy).  This
@@ -122,7 +122,7 @@ generating eBPF instructions.
 On the kernel side, implementing a map type requires defining some
 function (pointers) via `struct bpf_map_ops`_.  And eBPF programs have
 access to ``map_lookup_elem``, ``map_update_elem`` and
-``map_delete_elem``, which gets invoked from eBPF via bpf-helpers in
+``map_delete_elem``, which get invoked from eBPF via bpf-helpers in
 `kernel/bpf/helpers.c`_.
 
 .. section links
@@ -166,9 +166,9 @@ latest`_ available maps in the source code ::
 BPF_MAP_TYPE_ARRAY
 ==================
 
-As the name ``BPF_MAP_TYPE_ARRAY`` indicate this can be seen as an
+As the name ``BPF_MAP_TYPE_ARRAY`` indicates, this can be seen as an
 array.  All array elements are pre-allocated and zero initialized at
-init time.  Key as an index in array and can only be 4 byte (32-bit).
+init time.  Key is an index in array and can only be 4 bytes (32-bit).
 The constant size is defined by ``max_entries``.  This init-time
 constant also implies bpf_map_delete_elem (`array_map_delete_elem`_)
 is an invalid operation.
@@ -178,7 +178,7 @@ life of the eBPF program, which allows verifier+JIT to perform a wider
 range of optimizations.  E.g. `array_map_lookup_elem()`_ may be
 'inlined' by JIT.
 
-Inspecting kernel code look at bpf_map_ops `array_ops`_ in
+To inspect kernel code look at bpf_map_ops `array_ops`_ in
 kernel/bpf/arraymap.c.
 
 Small size gotcha, the ``value_size`` is rounded up to 8 bytes.
