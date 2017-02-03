@@ -112,31 +112,24 @@ files for defining the maps, but it uses another layout.  See man-page
 Interacting with maps
 =====================
 
-Interacting with an eBPF map from **userspace**, happens through the
-`bpf`_ syscall and a file descriptor.  The kernel
-`tools/lib/bpf/bpf.h`_ defines some ``bpf_map_*()`` helper functions
-for wrapping the `bpf_cmd`_ related to manipulating the map elements.
+Interacting with eBPF maps happens through some **lookup/update/delete**
+primitives.
+
+When writing eBFP programs using load helpers and libraries from
+samples/bpf/ and tools/lib/bpf/.  Common function name API have been
+created that hides the details of how kernel vs. userspace access
+these primitives (which is quite different).
+
+The common function names (parameters and return values differs):
 
 .. code-block:: c
 
-  enum bpf_cmd {
-	[...]
-	BPF_MAP_LOOKUP_ELEM,
-	BPF_MAP_UPDATE_ELEM,
-	BPF_MAP_DELETE_ELEM,
-	BPF_MAP_GET_NEXT_KEY,
-	[...]
-  };
-  /* Corresponding helper functions */
-  int bpf_map_lookup_elem(int fd, void *key, void *value);
-  int bpf_map_update_elem(int fd, void *key, void *value, __u64 flags);
-  int bpf_map_delete_elem(int fd, void *key);
-  int bpf_map_get_next_key(int fd, void *key, void *next_key);
+  void bpf_map_lookup_elem(map, void *key. ...);
+  void bpf_map_update_elem(map, void *key, ..., __u64 flags);
+  void bpf_map_delete_elem(map, void *key);
 
-Notice from userspace, there is no call to atomically increment or
-decrement the value 'in-place'. The bpf_map_update_elem() call will
-overwrite the existing value.  The flags argument allows
-bpf_map_update_elem() to define semantics on whether the element exists:
+The ``flags`` argument in ``bpf_map_update_elem()`` allows to define
+semantics on whether the element exists:
 
 .. code-block:: c
 
@@ -146,15 +139,109 @@ bpf_map_update_elem() to define semantics on whether the element exists:
   #define BPF_NOEXIST	1 /* create new element only if it didn't exist */
   #define BPF_EXIST	2 /* only update existing element */
 
-The eBPF-program running "kernel-side" has almost the same primitives
-(lookup/update/delete) for interacting with the map, but it interacts
-more directly with the map data structures. For example the call
-``bpf_map_lookup_elem()`` returns a direct pointer to the 'value'
-memory-element inside the kernel (while userspace gets a copy).  This
-allows the eBPF-program to atomically increment or decrement the value
-'in-place', by using appropiate compiler primitives like
-``__sync_fetch_and_add()``, which is understood by LLVM when
-generating eBPF instructions.
+Userspace
+---------
+The userspace API map helpers are defined in `tools/lib/bpf/bpf.h`_
+and looks like this:
+
+.. code-block:: c
+
+  /* Userspace helpers */
+  int bpf_map_lookup_elem(int fd, void *key, void *value);
+  int bpf_map_update_elem(int fd, void *key, void *value, __u64 flags);
+  int bpf_map_delete_elem(int fd, void *key);
+  /* Only userspace: */
+  int bpf_map_get_next_key(int fd, void *key, void *next_key);
+
+
+Interacting with an eBPF map from **userspace**, happens through the
+`bpf`_ syscall and a file descriptor.  See how the map handle ``int
+fd`` is a file descriptor .  On success, zero is returned, on
+failures -1 is returned and errno is set.
+
+Wrappers for the bpf syscall is implemented in `tools/lib/bpf/bpf.c`_,
+and ends up calling functions in `kernel/bpf/syscall.c`_, like
+`map_lookup_elem`_.
+
+.. code-block:: c
+
+  /* Corresponding syscall bpf commands from userspace */
+  enum bpf_cmd {
+	[...]
+	BPF_MAP_LOOKUP_ELEM,
+	BPF_MAP_UPDATE_ELEM,
+	BPF_MAP_DELETE_ELEM,
+	BPF_MAP_GET_NEXT_KEY,
+	[...]
+  };
+
+Notice how ``void *key`` and ``void *value`` are passed as a void
+pointers.  Given the memory seperation between kernel and userspace,
+this is a copy of the value.  Kernel primitives like
+``copy_from_user()`` and ``copy_to_user()`` are used, e.g. see
+`map_lookup_elem`_, which also kmalloc+kfree memory for a short
+period.
+
+From userspace, there is no function call to atomically increment or
+decrement the value 'in-place'. The bpf_map_update_elem() call will
+overwrite the existing value, with a copy of the value supplied.
+Depending on the map type, the overwrite will happen in an atomic way,
+e.g. using locking mechanisms specific to the map type.
+
+.. section links
+
+.. _tools/lib/bpf/bpf.h:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/bpf.h
+
+.. _tools/lib/bpf/bpf.c:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/bpf.c
+
+.. _map_lookup_elem: http://lxr.free-electrons.com/ident?i=map_lookup_elem
+
+.. _kernel/bpf/syscall.c:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/syscall.c
+
+
+Kernel-side eBPF program
+------------------------
+
+The API mapping for eBPF programs on the kernel-side is fairly hard to
+follow. It related to `samples/bpf/bpf_helpers.h`_ and maps into
+`kernel/bpf/helpers.c`_ via macros.
+
+.. code-block:: c
+
+  /* eBPF program helpers */
+  void *bpf_map_lookup_elem(void *map, void *key);
+  int bpf_map_update_elem(void *map, void *key, void *value, unsigned long long flags);
+  int bpf_map_delete_elem(void *map, void *key);
+
+The eBPF-program running kernel-side interacts more directly with the
+map data structures. For example the call ``bpf_map_lookup_elem()``
+returns a direct pointer to the 'value' memory-element inside the
+kernel (while userspace gets a copy).  This allows the eBPF-program to
+atomically increment or decrement the value 'in-place', by using
+appropiate compiler primitives like ``__sync_fetch_and_add()``, which
+is understood by LLVM when generating eBPF instructions.
+
+.. TODO::
+   1. describe how verifier validate map access to be safe.
+   2. describe int return codes of bpf_map_update_elem + bpf_map_delete_elem.
+
+.. section links
+
+.. _samples/bpf/bpf_helpers.h:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/samples/bpf/bpf_helpers.h
+
+.. _kernel/bpf/helpers.c:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/helpers.c
+
+
+Kernel map implementation
+-------------------------
+
+It might be useful to understand how the kernel implement a map type,
+in-order to help choosing the right type of map.
 
 On the kernel side, implementing a map type requires defining some
 function (pointers) via `struct bpf_map_ops`_.  And eBPF programs have
@@ -164,15 +251,7 @@ access to ``map_lookup_elem``, ``map_update_elem`` and
 
 .. section links
 
-.. _tools/lib/bpf/bpf.h:
-   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/bpf.h
-
-.. _bpf_cmd: http://lxr.free-electrons.com/ident?i=bpf_cmd
-
 .. _struct bpf_map_ops: http://lxr.free-electrons.com/ident?i=bpf_map_ops
-
-.. _kernel/bpf/helpers.c:
-   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/helpers.c
 
 
 =============
