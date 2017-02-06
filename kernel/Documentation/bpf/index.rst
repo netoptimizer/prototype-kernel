@@ -49,6 +49,7 @@ covered by this documentation.
    :maxdepth: 1
 
    ebpf_maps
+   ebpf_maps_types
    bcc_tool_chain
 
 .. links:
