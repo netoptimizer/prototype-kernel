@@ -34,8 +34,37 @@ but remember to `lookup latest`_ available maps in the source code.
 .. _lookup latest:
    http://lxr.free-electrons.com/ident?i=bpf_map_type
 
+Implementation details
+======================
+
+In-order to understand and follow the descriptions of the different
+map types, in is useful for the reader to understand how a map type is
+implemented by the kernel.
+
+On the kernel side, implementing a map type requires defining some
+function call (pointers) via `struct bpf_map_ops`_.  The eBPF programs
+(and userspace) have access to the functions calls
+``map_lookup_elem``, ``map_update_elem`` and ``map_delete_elem``,
+which get invoked from eBPF via bpf-helpers in `kernel/bpf/helpers.c`_,
+or via userspace the bpf syscall (as described in :doc:`ebpf_maps`).
+
+:ref:`Creating a map` requires supplying the following configuration
+attributes: map_type, key_size, value_size, max_entries and map_flags.
+
+.. section links
+
+.. _struct bpf_map_ops: http://lxr.free-electrons.com/ident?i=bpf_map_ops
+
+.. _kernel/bpf/helpers.c:
+   https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/helpers.c
+
+
 BPF_MAP_TYPE_ARRAY
 ==================
+
+Implementation defined in `kernel/bpf/arraymap.c`_ via struct
+bpf_map_ops `array_ops`_.
+
 
 As the name ``BPF_MAP_TYPE_ARRAY`` indicates, this can be seen as an
 array.  All array elements are pre-allocated and zero initialized at
@@ -49,8 +78,6 @@ life of the eBPF program, which allows verifier+JIT to perform a wider
 range of optimizations.  E.g. `array_map_lookup_elem()`_ may be
 'inlined' by JIT.
 
-To inspect kernel code look at bpf_map_ops `array_ops`_ in
-kernel/bpf/arraymap.c.
 
 Small size gotcha, the ``value_size`` is rounded up to 8 bytes.
 
@@ -77,6 +104,9 @@ the value, the API-user must use primitives like ``__sync_fetch_and_add()``
 when updating the value in-place.
 
 .. section links
+
+.. _kernel/bpf/arraymap.c:
+   http://lxr.free-electrons.com/source/kernel/bpf/arraymap.c
 
 .. _array_ops:
    http://lxr.free-electrons.com/ident?i=array_ops

@@ -29,6 +29,7 @@ and accessed by multiple programs (from man-page `bpf(2)`_):
  up to the user process and eBPF program to decide what they store
  inside maps.
 
+.. _`Creating a map`:
 
 Creating a map
 ==============
@@ -50,6 +51,8 @@ syscall.  This also implies that API users must clear/zero
 sizeof(bpf_attr), as compiler can size-align the struct differently,
 to avoid garbage data to be interpreted as parameters by future
 kernels.
+
+The following configuration attributes are needed when creating the map:
 
 .. code-block:: c
 
@@ -246,24 +249,6 @@ is understood by LLVM when generating eBPF instructions.
 
 .. _kernel/bpf/helpers.c:
    https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/helpers.c
-
-
-Kernel map implementation
--------------------------
-
-It might be useful to understand how the kernel implement a map type,
-in-order to help choosing the right type of map.
-
-On the kernel side, implementing a map type requires defining some
-function (pointers) via `struct bpf_map_ops`_.  And eBPF programs have
-access to ``map_lookup_elem``, ``map_update_elem`` and
-``map_delete_elem``, which get invoked from eBPF via bpf-helpers in
-`kernel/bpf/helpers.c`_.
-
-.. section links
-
-.. _struct bpf_map_ops: http://lxr.free-electrons.com/ident?i=bpf_map_ops
-
 
 .. links
 
