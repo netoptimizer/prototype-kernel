@@ -2,11 +2,17 @@
 eBPF maps
 =========
 
+This document describes what eBPF maps are, how you create them
+(`Creating a map`_), and how to interact with them (`Interacting with
+maps`_).  The different map types available are described here:
+:doc:`ebpf_maps_types`.
+
 Using eBPF maps is a method to keep state between invocations of the
 eBPF program, and allows sharing data between eBPF kernel programs,
 and also between kernel and user-space applications.
 
-Key/value store with arbitrary structure (from man-page `bpf(2)`_):
+Basically a key/value store with arbitrary structure (from man-page
+`bpf(2)`_):
 
  eBPF maps are a generic data structure for storage of different data
  types.  Data types are generally treated as binary blobs, so a user
@@ -23,14 +29,16 @@ and accessed by multiple programs (from man-page `bpf(2)`_):
  up to the user process and eBPF program to decide what they store
  inside maps.
 
+
 Creating a map
 ==============
 
 A map is created based on a request from userspace, via the `bpf`_
-syscall (`bpf_cmd`_ BPF_MAP_CREATE), which returns a new file descriptor
-that refers to the map.  On error, -1 is returned and errno is set to
-EINVAL, EPERM, or ENOMEM. These are the struct ``bpf_attr`` setup
-arguments to use when creating a map via the syscall:
+syscall (specifically `bpf_cmd`_ BPF_MAP_CREATE), which returns a new
+file descriptor that refers to the map.  On error, -1 is returned and
+errno is set to EINVAL, EPERM, or ENOMEM. These are the struct
+``bpf_attr`` setup arguments to use when creating a map via the
+syscall:
 
 .. code-block:: c
 
@@ -73,7 +81,7 @@ file, via global array variable ``map_fd[]``, and the array map index
 corresponds to the order the maps sections were defined in elf file of
 xxx_kern.c file.  Behind the scenes it is the ``load_bpf_file()`` call
 (from `samples/bpf/bpf_load`_) that takes care of parsing ELF file
-compiled by LLVM, pickup 'maps' section and creates maps via BPF
+compiled by LLVM, pickup 'maps' section and creates maps via the bpf
 syscall.
 
 .. code-block:: c

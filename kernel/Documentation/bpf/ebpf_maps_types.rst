@@ -2,12 +2,18 @@
 Types of eBPF maps
 ==================
 
-There are diffent types of maps available.  The type definitions
-needed when creating the maps are defined in include/uapi/linux/bpf.h
-as ``enum bpf_map_type``.
+This document describes the different types of eBPF maps available,
+and goes into details about the individual map types.  The purpose is
+to help choose the right type based on the individual use-case.
+Creating and interacting with maps are described in another document
+here: :doc:`ebpf_maps`.
 
-Example of `bpf_map_type`_ from kernel 4.9, but remember to `lookup
-latest`_ available maps in the source code ::
+The different types of maps available, are defined by ``enum
+bpf_map_type`` in include/uapi/linux/bpf.h.  These type definition
+"names" are needed when creating the map. Example of ``bpf_map_type``,
+but remember to `lookup latest`_ available maps in the source code.
+
+.. code-block:: c
 
  enum bpf_map_type {
 	BPF_MAP_TYPE_UNSPEC,
@@ -27,9 +33,6 @@ latest`_ available maps in the source code ::
 
 .. _lookup latest:
    http://lxr.free-electrons.com/ident?i=bpf_map_type
-
-.. _bpf_map_type:
-   http://lxr.free-electrons.com/source/tools/include/uapi/linux/bpf.h?v=4.9#L78
 
 BPF_MAP_TYPE_ARRAY
 ==================
