@@ -7,7 +7,7 @@ Introduction
 
 The Berkeley Packet Filter (BPF) started (`article 1992`_) as a
 special-purpose virtual machine (register based filter evaluator) for
-filtering network packets, best known for the its in tcpdump. It is
+filtering network packets, best known for its use in tcpdump. It is
 documented in the kernel tree, in the first part of:
 `Documentation/networking/filter.txt`_
 

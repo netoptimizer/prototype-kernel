@@ -123,6 +123,9 @@ files for defining the maps, but it uses another layout.  See man-page
 .. _tc bpf examples:
    https://git.kernel.org/cgit/linux/kernel/git/shemminger/iproute2.git/tree/examples/bpf
 
+.. _tc-bpf(8): http://man7.org/linux/man-pages/man8/tc-bpf.8.html
+
+
 Interacting with maps
 =====================
 
@@ -255,6 +258,3 @@ is understood by LLVM when generating eBPF instructions.
 .. _bpf(2): http://man7.org/linux/man-pages/man2/bpf.2.html
 
 .. _bpf: http://man7.org/linux/man-pages/man2/bpf.2.html
-
-.. _tc-bpf(8): http://man7.org/linux/man-pages/man8/tc-bpf.8.html
-

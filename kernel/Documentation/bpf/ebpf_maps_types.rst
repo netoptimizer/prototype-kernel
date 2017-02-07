@@ -65,7 +65,6 @@ BPF_MAP_TYPE_ARRAY
 Implementation defined in `kernel/bpf/arraymap.c`_ via struct
 bpf_map_ops `array_ops`_.
 
-
 As the name ``BPF_MAP_TYPE_ARRAY`` indicates, this can be seen as an
 array.  All array elements are pre-allocated and zero initialized at
 init time.  Key is an index in array and can only be 4 bytes (32-bit).
@@ -77,7 +76,6 @@ Optimized for fastest possible lookup. The size is constant for the
 life of the eBPF program, which allows verifier+JIT to perform a wider
 range of optimizations.  E.g. `array_map_lookup_elem()`_ may be
 'inlined' by JIT.
-
 
 Small size gotcha, the ``value_size`` is rounded up to 8 bytes.
 
@@ -119,9 +117,3 @@ when updating the value in-place.
 
 .. _samples/bpf/sockex1_kern.c:
    https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/samples/bpf/sockex1_kern.c
-
-
-.. Notes
-   git log kernel/bpf/arraymap.c|tail -33
-   git log kernel/bpf/hashtab.c|tail -33
-   will give an overview of key hash and array map principles.
