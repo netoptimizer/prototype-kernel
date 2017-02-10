@@ -30,6 +30,10 @@ modules:
 install:
 	$(MAKE) -C $(kbuilddir) M=$$PWD KDIR=$$PWD modules_install
 
+bpf:
+	$(MAKE) -C samples/bpf/ kbuilddir=$(kbuilddir)
+
+
 # Example usage:
 #  make push_remote kbuilddir=~/git/kernel/net-next/ HOST=192.168.122.49
 push_remote: modules
