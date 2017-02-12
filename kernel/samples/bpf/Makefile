@@ -19,7 +19,8 @@ CLANG ?= clang
 
 CC = gcc
 
-NOSTDINC_FLAGS=-nostdinc -isystem /usr/lib/gcc/x86_64-redhat-linux/6.2.1/include
+NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
+
 LINUXINCLUDE=-I $(KERNEL)/arch/x86/include -I$(KERNEL)/arch/x86/include/generated/uapi -I$(KERNEL)/arch/x86/include/generated -I$(KERNEL)/include -I$(KERNEL)/arch/x86/include/uapi -I$(KERNEL)/include/uapi -I$(KERNEL)/include/generated/uapi -include $(KERNEL)/include/linux/kconfig.h  -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
