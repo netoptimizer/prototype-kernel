@@ -5,6 +5,10 @@
 #ifndef __LIBBPF_H
 #define __LIBBPF_H
 
+/* Notice: This include is tricky because, due to Makefile
+ * construct of -I$(KERNEL)/tools/lib/ this include find
+ * tools/lib/bpf/bpf.h which defines the userspace API
+ */
 #include <bpf/bpf.h>
 
 struct bpf_insn;

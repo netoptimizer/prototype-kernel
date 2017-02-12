@@ -19,10 +19,6 @@ static const char *__doc__=
 
 #include <arpa/inet.h>
 
-// FIXME: Why is this not needed when compiled in kernel tree???
-//#include "bpf.h" // before "bpf_load.h"
-#include <bpf/bpf.h> // via -I$(KERNEL)/tools/lib
-
 #include "bpf_load.h"
 #include "bpf_util.h"
 #include "libbpf.h"

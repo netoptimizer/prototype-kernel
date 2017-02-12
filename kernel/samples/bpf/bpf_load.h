@@ -7,14 +7,6 @@
 #define MAX_MAPS 32
 #define MAX_PROGS 32
 
-/* Strange: This BPF_LOG_BUF_SIZE gets defined when compiling
- *  tools/lib/bpf/bpf.c into bpf.o, via tools/lib/bpf/bpf.h
- * But tools/lib/bpf/bpf.h does not get included
- */
-//#ifndef BPF_LOG_BUF_SIZE
-//#define BPF_LOG_BUF_SIZE 65536
-//#endif
-
 extern int map_fd[MAX_MAPS];
 extern int prog_fd[MAX_PROGS];
 extern int event_fd[MAX_PROGS];
