@@ -1,10 +1,17 @@
-kbuilddir ?= /lib/modules/$(shell uname -r)/build/
-
 TARGETS = xdp_ddos01_blacklist
 
+kbuilddir ?= /lib/modules/$(shell uname -r)/build/
 KERNEL=$(kbuilddir)
-CFLAGS=-I$(KERNEL)/usr/include -I$(KERNEL)/tools/lib \
-	-I$(KERNEL)/tools/include -I$(KERNEL)/include/
+
+CFLAGS := -O2 -Wall
+
+CGLAGS += -I$(KERNEL)/include/
+CFLAGS += -I$(KERNEL)/usr/include
+CFLAGS += -I$(KERNEL)/tools/lib -I$(KERNEL)/tools/include
+CFLAGS += -I$(KERNEL)/tools/perf
+# Strange dependency to "selftests"
+CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
+
 LDFLAGS= -lelf
 
 LLC ?= llc
@@ -67,6 +74,8 @@ bpf.o: $(KERNEL)/tools/lib/bpf/bpf.c
 bpf_load.o: $(KERNEL)/samples/bpf/bpf_load.c
 	$(CC) $(CFLAGS) -I$(KERNEL)/tools/perf -o $@ -c $<
 
+
+
 %_kern.o: %_kern.c
 	$(CLANG) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
@@ -74,6 +83,9 @@ bpf_load.o: $(KERNEL)/samples/bpf/bpf_load.c
 	    -Wno-gnu-variable-sized-type-not-at-end \
 	    -Wno-tautological-compare \
 	    -O2 -emit-llvm -c $< -o -| $(LLC) -march=bpf -filetype=obj -o $@
+
+xdp_ddos01_blacklist_user.o: xdp_ddos01_blacklist_user.c
+	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
 
 xdp_ddos01_blacklist: xdp_ddos01_blacklist_user.o  bpf.o bpf_load.o
 	make $@_kern.o
