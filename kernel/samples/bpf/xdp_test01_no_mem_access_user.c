@@ -115,26 +115,22 @@ static bool set_xdp_action(__u64 action)
 static bool stats_collect(struct stats_record *record)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
-	const unsigned int nr_keys = 1;
 	__u64 values[nr_cpus];
-	__u32 key;
+	__u32 key = 0;
+	__u64 sum = 0;
 	int i;
 
-	for (key = 0; key < nr_keys; key++) {
-		__u64 sum = 0;
-
-		if ((bpf_map_lookup_elem(map_fd[0], &key, values)) != 0) {
-			printf("DEBUG: bpf_map_lookup_elem failed\n");
-			return false;
-		}
-
-		/* Sum values from each CPU */
-		for (i = 0; i < nr_cpus; i++) {
-			sum += values[i];
-		}
-
-		record->data[key] = sum;
+	/* Notice map is percpu: BPF_MAP_TYPE_PERCPU_ARRAY */
+	if ((bpf_map_lookup_elem(map_fd[0], &key, values)) != 0) {
+		printf("DEBUG: bpf_map_lookup_elem failed\n");
+		return false;
 	}
+	/* Sum values from each CPU */
+	for (i = 0; i < nr_cpus; i++) {
+		sum += values[i];
+	}
+	record->data[key] = sum;
+
 	return true;
 }
 
