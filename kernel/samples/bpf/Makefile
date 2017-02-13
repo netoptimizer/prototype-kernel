@@ -1,5 +1,41 @@
-TARGETS = xdp_ddos01_blacklist
+#
+# Makefile for out-of-tree building eBPF programs
+#  similar to kernel/samples/bpf/
+#
+# Still depend on a kernel source tree.
+#
+TARGETS := xdp_ddos01_blacklist
+TARGETS += xdp1
 
+# Files under kernel/samples/bpf/ have a name-scheme:
+# ---------------------------------------------------
+# The eBPF program is called xxx_kern.c. This is the restricted-C
+# code, that need to be compiled with LLVM/clang, to generate an ELF
+# binary containing the eBPF instructions.
+#
+# The userspace program called xxx_user.c, is a regular C-code
+# program.  It need two external components from kernel tree, from
+# samples/bpf/ and tools/lib/bpf/.
+#
+# 1) When loading the ELF eBPF binary is uses the API load_bpf_file()
+#    via "bpf_load.h" (compiles against kernels samples/bpf/bpf_load.c).
+#
+# 2) The API for interacting with eBPF comes from tools/lib/bpf/bpf.h.
+#    For now, tools/lib/bpf/bpf.c is compiled directly, and executable
+#    is statically linked with object file.
+#
+#    This is likely improper use of tools/lib/bpf/, that can generate
+#    shared library code.  Hopefully someone will cleanup this
+#    Makefile and correct this usage.
+
+
+# Generate file name-scheme based on TARGETS
+KERN_SOURCES = ${TARGETS:=_kern.c}
+USER_SOURCES = ${TARGETS:=_user.c}
+KERN_OBJECTS = ${KERN_SOURCES:.c=.o}
+USER_OBJECTS = ${USER_SOURCES:.c=.o}
+
+# Notice: the kbuilddir can be redefined on make cmdline
 kbuilddir ?= /lib/modules/$(shell uname -r)/build/
 KERNEL=$(kbuilddir)
 
@@ -9,11 +45,18 @@ CGLAGS += -I$(KERNEL)/include/
 CFLAGS += -I$(KERNEL)/usr/include
 CFLAGS += -I$(KERNEL)/tools/lib -I$(KERNEL)/tools/include
 CFLAGS += -I$(KERNEL)/tools/perf
-# Strange dependency to "selftests"
+# Strange dependency to "selftests" due to "bpf_util.h"
 CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
 
 LDFLAGS= -lelf
 
+# Objects that xxx_user program is linked with:
+OBJECT_LIBBPF  = bpf.o
+OBJECT_LOADBPF = bpf_load.o
+OBJECTS = $(OBJECT_LIBBPF) $(OBJECT_LOADBPF)
+
+# Allows pointing LLC/CLANG to another LLVM backend, redefine on cmdline:
+#  make LLC=~/git/llvm/build/bin/llc CLANG=~/git/llvm/build/bin/clang
 LLC ?= llc
 CLANG ?= clang
 
@@ -24,12 +67,22 @@ NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 LINUXINCLUDE=-I $(KERNEL)/arch/x86/include -I$(KERNEL)/arch/x86/include/generated/uapi -I$(KERNEL)/arch/x86/include/generated -I$(KERNEL)/include -I$(KERNEL)/arch/x86/include/uapi -I$(KERNEL)/include/uapi -I$(KERNEL)/include/generated/uapi -include $(KERNEL)/include/linux/kconfig.h  -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
-all: linux-src-devel-headers verify_llvm_target_bpf $(TARGETS)
+all: dependencies $(TARGETS) $(KERN_OBJECTS)
+
+.PHONY: dependencies clean verify_cmds verify_llvm_target_bpf $(CLANG) $(LLC)
+
+test:
+	@echo TEST-TARGET
+	@echo kbuilddir=$(KERNEL)
+	@echo KERN_SOURCES $(KERN_SOURCES)
 
 clean:
-	rm -f bpf_load.o  bpf.o
-	rm -f xdp_ttl xdp_ttl_kern.o xdp_ttl_kern.bc xdp_ttl_user.o
-	rm -f xdp_passer xdp_passer_kern.o xdp_passer_kern.bc xdp_passer_user.o
+	rm -f $(OBJECTS)
+	rm -f $(TARGETS)
+	rm -f $(KERN_OBJECTS)
+	rm -f $(USER_OBJECTS)
+
+dependencies: verify_llvm_target_bpf linux-src-devel-headers
 
 linux-src:
 	@if ! test -d $(KERNEL)/; then \
@@ -68,16 +121,15 @@ verify_llvm_target_bpf: verify_cmds
 		exit 2; \
 	else true; fi
 
-
-bpf.o: $(KERNEL)/tools/lib/bpf/bpf.c
+# The fake-minimal-libbpf
+$(OBJECT_LIBBPF): $(KERNEL)/tools/lib/bpf/bpf.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-bpf_load.o: $(KERNEL)/samples/bpf/bpf_load.c
-	$(CC) $(CFLAGS) -I$(KERNEL)/tools/perf -o $@ -c $<
+$(OBJECT_LOADBPF): $(KERNEL)/samples/bpf/bpf_load.c
+	$(CC) $(CFLAGS) -o $@ -c $<
 
-
-
-%_kern.o: %_kern.c
+# Compiling of eBPF restricted-C code with LLVM
+$(KERN_OBJECTS): %.o: %.c
 	$(CLANG) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
 	    -Wno-compare-distinct-pointer-types \
@@ -85,11 +137,5 @@ bpf_load.o: $(KERNEL)/samples/bpf/bpf_load.c
 	    -Wno-tautological-compare \
 	    -O2 -emit-llvm -c $< -o -| $(LLC) -march=bpf -filetype=obj -o $@
 
-xdp_ddos01_blacklist_user.o: xdp_ddos01_blacklist_user.c
-	$(CC) $(CFLAGS) $(LDFLAGS) -c -o $@ $<
-
-xdp_ddos01_blacklist: xdp_ddos01_blacklist_user.o  bpf.o bpf_load.o
-	make $@_kern.o
-	$(CC) $(CFLAGS) -I$(KERNEL)/tools/include/uapi/linux $(LDFLAGS) -o $@ $^
-
-.PHONY: verify_cmds verify_target_bpf $(CLANG) $(LLC)
+$(TARGETS): %: %_user.c $(OBJECTS)
+	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
