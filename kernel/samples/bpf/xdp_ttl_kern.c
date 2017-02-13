@@ -24,6 +24,17 @@ struct bpf_map_def SEC("maps") ttl_map = {
 	.max_entries = 256,
 };
 
+struct hc_info {
+	u8 hop_count;
+};
+
+struct bpf_map_def SEC("maps") ip2hc_map = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY, // What to choose HASH???
+	.key_size = sizeof(u32), /* IP-address */
+	.value_size = sizeof(struct hc_info), // kernel round up ARRAY type
+	.max_entries = 100000,
+};
+
 //#define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from  bpf_trace_printk()
@@ -148,7 +159,6 @@ int  xdp_ttl_program(struct xdp_md *ctx)
 
 	bpf_debug("Reached L3: L3off:%llu proto:0x%x\n", l3_offset, eth_proto);
 
-	/* */
 	action = handle_eth_protocol(ctx, eth_proto, l3_offset);
 	return action;
 }
