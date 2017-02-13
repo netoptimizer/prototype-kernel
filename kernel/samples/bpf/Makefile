@@ -5,7 +5,7 @@
 # Still depend on a kernel source tree.
 #
 TARGETS := xdp_ddos01_blacklist
-#TARGETS += xdp1
+TARGETS += xdp_ttl
 
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
