@@ -7,6 +7,8 @@
 TARGETS := xdp_ddos01_blacklist
 TARGETS += xdp_ttl
 
+TARGETS += xdp_test01_no_mem_access
+
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
 # The eBPF program is called xxx_kern.c. This is the restricted-C

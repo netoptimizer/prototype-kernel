@@ -1,0 +1,174 @@
+/* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
+ */
+static const char *__doc__=
+ " XDP test01: Speed when not touching packet memory";
+
+#include <assert.h>
+#include <errno.h>
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdbool.h>
+#include <string.h>
+#include <unistd.h>
+
+#include <sys/resource.h>
+#include <getopt.h>
+
+#include <arpa/inet.h>
+
+#include "bpf_load.h"
+#include "bpf_util.h"
+#include "libbpf.h"
+
+static int ifindex = -1;
+
+/* Exit return codes */
+#define EXIT_OK                 0
+#define EXIT_FAIL               1
+#define EXIT_FAIL_OPTION        2
+#define EXIT_FAIL_XDP           3
+
+static void int_exit(int sig)
+{
+	fprintf(stderr, "Interrupted: Removing XDP program on ifindex:%d\n",
+		ifindex);
+	if (ifindex > -1)
+		set_link_xdp_fd(ifindex, -1);
+	exit(EXIT_OK);
+}
+
+static const struct option long_options[] = {
+	{"help",	no_argument,		NULL, 'h' },
+	{"ifindex",	required_argument,	NULL, 'i' },
+	{0, 0, NULL,  0 }
+};
+
+static void usage(char *argv[])
+{
+	int i;
+	printf("\nDOCUMENTATION:\n%s\n", __doc__);
+	printf("\n");
+	printf(" Usage: %s (options-see-below)\n",
+	       argv[0]);
+	printf(" Listing options:\n");
+	for (i = 0; long_options[i].name != 0; i++) {
+		printf(" --%-12s", long_options[i].name);
+		if (long_options[i].flag != NULL)
+			printf(" flag (internal value:%d)",
+			       *long_options[i].flag);
+		else
+			printf(" short-option: -%c",
+			       long_options[i].val);
+		printf("\n");
+	}
+	printf("\n");
+}
+
+struct stats_record {
+	__u64 data[1];
+};
+
+static bool stats_collect(struct stats_record *record)
+{
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	const unsigned int nr_keys = 1;
+	__u64 values[nr_cpus];
+	__u32 key;
+	int i;
+
+	for (key = 0; key < nr_keys; key++) {
+		__u64 sum = 0;
+
+		if ((bpf_map_lookup_elem(map_fd[0], &key, values)) != 0) {
+			printf("DEBUG: bpf_map_lookup_elem failed\n");
+			return false;
+		}
+
+		/* Sum values from each CPU */
+		for (i = 0; i < nr_cpus; i++) {
+			sum += values[i];
+		}
+
+		record->data[key] = sum;
+	}
+	return true;
+}
+
+static void stats_poll(int interval)
+{
+	struct stats_record record;
+	__u64 prev = 0, count;
+
+	memset(&record, 0, sizeof(record));
+
+	while (1) {
+		if (!stats_collect(&record))
+			exit(EXIT_FAIL_XDP);
+
+		count = record.data[0];
+		printf("RX: count=%llu prev=%llu pps=%llu\n",
+		       count, prev, (count - prev)/interval);
+
+		prev = count;
+		sleep(interval);
+	}
+}
+
+int main(int argc, char **argv)
+{
+	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
+	char filename[256];
+	int longindex = 0;
+	int opt;
+
+	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
+
+	/* Parse commands line args */
+	while ((opt = getopt_long(argc, argv, "hi:",
+				  long_options, &longindex)) != -1) {
+		switch (opt) {
+		case 'i':
+			ifindex = atoi(optarg);
+			break;
+		case 'h':
+		default:
+			usage(argv);
+			return EXIT_FAIL_OPTION;
+		}
+	}
+	/* Required options */
+	if (ifindex == -1) {
+		printf("**Error**: required option --ifindex missing");
+		usage(argv);
+		return EXIT_FAIL_OPTION;
+	}
+
+	/* Increase resource limits */
+	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+		perror("setrlimit(RLIMIT_MEMLOCK, RLIM_INFINITY)");
+		return 1;
+	}
+
+	if (load_bpf_file(filename)) {
+		printf("%s", bpf_log_buf);
+		return 1;
+	}
+
+	if (!prog_fd[0]) {
+		printf("load_bpf_file: %s\n", strerror(errno));
+		return 1;
+	}
+
+	/* Remove XDP program when program is interrupted */
+	signal(SIGINT, int_exit);
+
+	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
+		printf("link set xdp fd failed\n");
+		return EXIT_FAIL_XDP;
+	}
+
+	stats_poll(1);
+
+	return EXIT_OK;
+}
