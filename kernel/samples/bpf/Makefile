@@ -129,13 +129,18 @@ $(OBJECT_LOADBPF): $(KERNEL)/samples/bpf/bpf_load.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 # Compiling of eBPF restricted-C code with LLVM
+#  clang option -S generated output file with suffix .ll
+#   which is the non-binary LLVM assembly language format
+#   (normally LLVM bitcode format .bc is generated)
+#
 $(KERN_OBJECTS): %.o: %.c
-	$(CLANG) $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
+	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
 	    -Wno-compare-distinct-pointer-types \
 	    -Wno-gnu-variable-sized-type-not-at-end \
 	    -Wno-tautological-compare \
-	    -O2 -emit-llvm -c $< -o -| $(LLC) -march=bpf -filetype=obj -o $@
+	    -O2 -emit-llvm -c $<
+	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS)
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
