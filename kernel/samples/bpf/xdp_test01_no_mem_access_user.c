@@ -42,6 +42,7 @@ static void int_exit(int sig)
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"ifindex",	required_argument,	NULL, 'i' },
+	{"sec", 	required_argument,	NULL, 's' },
 	{0, 0, NULL,  0 }
 };
 
@@ -113,7 +114,6 @@ static void stats_poll(int interval)
 
 		count = record.data[0];
 		pps = (count - prev)/interval;
-
 		printf("RX: XDP_DROP: %llu pps (%'llu pps)\n", pps, pps);
 
 		prev = count;
@@ -124,6 +124,7 @@ static void stats_poll(int interval)
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
+	int interval = 1;
 	char filename[256];
 	int longindex = 0;
 	int opt;
@@ -131,11 +132,14 @@ int main(int argc, char **argv)
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hi:",
+	while ((opt = getopt_long(argc, argv, "hi:s:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'i':
 			ifindex = atoi(optarg);
+			break;
+		case 's':
+			interval = atoi(optarg);
 			break;
 		case 'h':
 		default:
@@ -174,7 +178,7 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_XDP;
 	}
 
-	stats_poll(1);
+	stats_poll(interval);
 
 	return EXIT_OK;
 }
