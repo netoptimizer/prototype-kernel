@@ -71,7 +71,7 @@ Page per packet
 
 .. memory model
 
-On RX many NIC drivers splitup a memory page, to share it for multiple
+On RX many NIC drivers split up a memory page, to share it for multiple
 packets, in-order to conserve memory.  Doing so complicates handling
 and accounting of these memory pages, which affects performance.
 Particularly the extra atomic refcnt handling needed for the page can

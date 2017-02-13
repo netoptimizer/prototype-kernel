@@ -2,7 +2,7 @@
 End-user documentation
 ======================
 
-This part of the XDP documentation is targetted end-users, describing
+This part of the XDP documentation is targeted at end-users, describing
 how to use and setup XDP.
 
 The XDP program running (inside the driver hook point) is an eBPF
