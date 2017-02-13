@@ -78,7 +78,7 @@ static void stats_print_headers(void)
 	{
 	int debug_notice_interval = 3;
 	char msg[] =
-		"\nDebug outout avail via:\n"
+		"\nDebug output available via:\n"
 		" sudo cat /sys/kernel/debug/tracing/trace_pipe\n\n";
 	printf(msg, debug_notice_interval);
 	}

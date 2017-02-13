@@ -34,7 +34,7 @@ packet-data.  Thus, eBPF uses some "direct access" instruction for
 accessing this data, but for safety this need to pass the in-kernel
 validator.
 
-Walking the packet data, requires writing the boundry checks in a
+Walking the packet data, requires writing the boundary checks in a
 specialized manor.
 
 Like::
