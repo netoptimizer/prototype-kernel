@@ -11,6 +11,7 @@ static const char *__doc__=
 #include <stdbool.h>
 #include <string.h>
 #include <unistd.h>
+#include <locale.h>
 
 #include <sys/resource.h>
 #include <getopt.h>
@@ -99,16 +100,21 @@ static void stats_poll(int interval)
 {
 	struct stats_record record;
 	__u64 prev = 0, count;
+	__u64 pps;
 
 	memset(&record, 0, sizeof(record));
+
+	/* Trick to pretty printf with thousands separators use %' */
+	setlocale(LC_NUMERIC, "en_US");
 
 	while (1) {
 		if (!stats_collect(&record))
 			exit(EXIT_FAIL_XDP);
 
 		count = record.data[0];
-		printf("RX: count=%llu prev=%llu pps=%llu\n",
-		       count, prev, (count - prev)/interval);
+		pps = (count - prev)/interval;
+
+		printf("RX: XDP_DROP: %llu pps (%'llu pps)\n", pps, pps);
 
 		prev = count;
 		sleep(interval);
