@@ -5,7 +5,7 @@
 # Still depend on a kernel source tree.
 #
 TARGETS := xdp_ddos01_blacklist
-TARGETS += xdp1
+#TARGETS += xdp1
 
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
@@ -71,12 +71,13 @@ all: dependencies $(TARGETS) $(KERN_OBJECTS)
 
 .PHONY: dependencies clean verify_cmds verify_llvm_target_bpf $(CLANG) $(LLC)
 
-test:
-	@echo TEST-TARGET
-	@echo kbuilddir=$(KERNEL)
-	@echo KERN_SOURCES $(KERN_SOURCES)
-
 clean:
+	@find . -type f \
+		\( -name '*~' \
+		-o -name '*.ll' \
+		-o -name '*.bc' \
+		-o -name 'core' \) \
+		-exec rm -vf '{}' \;
 	rm -f $(OBJECTS)
 	rm -f $(TARGETS)
 	rm -f $(KERN_OBJECTS)
