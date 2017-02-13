@@ -86,6 +86,32 @@ static const char *action2str(int action)
 	return NULL;
 }
 
+static __u64 get_xdp_action(void)
+{
+	__u64 value;
+	__u32 key = 0;
+
+	/* map_fd[1] == map(xdp_action) */
+	if ((bpf_map_lookup_elem(map_fd[1], &key, &value)) != 0) {
+		printf("%s(): bpf_map_lookup_elem failed\n", __func__);
+		exit(EXIT_FAIL_XDP);
+	}
+	return value;
+}
+
+static bool set_xdp_action(__u64 action)
+{
+	__u64 value = action;
+	__u32 key = 0;
+
+	/* map_fd[1] == map(xdp_action) */
+	if ((bpf_map_update_elem(map_fd[1], &key, &value, BPF_ANY)) != 0) {
+		printf("%s(): bpf_map_update_elem failed\n", __func__);
+		return false;
+	}
+	return true;
+}
+
 static bool stats_collect(struct stats_record *record)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
@@ -93,9 +119,6 @@ static bool stats_collect(struct stats_record *record)
 	__u64 values[nr_cpus];
 	__u32 key;
 	int i;
-
-	/* Prepare for program to change action */
-	record->action = XDP_DROP;
 
 	for (key = 0; key < nr_keys; key++) {
 		__u64 sum = 0;
@@ -122,6 +145,9 @@ static void stats_poll(int interval)
 	__u64 pps;
 
 	memset(&record, 0, sizeof(record));
+
+	/* Read current XDP action */
+	record.action = get_xdp_action();
 
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
@@ -196,6 +222,8 @@ int main(int argc, char **argv)
 		printf("link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
+
+	set_xdp_action(XDP_DROP);
 
 	stats_poll(interval);
 

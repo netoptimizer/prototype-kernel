@@ -16,6 +16,14 @@ struct bpf_map_def SEC("maps") rx_cnt = {
 	.max_entries = 1,
 };
 
+struct bpf_map_def SEC("maps") xdp_action = {
+	.type = BPF_MAP_TYPE_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = 1,
+};
+
+
 SEC("xdp_test01_no_mem_access")
 int xdp_prog(struct xdp_md *ctx)
 {
@@ -25,10 +33,16 @@ int xdp_prog(struct xdp_md *ctx)
 	long *value;
 	u64 offset;
 	u32 key = 0;
+	int *action;
 
 	/* Validate packet length is minimum Eth header size */
 	offset = sizeof(*eth);
 	if (data + offset > data_end)
+		return XDP_DROP;
+
+	/* Allow userspace to choose XDP_DROP or XDP_PASS */
+	action = bpf_map_lookup_elem(&xdp_action, &key);
+	if (!action)
 		return XDP_DROP;
 
 	/* NOTICE: Don't touch packet data, only count packets */
@@ -37,8 +51,7 @@ int xdp_prog(struct xdp_md *ctx)
 	if (value)
 		*value += 1;
 
-	/* TODO: Allow userspace to choose XDP_DROP or XDP_PASS */
-	return XDP_DROP;
+	return *action;
 }
 
 char _license[] SEC("license") = "GPL";
