@@ -69,7 +69,22 @@ static void usage(char *argv[])
 
 struct stats_record {
 	__u64 data[1];
+	__u64 action;
 };
+
+#define XDP_ACTION_MAX (XDP_TX + 1)
+static const char *xdp_action_names[XDP_ACTION_MAX] = {
+	[XDP_ABORTED]	= "XDP_ABORTED",
+	[XDP_DROP]	= "XDP_DROP",
+	[XDP_PASS]	= "XDP_PASS",
+	[XDP_TX]	= "XDP_TX",
+};
+static const char *action2str(int action)
+{
+	if (action < XDP_ACTION_MAX)
+		return xdp_action_names[action];
+	return NULL;
+}
 
 static bool stats_collect(struct stats_record *record)
 {
@@ -78,6 +93,9 @@ static bool stats_collect(struct stats_record *record)
 	__u64 values[nr_cpus];
 	__u32 key;
 	int i;
+
+	/* Prepare for program to change action */
+	record->action = XDP_DROP;
 
 	for (key = 0; key < nr_keys; key++) {
 		__u64 sum = 0;
@@ -114,7 +132,8 @@ static void stats_poll(int interval)
 
 		count = record.data[0];
 		pps = (count - prev)/interval;
-		printf("RX: XDP_DROP: %llu pps (%'llu pps)\n", pps, pps);
+		printf("XDP action: %s : %llu pps (%'llu pps)\n",
+		       action2str(record.action), pps, pps);
 
 		prev = count;
 		sleep(interval);
