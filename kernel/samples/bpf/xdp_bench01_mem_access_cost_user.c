@@ -243,6 +243,10 @@ static void stats_poll(int interval)
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
 
+	/* Header */
+	printf("%-12s %-10s %-18s %-9s\n",
+	       "XDP_action", "pps ", "pps-human-readable", "mem");
+
 	while (1) {
 		sleep(interval);
 		prev_timestamp = timestamp;
@@ -255,7 +259,7 @@ static void stats_poll(int interval)
 		/* pps  = (count - prev)/interval; */
 		pps_ = (count - prev) / ((double) period / NANOSEC_PER_SEC);
 
-		printf("XDP action: %s : %.0f pps (%'.0f pps) mem:%s\n",
+		printf("%-12s %-10.0f %'-18.0f %-9s\n",
 		       action2str(record.action), pps_, pps_,
 		       mem2str(record.touch_mem));
 
