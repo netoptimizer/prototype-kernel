@@ -44,6 +44,7 @@ static const struct option long_options[] = {
 	{"ifindex",	required_argument,	NULL, 'i' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{"action", 	required_argument,	NULL, 'a' },
+	{"readmem", 	no_argument,		NULL, 'r' },
 	{0, 0, NULL,  0 }
 };
 
@@ -71,6 +72,7 @@ static void usage(char *argv[])
 struct stats_record {
 	__u64 data[1];
 	__u64 action;
+	__u64 touch_mem;
 };
 
 #define XDP_ACTION_MAX (XDP_TX + 1)
@@ -141,6 +143,45 @@ static void list_xdp_action(void)
 	printf("\n");
 }
 
+enum touch_mem_type {
+	NO_TOUCH = 0x0ULL,
+	READ_MEM = 0x1ULL,
+};
+static char* mem2str(enum touch_mem_type touch_mem)
+{
+	if (touch_mem == NO_TOUCH)
+		return "no_touch";
+	if (touch_mem == READ_MEM)
+		return "read";
+	printf("ERROR: Unknown memory touch type");
+	exit(EXIT_FAIL);
+}
+
+static __u64 get_touch_mem(void)
+{
+	__u64 value;
+	__u32 key = 0;
+
+	/* map_fd[2] == map(touch_memory) */
+	if ((bpf_map_lookup_elem(map_fd[2], &key, &value)) != 0) {
+		printf("%s(): bpf_map_lookup_elem failed\n", __func__);
+		exit(EXIT_FAIL_XDP);
+	}
+	return value;
+}
+
+static bool set_touch_mem(__u64 action)
+{
+	__u64 value = action;
+	__u32 key = 0;
+
+	/* map_fd[2] == map(touch_memory) */
+	if ((bpf_map_update_elem(map_fd[2], &key, &value, BPF_ANY)) != 0) {
+		printf("%s(): bpf_map_update_elem failed\n", __func__);
+		return false;
+	}
+	return true;
+}
 
 static bool stats_collect(struct stats_record *record)
 {
@@ -172,8 +213,9 @@ static void stats_poll(int interval)
 
 	memset(&record, 0, sizeof(record));
 
-	/* Read current XDP action */
-	record.action = get_xdp_action();
+	/* Read current XDP action and touch mem setting */
+	record.action    = get_xdp_action();
+	record.touch_mem = get_touch_mem();
 
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
@@ -184,8 +226,9 @@ static void stats_poll(int interval)
 
 		count = record.data[0];
 		pps = (count - prev)/interval;
-		printf("XDP action: %s : %llu pps (%'llu pps)\n",
-		       action2str(record.action), pps, pps);
+		printf("XDP action: %s : %llu pps (%'llu pps) mem:%s\n",
+		       action2str(record.action), pps, pps,
+		       mem2str(record.touch_mem));
 		// TODO: add nanosec accuracy measurement
 
 		prev = count;
@@ -202,12 +245,13 @@ int main(int argc, char **argv)
 	char filename[256];
 	int longindex = 0;
 	int interval = 1;
+	__u64 touch_mem = 0; /* Default: Don't touch packet memory */
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hi:s:a:",
+	while ((opt = getopt_long(argc, argv, "hir:s:a:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -218,6 +262,9 @@ int main(int argc, char **argv)
 			break;
 		case 'a':
 			action_str = optarg;
+			break;
+		case 'r':
+			touch_mem |= READ_MEM;
 			break;
 		case 'h':
 		default:
@@ -260,7 +307,9 @@ int main(int argc, char **argv)
 		return EXIT_FAIL;
 	}
 
+	/* Control behavior of XDP program */
 	set_xdp_action(action);
+	set_touch_mem(touch_mem);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);

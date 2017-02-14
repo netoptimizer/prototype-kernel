@@ -23,6 +23,12 @@ struct bpf_map_def SEC("maps") xdp_action = {
 	.max_entries = 1,
 };
 
+struct bpf_map_def SEC("maps") touch_memory = {
+	.type = BPF_MAP_TYPE_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = 1,
+};
 
 SEC("xdp_bench01")
 int xdp_prog(struct xdp_md *ctx)
@@ -30,10 +36,12 @@ int xdp_prog(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
+	volatile u16 eth_type;
 	long *value;
 	u64 offset;
 	u32 key = 0;
 	int *action;
+	u64 *touch_mem;
 
 	/* Validate packet length is minimum Eth header size */
 	offset = sizeof(*eth);
@@ -45,7 +53,16 @@ int xdp_prog(struct xdp_md *ctx)
 	if (!action)
 		return XDP_DROP;
 
-	/* NOTICE: Don't touch packet data, only count packets */
+	/* Default: Don't touch packet data, only count packets */
+	touch_mem = bpf_map_lookup_elem(&touch_memory, &key);
+	if (touch_mem && (*touch_mem == 1)) {
+		struct ethhdr *eth = data;
+
+		eth_type = eth->h_proto;
+		/* Avoid compile removing this: e.g Drop non 802.3 Ethertypes */
+		if (ntohs(eth_type) < ETH_P_802_3_MIN)
+			return XDP_DROP;
+	}
 
 	value = bpf_map_lookup_elem(&rx_cnt, &key);
 	if (value)
