@@ -43,6 +43,7 @@ static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"ifindex",	required_argument,	NULL, 'i' },
 	{"sec", 	required_argument,	NULL, 's' },
+	{"action", 	required_argument,	NULL, 'a' },
 	{0, 0, NULL,  0 }
 };
 
@@ -73,6 +74,7 @@ struct stats_record {
 };
 
 #define XDP_ACTION_MAX (XDP_TX + 1)
+#define XDP_ACTION_MAX_STRLEN 11
 static const char *xdp_action_names[XDP_ACTION_MAX] = {
 	[XDP_ABORTED]	= "XDP_ABORTED",
 	[XDP_DROP]	= "XDP_DROP",
@@ -111,6 +113,34 @@ static bool set_xdp_action(__u64 action)
 	}
 	return true;
 }
+
+static int parse_xdp_action(char *action_str)
+{
+	size_t maxlen;
+	__u64 action = -1;
+	int i;
+
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		maxlen = strnlen(xdp_action_names[i], XDP_ACTION_MAX_STRLEN);
+		if (strncmp(xdp_action_names[i], action_str, maxlen) == 0) {
+			action = i;
+			break;
+		}
+	}
+	return action;
+}
+
+static void list_xdp_action(void)
+{
+	int i;
+
+	printf("Available XDP --action <options>\n");
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		printf("\t%s\n", xdp_action_names[i]);
+	}
+	printf("\n");
+}
+
 
 static bool stats_collect(struct stats_record *record)
 {
@@ -156,24 +186,28 @@ static void stats_poll(int interval)
 		pps = (count - prev)/interval;
 		printf("XDP action: %s : %llu pps (%'llu pps)\n",
 		       action2str(record.action), pps, pps);
+		// TODO: add nanosec accuracy measurement
 
 		prev = count;
 		sleep(interval);
+		// TODO: measure time, don't rely on accuracy of sleep()
 	}
 }
 
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
-	int interval = 1;
+	char *action_str = NULL;
+	int action = XDP_DROP; /* Default action */
 	char filename[256];
 	int longindex = 0;
+	int interval = 1;
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hi:s:",
+	while ((opt = getopt_long(argc, argv, "hi:s:a:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'i':
@@ -182,9 +216,13 @@ int main(int argc, char **argv)
 		case 's':
 			interval = atoi(optarg);
 			break;
+		case 'a':
+			action_str = optarg;
+			break;
 		case 'h':
 		default:
 			usage(argv);
+			list_xdp_action();
 			return EXIT_FAIL_OPTION;
 		}
 	}
@@ -195,21 +233,34 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_OPTION;
 	}
 
+	/* Parse action string */
+	if (action_str) {
+		action = parse_xdp_action(action_str);
+		if (action < 0) {
+			printf("**Error**: Invalid XDP action\n");
+			usage(argv);
+			list_xdp_action();
+			return EXIT_FAIL_OPTION;
+		}
+	}
+
 	/* Increase resource limits */
 	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
 		perror("setrlimit(RLIMIT_MEMLOCK, RLIM_INFINITY)");
-		return 1;
+		return EXIT_FAIL;
 	}
 
 	if (load_bpf_file(filename)) {
 		printf("%s", bpf_log_buf);
-		return 1;
+		return EXIT_FAIL;
 	}
 
 	if (!prog_fd[0]) {
 		printf("load_bpf_file: %s\n", strerror(errno));
-		return 1;
+		return EXIT_FAIL;
 	}
+
+	set_xdp_action(action);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
@@ -218,8 +269,6 @@ int main(int argc, char **argv)
 		printf("link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
-
-	set_xdp_action(XDP_DROP);
 
 	stats_poll(interval);
 
