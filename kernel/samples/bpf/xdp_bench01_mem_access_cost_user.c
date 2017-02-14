@@ -1,7 +1,7 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " XDP test01: Speed when not touching packet memory";
+ " XDP bench01: Speed when not touching packet memory";
 
 #include <assert.h>
 #include <errno.h>

@@ -7,7 +7,7 @@
 TARGETS := xdp_ddos01_blacklist
 TARGETS += xdp_ttl
 
-TARGETS += xdp_test01_no_mem_access
+TARGETS += xdp_bench01_mem_access_cost
 
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------

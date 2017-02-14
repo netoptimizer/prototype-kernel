@@ -24,7 +24,7 @@ struct bpf_map_def SEC("maps") xdp_action = {
 };
 
 
-SEC("xdp_test01_no_mem_access")
+SEC("xdp_bench01")
 int xdp_prog(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
