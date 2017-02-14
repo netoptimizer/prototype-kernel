@@ -26,6 +26,12 @@ static const char *__doc__=
 static int ifindex = -1;
 static int verbose = 1;
 
+/* Export eBPF map for IPv4 blacklist as a file
+ * Gotcha need to mount:
+ *   mount -t bpf bpf /sys/fs/bpf/
+ */
+const char *file = "/sys/fs/bpf/ddos_blacklist";
+
 static void int_exit(int sig)
 {
 	fprintf(stderr, "Interrupted: Removing XDP program on ifindex:%d\n",
@@ -233,6 +239,14 @@ int main(int argc, char **argv)
 	}
 
 	blacklist_add("192.2.1.3");
+
+	/* Export map as a file */
+	if (bpf_obj_pin(map_fd[0], file) != 0) {
+		printf("ERROR: Cannot pin map file:%s err(%d):%s",
+		       file, errno, strerror(errno));
+		return EXIT_FAIL_XDP;
+	}
+
 	blacklist_add("192.2.1.3");
 	sleep(10);
 	blacklist_add("198.18.50.3");
