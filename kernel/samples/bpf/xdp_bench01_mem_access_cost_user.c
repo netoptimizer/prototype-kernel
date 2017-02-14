@@ -15,6 +15,7 @@ static const char *__doc__=
 
 #include <sys/resource.h>
 #include <getopt.h>
+#include <time.h>
 
 #include <arpa/inet.h>
 
@@ -183,6 +184,24 @@ static bool set_touch_mem(__u64 action)
 	return true;
 }
 
+/* gettime returns the current time of day in nanoseconds.
+ * Cost: clock_gettime (ns) => 26ns (CLOCK_MONOTONIC)
+ *       clock_gettime (ns) =>  9ns (CLOCK_MONOTONIC_COARSE)
+ */
+#define NANOSEC_PER_SEC 1000000000 /* 10^9 */
+uint64_t gettime(void)
+{
+	struct timespec t;
+	int res;
+
+	res = clock_gettime(CLOCK_MONOTONIC, &t);
+	if (res < 0) {
+		printf("Error with gettimeofday! (%i)\n", res);
+		exit(EXIT_FAIL);
+	}
+	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
+}
+
 static bool stats_collect(struct stats_record *record)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
@@ -209,9 +228,13 @@ static void stats_poll(int interval)
 {
 	struct stats_record record;
 	__u64 prev = 0, count;
-	__u64 pps;
+	__u64 prev_timestamp;
+	__u64 timestamp;
+	__u64 period;
+	double pps_ = 0;
 
 	memset(&record, 0, sizeof(record));
+	timestamp = gettime();
 
 	/* Read current XDP action and touch mem setting */
 	record.action    = get_xdp_action();
@@ -221,19 +244,23 @@ static void stats_poll(int interval)
 	setlocale(LC_NUMERIC, "en_US");
 
 	while (1) {
+		sleep(interval);
+		prev_timestamp = timestamp;
+		timestamp = gettime();
 		if (!stats_collect(&record))
 			exit(EXIT_FAIL_XDP);
 
+		period = timestamp - prev_timestamp;
 		count = record.data[0];
-		pps = (count - prev)/interval;
-		printf("XDP action: %s : %llu pps (%'llu pps) mem:%s\n",
-		       action2str(record.action), pps, pps,
-		       mem2str(record.touch_mem));
-		// TODO: add nanosec accuracy measurement
+		/* pps  = (count - prev)/interval; */
+		pps_ = (count - prev) / ((double) period / NANOSEC_PER_SEC);
 
+		printf("XDP action: %s : %.0f pps (%'.0f pps) mem:%s\n",
+		       action2str(record.action), pps_, pps_,
+		       mem2str(record.touch_mem));
+
+		// TODO: add nanosec variation measurement to assess accuracy
 		prev = count;
-		sleep(interval);
-		// TODO: measure time, don't rely on accuracy of sleep()
 	}
 }
 
