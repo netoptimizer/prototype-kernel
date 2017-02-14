@@ -61,7 +61,7 @@ is allowed through.  This is usually the base case, once the attack
 starts.
 
 Thus, they have need for analysing the traffic that gets forwarded
-with :ref:`XDP_TX`. (ISSUE) The is currently no way to sample or dump
+with :ref:`XDP_TX`. (ISSUE) There is currently no way to sample or dump
 the :ref:`XDP_TX` traffic.
 
 A physical solution could be to do switch-port mirroring of the
