@@ -156,8 +156,8 @@ u32 handle_eth_protocol(struct xdp_md *ctx, u16 eth_proto, u64 l3_offset)
 	return XDP_PASS;
 }
 
-SEC("xdp_ttl")
-int  xdp_ttl_program(struct xdp_md *ctx)
+SEC("xdp_prog")
+int  xdp_program(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
