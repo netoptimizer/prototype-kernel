@@ -30,7 +30,7 @@ static int verbose = 1;
  * Gotcha need to mount:
  *   mount -t bpf bpf /sys/fs/bpf/
  */
-const char *file = "/sys/fs/bpf/ddos_blacklist";
+static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
 
 static void int_exit(int sig)
 {
@@ -53,6 +53,7 @@ static const struct option long_options[] = {
 #define EXIT_FAIL_OPTION	2
 #define EXIT_FAIL_XDP		3
 #define EXIT_FAIL_KEY_UPDATE	4
+#define EXIT_FAIL_MAP		5
 #define EXIT_FAIL_IP		102
 
 static void usage(char *argv[])
@@ -230,6 +231,32 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	/* Export map as a file */
+	if (bpf_obj_pin(map_fd[0], file_blacklist) != 0) {
+		if (errno == 17) {
+			/* File exists, remove it as this bpf XDP
+			 * program force-fully overwrite/swap existing
+			 * XDP prog.
+			 */
+			printf("Del previous map file: %s\n", file_blacklist);
+			if (unlink(file_blacklist) < 0) {
+				printf("ERR: cannot cleanup old map"
+				       "file:%s err(%d):%s\n",
+				       file_blacklist, errno, strerror(errno));
+				exit(EXIT_FAIL_MAP);
+			}
+			/* FIXME: shouldn't we let an existing
+			 * blacklist map "survive", and feed it to the
+			 * eBPF program?
+			 */
+		} else {
+			printf("ERR: Cannot pin map file:%s err(%d):%s\n",
+			       file_blacklist, errno, strerror(errno));
+			return EXIT_FAIL_MAP;
+		}
+	}
+	printf("Blacklist exported to file: %s\n", file_blacklist);
+
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
 
@@ -239,14 +266,6 @@ int main(int argc, char **argv)
 	}
 
 	blacklist_add("192.2.1.3");
-
-	/* Export map as a file */
-	if (bpf_obj_pin(map_fd[0], file) != 0) {
-		printf("ERROR: Cannot pin map file:%s err(%d):%s",
-		       file, errno, strerror(errno));
-		return EXIT_FAIL_XDP;
-	}
-
 	blacklist_add("192.2.1.3");
 	sleep(10);
 	blacklist_add("198.18.50.3");
