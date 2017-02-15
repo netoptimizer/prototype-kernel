@@ -16,6 +16,7 @@ static const char *__doc__=
 
 #include <sys/resource.h>
 #include <getopt.h>
+#include <net/if.h>
 
 #include <arpa/inet.h>
 
@@ -23,6 +24,8 @@ static const char *__doc__=
 #include "bpf_util.h"
 #include "libbpf.h"
 
+static char ifname_buf[IF_NAMESIZE];
+static char *ifname = NULL;
 static int ifindex = -1;
 static int verbose = 1;
 
@@ -34,8 +37,9 @@ static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
 
 static void int_exit(int sig)
 {
-	fprintf(stderr, "Interrupted: Removing XDP program on ifindex:%d\n",
-		ifindex);
+	fprintf(stderr, "Interrupted: Removing XDP program on"
+		" ifindex:%d device:%s\n",
+		ifindex, ifname);
 	if (ifindex > -1)
 		set_link_xdp_fd(ifindex, -1);
 	exit(0);
@@ -43,7 +47,7 @@ static void int_exit(int sig)
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
-	{"ifindex",	required_argument,	NULL, 'i' },
+	{"dev",		required_argument,	NULL, 'd' },
 	{0, 0, NULL,  0 }
 };
 
@@ -199,10 +203,25 @@ int main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, "hi:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
-		case 'i':
-			ifindex = atoi(optarg);
+		case 'd':
+			if (strlen(optarg) >= IF_NAMESIZE) {
+				printf("ERR: --dev name too long\n");
+				goto error;
+			}
+			ifname = (char *)&ifname_buf;
+			strncpy(ifname, optarg, IF_NAMESIZE);
+			ifindex = if_nametoindex(ifname);
+			if (ifindex == 0) {
+				printf("ERR: --dev name unknown err(%d):%s\n",
+				       errno, strerror(errno));
+				goto error;
+			}
+			if (verbose)
+				printf("Device:%s have ifindex:%d\n",
+				       ifname, ifindex);
 			break;
 		case 'h':
+		error:
 		default:
 			usage(argv);
 			return EXIT_FAIL_OPTION;
@@ -210,7 +229,7 @@ int main(int argc, char **argv)
 	}
 	/* Required options */
 	if (ifindex == -1) {
-		printf("**Error**: required option --ifindex missing");
+		printf("ERR: required option --dev missing");
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
