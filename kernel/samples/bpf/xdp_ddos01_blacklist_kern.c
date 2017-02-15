@@ -25,6 +25,16 @@ struct bpf_map_def SEC("maps") blacklist = {
 	.map_flags   = BPF_F_NO_PREALLOC,
 };
 
+#define XDP_ACTION_MAX (XDP_TX + 1)
+
+/* Counter per XDP "action" verdict */
+struct bpf_map_def SEC("maps") verdict_cnt = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = XDP_ACTION_MAX,
+};
+
 // TODO: Add general stats counter-map per XDP action
 
 // TODO: Add map for controlling behavior
@@ -45,6 +55,20 @@ struct bpf_map_def SEC("maps") blacklist = {
 #else
 #define bpf_debug(fmt, ...) { } while (0)
 #endif
+
+/* Keeps stats of XDP_DROP vs XDP_PASS */
+static __always_inline
+void stats_action_verdict(u32 action)
+{
+	u64 *value;
+
+	if (action >= XDP_ACTION_MAX)
+		return;
+
+	value = bpf_map_lookup_elem(&verdict_cnt, &action);
+	if (value)
+		*value += 1;
+}
 
 /* Parse Ethernet layer 2, extract network layer 3 offset and protocol
  *
@@ -132,7 +156,6 @@ u32 handle_eth_protocol(struct xdp_md *ctx, u16 eth_proto, u64 l3_offset)
 	return XDP_PASS;
 }
 
-
 SEC("xdp_ttl")
 int  xdp_ttl_program(struct xdp_md *ctx)
 {
@@ -151,6 +174,7 @@ int  xdp_ttl_program(struct xdp_md *ctx)
 	bpf_debug("Reached L3: L3off:%llu proto:0x%x\n", l3_offset, eth_proto);
 
 	action = handle_eth_protocol(ctx, eth_proto, l3_offset);
+	stats_action_verdict(action);
 	return action;
 }
 
