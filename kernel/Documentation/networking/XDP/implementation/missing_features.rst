@@ -17,11 +17,11 @@ Initial support for XDP head adjustment added to net-next in this commit:
 
 Initial support only covers driver mlx4.
 
-.. TODO:: Update document once feature is avail in a kernel release.
+.. TODO:: Update document once feature is available in a kernel release.
 	  Plus, keep track of drivers supporting this feature.
 
 .. TODO:: Create new section under :doc:`userspace_api` that describe
-          howo use this and point to sample programs.
+          howto use this and point to sample programs.
 
 The eBPF program gets a new helper function called: ``bpf_xdp_adjust_head``
 

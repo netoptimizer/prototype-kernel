@@ -71,7 +71,7 @@ XDP has a speed advantage.  The XDP load balance forwarding decision
 happens **very** early, before the OS has spent/invested too many
 cycles on the packet.  This means the XDP load balancing functionality
 should not increase the load on the server significantly.  Thus, it
-should okay to run the service and LB on the same server.  One can
+should be okay to run the service and LB on the same server.  One can
 even imagine having a feedback loop into the LB-program decision,
 based on whether the service is struggling to keep up.
 
