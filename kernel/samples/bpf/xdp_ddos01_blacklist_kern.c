@@ -25,6 +25,12 @@ struct bpf_map_def SEC("maps") blacklist = {
 	.map_flags   = BPF_F_NO_PREALLOC,
 };
 
+// TODO: Add general stats counter-map per XDP action
+
+// TODO: Add map for controlling behavior
+
+// TODO: Add map for port+(protocol) filtering
+
 //#define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from bpf_trace_printk()

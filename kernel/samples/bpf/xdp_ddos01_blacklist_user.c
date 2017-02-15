@@ -34,6 +34,7 @@ static int verbose = 1;
  *   mount -t bpf bpf /sys/fs/bpf/
  */
 static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
+// TODO: create subdir per ifname, to allow more XDP progs
 
 static void int_exit(int sig)
 {
