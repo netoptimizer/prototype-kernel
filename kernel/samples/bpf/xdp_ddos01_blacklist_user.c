@@ -30,14 +30,6 @@ static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 static int ifindex = -1;
 
-/* Export eBPF map for IPv4 blacklist as a file
- * Gotcha need to mount:
- *   mount -t bpf bpf /sys/fs/bpf/
- */
-static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
-static const char *file_verdict   = "/sys/fs/bpf/ddos_blacklist_stat_verdict";
-// TODO: create subdir per ifname, to allow more XDP progs
-
 static void int_exit(int sig)
 {
 	fprintf(stderr, "Interrupted: Removing XDP program on"

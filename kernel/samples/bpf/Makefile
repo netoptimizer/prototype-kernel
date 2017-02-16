@@ -9,6 +9,8 @@ TARGETS += xdp_ttl
 
 TARGETS += xdp_bench01_mem_access_cost
 
+CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
+
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
 # The eBPF program is called xxx_kern.c. This is the restricted-C
@@ -69,7 +71,7 @@ NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 LINUXINCLUDE=-I $(KERNEL)/arch/x86/include -I$(KERNEL)/arch/x86/include/generated/uapi -I$(KERNEL)/arch/x86/include/generated -I$(KERNEL)/include -I$(KERNEL)/arch/x86/include/uapi -I$(KERNEL)/include/uapi -I$(KERNEL)/include/generated/uapi -include $(KERNEL)/include/linux/kconfig.h  -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
-all: dependencies $(TARGETS) $(KERN_OBJECTS)
+all: dependencies $(TARGETS) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
 
 .PHONY: dependencies clean verify_cmds verify_llvm_target_bpf $(CLANG) $(LLC)
 
@@ -145,5 +147,8 @@ $(KERN_OBJECTS): %.o: %.c
 	    -O2 -emit-llvm -c $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
-$(TARGETS): %: %_user.c $(OBJECTS)
+$(TARGETS): %: %_user.c $(OBJECTS) Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
+
+$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile
+	$(CC) -g $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
