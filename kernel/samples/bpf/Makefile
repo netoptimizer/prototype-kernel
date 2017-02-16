@@ -10,6 +10,7 @@ TARGETS += xdp_ttl
 TARGETS += xdp_bench01_mem_access_cost
 
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
+COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
@@ -150,5 +151,5 @@ $(KERN_OBJECTS): %.o: %.c
 $(TARGETS): %: %_user.c $(OBJECTS) Makefile
 	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
 
-$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile
+$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile $(COMMON_H)
 	$(CC) -g $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
