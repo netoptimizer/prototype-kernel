@@ -28,9 +28,9 @@ static const char *__doc__=
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"add",		no_argument,		NULL, 'a' },
-	{"del",		no_argument,		NULL, 'd' },
-	{"ip",		required_argument,	NULL, 's' },
-	{0, 0, NULL,  0 }
+	{"del",		no_argument,		NULL, 'x' },
+	{"ip",		required_argument,	NULL, 'i' },
+	{"stats",	no_argument,		NULL, 's' },
 };
 
 static void usage(char *argv[])
@@ -85,7 +85,7 @@ int main(int argc, char **argv)
 	fd_blacklist = open_bpf_map(file_blacklist);
 	fd_verdict   = open_bpf_map(file_verdict);
 
-	while ((opt = getopt_long(argc, argv, "hs:",
+	while ((opt = getopt_long(argc, argv, "adshi:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'a':
@@ -94,7 +94,7 @@ int main(int argc, char **argv)
 		case 'd':
 			action |= ACTION_DEL;
 			break;
-		case 's':
+		case 'i':
 			printf("Blacklist IP:%s\n", optarg);
 			if (!optarg || strlen(optarg) >= STR_MAX) {
 				printf("ERR: src ip too long or NULL\n");
@@ -102,6 +102,9 @@ int main(int argc, char **argv)
 			}
 			ip_string = (char *)&_ip_string_buf;
 			strncpy(ip_string, optarg, STR_MAX);
+			break;
+		case 's':
+			action |= ACTION_ADD;
 			break;
 		case 'h':
 		error:
@@ -125,4 +128,5 @@ int main(int argc, char **argv)
 	}
 
 	/* TODO: Implement stats */
+	
 }
