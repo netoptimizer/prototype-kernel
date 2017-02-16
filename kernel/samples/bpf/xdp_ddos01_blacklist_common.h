@@ -22,9 +22,12 @@ static const char *file_verdict   = "/sys/fs/bpf/ddos_blacklist_stat_verdict";
 
 static void blacklist_add(int fd, char *ip_string)
 {
-	__u64 value = 0;
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	__u64 values[nr_cpus];
 	__u32 key;
 	int res;
+
+	memset(values, 0, sizeof(__u64) * nr_cpus);
 
 	/* Convert IP-string into 32-bit network byte-order value */
 	res = inet_pton(AF_INET, ip_string, &key);
@@ -38,7 +41,7 @@ static void blacklist_add(int fd, char *ip_string)
 		exit(EXIT_FAIL_IP);
 	}
 
-	res = bpf_map_update_elem(fd, &key, &value, BPF_NOEXIST);
+	res = bpf_map_update_elem(fd, &key, values, BPF_NOEXIST);
 	if (res != 0) { /* 0 == success */
 
 		printf("%s() IP:%s key:0x%X errno(%d/%s)",

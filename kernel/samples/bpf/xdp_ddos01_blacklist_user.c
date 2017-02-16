@@ -96,7 +96,7 @@ static void stats_print(struct stats_key *record)
 
 	key   = record->key;
 	count = record->value_sum;
-	if (count)
+	//if (count)
 		printf("Key: IP-src-raw:0x%X count:%llu\n", key, count);
 }
 static bool stats_collect(struct stats_key *record, __u32 key)
