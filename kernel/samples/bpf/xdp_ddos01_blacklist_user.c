@@ -156,7 +156,7 @@ static void stats_poll(void)
 	}
 }
 
-static void blacklist_add(char *ip_string)
+static void blacklist_add(int fd, char *ip_string)
 {
 	__u64 value = 0;
 	__u32 key;
@@ -174,7 +174,7 @@ static void blacklist_add(char *ip_string)
 		exit(EXIT_FAIL_IP);
 	}
 
-	res = bpf_map_update_elem(map_fd[0], &key, &value, BPF_NOEXIST);
+	res = bpf_map_update_elem(fd, &key, &value, BPF_NOEXIST);
 	if (res != 0) { /* 0 == success */
 
 		printf("%s() IP:%s key:0x%X errno(%d/%s)",
@@ -302,10 +302,10 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_XDP;
 	}
 
-	blacklist_add("192.2.1.3");
-	blacklist_add("192.2.1.3");
+	blacklist_add(map_fd[0], "192.2.1.3");
+	blacklist_add(map_fd[0], "192.2.1.3");
 	sleep(10);
-	blacklist_add("198.18.50.3");
+	blacklist_add(map_fd[0], "198.18.50.3");
 
 	while (1) {
 		stats_poll();
