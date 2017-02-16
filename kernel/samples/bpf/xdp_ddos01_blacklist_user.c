@@ -190,6 +190,42 @@ static void blacklist_add(char *ip_string)
 		printf("%s() IP:%s key:0x%X\n", __func__, ip_string, key);
 }
 
+bool export_map(int fd, const char *file)
+{
+	int retries = 2;
+
+retry:
+	if (!retries--)
+		return EXIT_FAIL_MAP;
+
+	/* Export map as a file */
+	if (bpf_obj_pin(fd, file) != 0) {
+		if (errno == 17) {
+			/* File exists, remove it as this bpf XDP
+			 * program force-fully overwrite/swap existing
+			 * XDP prog.
+			 */
+			printf("Delete previous map file: %s\n", file);
+			if (unlink(file) < 0) {
+				printf("ERR: cannot cleanup old map"
+				       "file:%s err(%d):%s\n",
+				       file, errno, strerror(errno));
+				exit(EXIT_FAIL_MAP);
+			}
+			/* FIXME: shouldn't we let an existing
+			 * blacklist map "survive", and feed it to the
+			 * eBPF program?
+			 */
+			goto retry;
+		} else {
+			printf("ERR: Cannot pin map file:%s err(%d):%s\n",
+			       file, errno, strerror(errno));
+			return EXIT_FAIL_MAP;
+		}
+	}
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
@@ -251,30 +287,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* Export map as a file */
-	if (bpf_obj_pin(map_fd[0], file_blacklist) != 0) {
-		if (errno == 17) {
-			/* File exists, remove it as this bpf XDP
-			 * program force-fully overwrite/swap existing
-			 * XDP prog.
-			 */
-			printf("Del previous map file: %s\n", file_blacklist);
-			if (unlink(file_blacklist) < 0) {
-				printf("ERR: cannot cleanup old map"
-				       "file:%s err(%d):%s\n",
-				       file_blacklist, errno, strerror(errno));
-				exit(EXIT_FAIL_MAP);
-			}
-			/* FIXME: shouldn't we let an existing
-			 * blacklist map "survive", and feed it to the
-			 * eBPF program?
-			 */
-		} else {
-			printf("ERR: Cannot pin map file:%s err(%d):%s\n",
-			       file_blacklist, errno, strerror(errno));
-			return EXIT_FAIL_MAP;
-		}
-	}
+	export_map(map_fd[0], file_blacklist);
 	printf("Blacklist exported to file: %s\n", file_blacklist);
 
 	/* Remove XDP program when program is interrupted */
