@@ -34,6 +34,7 @@ static int verbose = 1;
  *   mount -t bpf bpf /sys/fs/bpf/
  */
 static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
+static const char *file_verdict   = "/sys/fs/bpf/ddos_blacklist_stat_verdict";
 // TODO: create subdir per ifname, to allow more XDP progs
 
 static void int_exit(int sig)
@@ -289,6 +290,9 @@ int main(int argc, char **argv)
 
 	export_map(map_fd[0], file_blacklist);
 	printf("Blacklist exported to file: %s\n", file_blacklist);
+
+	export_map(map_fd[1], file_verdict);
+	printf("Verdict stats exported to file: %s\n", file_verdict);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
