@@ -30,18 +30,25 @@ static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 static int ifindex = -1;
 
-static void int_exit(int sig)
+static void remove_xdp_program(int ifindex, const char *ifname)
 {
-	fprintf(stderr, "Interrupted: Removing XDP program on"
-		" ifindex:%d device:%s\n",
+	fprintf(stderr, "Removing XDP program on ifindex:%d device:%s\n",
 		ifindex, ifname);
 	if (ifindex > -1)
 		set_link_xdp_fd(ifindex, -1);
-	exit(0);
+	if (unlink(file_blacklist) < 0) {
+		printf("WARN: cannot remove map file:%s err(%d):%s\n",
+		       file_blacklist, errno, strerror(errno));
+	}
+	if (unlink(file_verdict) < 0) {
+		printf("WARN: cannot remove map file:%s err(%d):%s\n",
+		       file_verdict, errno, strerror(errno));
+	}
 }
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
+	{"remove",	no_argument,		NULL, 'r' },
 	{"dev",		required_argument,	NULL, 'd' },
 	{0, 0, NULL,  0 }
 };
@@ -179,6 +186,7 @@ retry:
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
+	bool rm_xdp_prog = false;
 	char filename[256];
 	int longindex = 0;
 	int interval = 2;
@@ -190,6 +198,9 @@ int main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, "hd:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
+		case 'r':
+			rm_xdp_prog = true;
+			break;
 		case 'd':
 			if (strlen(optarg) >= IF_NAMESIZE) {
 				printf("ERR: --dev name too long\n");
@@ -220,6 +231,10 @@ int main(int argc, char **argv)
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
+	if (rm_xdp_prog) {
+		remove_xdp_program(ifindex, ifname);
+		return EXIT_OK;
+	}
 
 	/* Increase resource limits */
 	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
@@ -242,9 +257,6 @@ int main(int argc, char **argv)
 
 	export_map(map_fd[1], file_verdict);
 	printf("Verdict stats exported to file: %s\n", file_verdict);
-
-	/* Remove XDP program when program is interrupted */
-	signal(SIGINT, int_exit);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
 		printf("link set xdp fd failed\n");
