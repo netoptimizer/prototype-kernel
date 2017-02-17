@@ -74,79 +74,6 @@ static void usage(char *argv[])
 	printf("\n");
 }
 
-static void stats_print_headers(void)
-{
-	static unsigned int i;
-#define DEBUG 1
-#ifdef  DEBUG
-	{
-	int debug_notice_interval = 3;
-	char msg[] =
-		"\nDebug output available via:\n"
-		" sudo cat /sys/kernel/debug/tracing/trace_pipe\n\n";
-	printf(msg, debug_notice_interval);
-	}
-#endif
-	i++;
-	printf("Stats: %d\n", i);
-}
-
-struct stats_key {
-	__u32 key;
-	__u64 value_sum;
-};
-
-static void stats_print(struct stats_key *record)
-{
-	__u64 count;
-	__u32 key;
-
-	key   = record->key;
-	count = record->value_sum;
-	//if (count)
-		printf("Key: IP-src-raw:0x%X count:%llu\n", key, count);
-}
-static bool stats_collect(struct stats_key *record, __u32 key)
-{
-	unsigned int nr_cpus = bpf_num_possible_cpus();
-	__u64 values[nr_cpus];
-	__u64 sum = 0;
-	int i;
-
-	if ((bpf_map_lookup_elem(map_fd[0], &key, values)) != 0) {
-		printf("DEBUG: bpf_map_lookup_elem failed\n");
-		return false;
-	}
-
-	/* Sum values from each CPU */
-	for (i = 0; i < nr_cpus; i++) {
-		sum += values[i];
-	}
-
-	record->value_sum = sum;
-	record->key = key;
-	return true;
-}
-
-static void stats_poll(void)
-{
-	struct stats_key record;
-	__u32 key = 0, next_key;
-
-	/* clear screen */
-	printf("\033[2J");
-	stats_print_headers();
-
-	while (bpf_map_get_next_key(map_fd[0], &key, &next_key) == 0) {
-
-		memset(&record, 0, sizeof(record));
-		if (stats_collect(&record, next_key))
-			stats_print(&record);
-
-		key = next_key;
-	}
-}
-
 bool export_map(int fd, const char *file)
 {
 	int retries = 2;
@@ -267,11 +194,6 @@ int main(int argc, char **argv)
 	blacklist_add(map_fd[0], "192.2.1.3");
 	sleep(10);
 	blacklist_add(map_fd[0], "198.18.50.3");
-
-	while (1) {
-		stats_poll();
-		sleep(interval);
-	}
 
 	return EXIT_OK;
 }
