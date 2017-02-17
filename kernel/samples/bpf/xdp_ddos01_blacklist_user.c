@@ -1,7 +1,12 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " XDP example: DDoS protection via IPv4 blacklist";
+ " XDP: DDoS protection via IPv4 blacklist\n"
+ "\n"
+ "This program loads the XDP eBPF program into the kernel.\n"
+ "Use the cmdline tool for add/removing source IPs to the blacklist\n"
+ "and read statistics.\n"
+ ;
 
 #include <linux/bpf.h>
 
@@ -50,6 +55,7 @@ static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"remove",	no_argument,		NULL, 'r' },
 	{"dev",		required_argument,	NULL, 'd' },
+	{"quite",	no_argument,		NULL, 'q' },
 	{0, 0, NULL,  0 }
 };
 
@@ -57,7 +63,6 @@ static void usage(char *argv[])
 {
 	int i;
 	printf("\nDOCUMENTATION:\n%s\n", __doc__);
-	printf("\n");
 	printf(" Usage: %s (options-see-below)\n",
 	       argv[0]);
 	printf(" Listing options:\n");
@@ -89,20 +94,22 @@ retry:
 			 * program force-fully overwrite/swap existing
 			 * XDP prog.
 			 */
-			printf("Delete previous map file: %s\n", file);
 			if (unlink(file) < 0) {
-				printf("ERR: cannot cleanup old map"
+				fprintf(stderr, "ERR: cannot cleanup old map"
 				       "file:%s err(%d):%s\n",
 				       file, errno, strerror(errno));
 				exit(EXIT_FAIL_MAP);
 			}
+			fprintf(stderr,
+				"WARN: Deleted previous map file: %s\n", file);
 			/* FIXME: shouldn't we let an existing
 			 * blacklist map "survive", and feed it to the
 			 * eBPF program?
 			 */
 			goto retry;
 		} else {
-			printf("ERR: Cannot pin map file:%s err(%d):%s\n",
+			fprintf(stderr,
+				"ERR: Cannot pin map file:%s err(%d):%s\n",
 			       file, errno, strerror(errno));
 			return EXIT_FAIL_MAP;
 		}
@@ -116,34 +123,34 @@ int main(int argc, char **argv)
 	bool rm_xdp_prog = false;
 	char filename[256];
 	int longindex = 0;
-	int interval = 2;
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hd:",
+	while ((opt = getopt_long(argc, argv, "hrqd:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
+		case 'q':
+			verbose = 0;
+			break;
 		case 'r':
 			rm_xdp_prog = true;
 			break;
 		case 'd':
 			if (strlen(optarg) >= IF_NAMESIZE) {
-				printf("ERR: --dev name too long\n");
+				fprintf(stderr, "ERR: --dev name too long\n");
 				goto error;
 			}
 			ifname = (char *)&ifname_buf;
 			strncpy(ifname, optarg, IF_NAMESIZE);
 			ifindex = if_nametoindex(ifname);
 			if (ifindex == 0) {
-				printf("ERR: --dev name unknown err(%d):%s\n",
-				       errno, strerror(errno));
+				fprintf(stderr,
+					"ERR: --dev name unknown err(%d):%s\n",
+					errno, strerror(errno));
 				goto error;
 			}
-			if (verbose)
-				printf("Device:%s have ifindex:%d\n",
-				       ifname, ifindex);
 			break;
 		case 'h':
 		error:
@@ -161,6 +168,11 @@ int main(int argc, char **argv)
 	if (rm_xdp_prog) {
 		remove_xdp_program(ifindex, ifname);
 		return EXIT_OK;
+	}
+	if (verbose) {
+		printf("Documentation:\n%s\n", __doc__);
+		printf(" - Attached to device:%s (ifindex:%d)\n",
+		       ifname, ifindex);
 	}
 
 	/* Increase resource limits */
@@ -180,10 +192,12 @@ int main(int argc, char **argv)
 	}
 
 	export_map(map_fd[0], file_blacklist);
-	printf("Blacklist exported to file: %s\n", file_blacklist);
+	if (verbose)
+		printf(" - Blacklist exported to file: %s\n", file_blacklist);
 
 	export_map(map_fd[1], file_verdict);
-	printf("Verdict stats exported to file: %s\n", file_verdict);
+	if (verbose)
+		printf("Verdict stats exported to file: %s\n", file_verdict);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
 		printf("link set xdp fd failed\n");
