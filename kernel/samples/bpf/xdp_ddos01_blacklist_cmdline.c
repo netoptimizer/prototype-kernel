@@ -214,9 +214,6 @@ int main(int argc, char **argv)
 		close(fd_blacklist);
 	}
 
-	// TODO: implement stats for verdicts
-	close(fd_verdict);
-
 	/* Show statistics by polling */
 	while (stats) {
 		/* File can be overwritten by (re)loading _kern */
@@ -225,4 +222,8 @@ int main(int argc, char **argv)
 		close(fd_blacklist);
 		sleep(interval);
 	}
+
+	// TODO: implement stats for verdicts
+	// Hack: keep it open to inspect /proc/pid/fdinfo/3
+	close(fd_verdict);
 }
