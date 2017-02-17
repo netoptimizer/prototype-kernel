@@ -160,8 +160,7 @@ int main(int argc, char **argv)
 	int longindex = 0;
 	int opt;
 
-	fd_blacklist = open_bpf_map(file_blacklist);
-	fd_verdict   = open_bpf_map(file_verdict);
+	fd_verdict = open_bpf_map(file_verdict);
 
 	while ((opt = getopt_long(argc, argv, "adshi:",
 				  long_options, &longindex)) != -1) {
@@ -196,20 +195,28 @@ int main(int argc, char **argv)
 
 	/* Update blacklist */
 	if (ip_string) {
+		fd_blacklist = open_bpf_map(file_blacklist);
 		if ((action == ACTION_ADD))
 			blacklist_add(fd_blacklist, ip_string);
 		else if ((action == ACTION_DEL) && ip_string)
 			//blacklist_add(fd_blacklist, ip_string);
 			;
 		else {
-			printf("Warning: not action specified for IP:%s\n",
+			printf("WARN: not action specified for IP:%s\n",
 				ip_string);
 		}
+		close(fd_blacklist);
 	}
 
-	/* TODO: Implement stats */
+	// TODO: implement stats for verdicts
+	close(fd_verdict);
+
+	/* Show statistics by polling */
 	while (stats) {
+		/* File can be overwritten by (re)loading _kern */
+		fd_blacklist = open_bpf_map(file_blacklist);
 		stats_poll(fd_blacklist);
+		close(fd_blacklist);
 		sleep(interval);
 	}
 }
