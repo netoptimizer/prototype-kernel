@@ -8,6 +8,7 @@
 #define EXIT_FAIL_XDP		3
 #define EXIT_FAIL_MAP		20
 #define EXIT_FAIL_MAP_KEY	21
+#define EXIT_FAIL_MAP_FILE	22
 #define EXIT_FAIL_IP		102
 
 static int verbose = 1;

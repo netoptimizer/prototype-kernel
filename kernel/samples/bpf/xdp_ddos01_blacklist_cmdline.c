@@ -64,7 +64,7 @@ int open_bpf_map(const char *file)
 	if (fd < 0) {
 		printf("ERR: Failed to open bpf map file:%s err(%d):%s\n",
 		       file, errno, strerror(errno));
-		exit(EXIT_FAIL_MAP);
+		exit(EXIT_FAIL_MAP_FILE);
 	}
 	return fd;
 }
