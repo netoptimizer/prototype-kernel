@@ -67,19 +67,22 @@ int open_bpf_map(const char *file)
 	return fd;
 }
 
-#define STR_MAX 42
 
-#define ACTION_ADD (1 << 0)
-#define ACTION_DEL (1 << 1)
+/* Blacklist operations */
+#define ACTION_ADD	(1 << 0)
+#define ACTION_DEL	(1 << 1)
 
 int main(int argc, char **argv)
 {
-	int longindex = 0;
-	int fd_blacklist;
-	int fd_verdict;
-	unsigned int action = 0;
+#	define STR_MAX 42 /* For trivial input validation */
 	char _ip_string_buf[STR_MAX] = {};
 	char *ip_string = NULL;
+
+	unsigned int action = 0;
+	bool stats = false;
+	int fd_blacklist;
+	int fd_verdict;
+	int longindex = 0;
 	int opt;
 
 	fd_blacklist = open_bpf_map(file_blacklist);
@@ -104,7 +107,7 @@ int main(int argc, char **argv)
 			strncpy(ip_string, optarg, STR_MAX);
 			break;
 		case 's':
-			action |= ACTION_ADD;
+			stats = true;
 			break;
 		case 'h':
 		error:
