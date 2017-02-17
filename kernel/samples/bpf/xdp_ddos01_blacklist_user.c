@@ -190,9 +190,7 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_XDP;
 	}
 
-	blacklist_add(map_fd[0], "192.2.1.3");
-	blacklist_add(map_fd[0], "192.2.1.3");
-	sleep(10);
+	/* Add something to the map as a test */
 	blacklist_add(map_fd[0], "198.18.50.3");
 
 	return EXIT_OK;
