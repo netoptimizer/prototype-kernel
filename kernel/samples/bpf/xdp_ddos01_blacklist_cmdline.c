@@ -93,13 +93,19 @@ struct stats_key {
 
 static void stats_print(struct stats_key *record)
 {
+	char ip_txt[INET_ADDRSTRLEN] = {0};
 	__u64 count;
 	__u32 key;
 
 	key   = record->key;
 	count = record->value_sum;
-	//if (count)
-		printf("Key: IP-src-raw:0x%X count:%llu\n", key, count);
+
+	/* Convert IPv4 addresses from binary to text form */
+	if (!inet_ntop(AF_INET, &key, ip_txt, sizeof(ip_txt))) {
+		printf("ERR: Cannot convert key:0x%X to IP-txt\n", key);
+		exit(EXIT_FAIL_IP);
+	}
+	printf("Key: IP:%-15s count:%llu\n", ip_txt, count);
 }
 static bool stats_collect(int fd, struct stats_key *record, __u32 key)
 {
