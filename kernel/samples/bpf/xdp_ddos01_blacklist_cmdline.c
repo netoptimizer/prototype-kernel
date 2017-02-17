@@ -61,8 +61,8 @@ int open_bpf_map(const char *file)
 	int fd;
 
 	fd = bpf_obj_get(file);
-	if (!fd) {
-		printf("ERR: Failed to get bpf map file:%s err(%d):%s\n",
+	if (fd < 0) {
+		printf("ERR: Failed to open bpf map file:%s err(%d):%s\n",
 		       file, errno, strerror(errno));
 		exit(EXIT_FAIL_MAP);
 	}
