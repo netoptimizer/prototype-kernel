@@ -1,7 +1,7 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " XDP bench01: Speed when not touching packet memory";
+ " XDP bench01: Measure cost of touching vs. not-touching packet memory";
 
 #include <assert.h>
 #include <errno.h>
@@ -74,7 +74,7 @@ static void usage(char *argv[])
 }
 
 struct stats_record {
-	__u64 data[1];
+	__u64 counter;
 	__u64 action;
 	__u64 touch_mem;
 };
@@ -226,7 +226,7 @@ static bool stats_collect(struct stats_record *record)
 	for (i = 0; i < nr_cpus; i++) {
 		sum += values[i];
 	}
-	record->data[key] = sum;
+	record->counter = sum;
 
 	return true;
 }
@@ -257,12 +257,13 @@ static void stats_poll(int interval)
 	while (1) {
 		sleep(interval);
 		prev_timestamp = timestamp;
+		prev = record.counter;
 		timestamp = gettime();
 		if (!stats_collect(&record))
 			exit(EXIT_FAIL_XDP);
 
 		period = timestamp - prev_timestamp;
-		count = record.data[0];
+		count = record.counter;
 		/* pps  = (count - prev)/interval; */
 		pps_ = (count - prev) / ((double) period / NANOSEC_PER_SEC);
 
@@ -271,7 +272,6 @@ static void stats_poll(int interval)
 		       mem2str(record.touch_mem));
 
 		// TODO: add nanosec variation measurement to assess accuracy
-		prev = count;
 	}
 }
 

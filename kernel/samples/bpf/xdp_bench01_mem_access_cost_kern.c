@@ -1,12 +1,7 @@
-/* 
- */
-#define KBUILD_MODNAME "foo"
+/* xdp_bench01_mem_access_cost */
 #include <uapi/linux/bpf.h>
 #include <uapi/linux/if_ether.h>
-#include <uapi/linux/if_packet.h>
-#include <uapi/linux/ip.h>
 #include <uapi/linux/in.h>
-#include <uapi/linux/tcp.h>
 #include "bpf_helpers.h"
 
 struct bpf_map_def SEC("maps") rx_cnt = {
