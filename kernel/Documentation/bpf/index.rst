@@ -50,6 +50,7 @@ covered by this documentation.
 
    ebpf_maps
    ebpf_maps_types
+   troubleshooting
    bcc_tool_chain
 
 .. links:
