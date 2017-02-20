@@ -253,6 +253,38 @@ is understood by LLVM when generating eBPF instructions.
 .. _kernel/bpf/helpers.c:
    https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/kernel/bpf/helpers.c
 
+
+Export map to filesystem
+========================
+
+.. read: https://lwn.net/Articles/664688/ Persistent BPF objects
+
+When `Interacting with maps`_ from `Userspace`_ a file descriptor is
+needed. There are two methods for sharing this file descriptor.
+
+1) By passing it over Unix-domain sockets.
+2) Exporting the map to a special ``bpf`` filesystem.
+
+Option 2, exporting or pinning the map through the filesystem is more
+convenient and easier than option 1. Thus, this document will focus on
+option 2.
+
+.. TODO:: Describe the API for ``bpf_obj_pin`` and ``bpf_obj_get``.
+	  Usage examples available in `XDP blacklist`_ for
+	  bpf_obj_pin() and `XDP blacklist cmdline tool`_ show use of
+	  bpf_obj_get().
+
+.. TODO:: add link to Daniel's TC example of using Unix-domain sockets.
+
+
+.. section links
+
+.. _XDP blacklist cmdline tool:
+   https://github.com/netoptimizer/prototype-kernel/blob/master/kernel/samples/bpf/xdp_ddos01_blacklist_cmdline.c
+
+.. _XDP blacklist:
+   https://github.com/netoptimizer/prototype-kernel/blob/master/kernel/samples/bpf/xdp_ddos01_blacklist_user.c
+
 .. links
 
 .. _bpf(2): http://man7.org/linux/man-pages/man2/bpf.2.html
