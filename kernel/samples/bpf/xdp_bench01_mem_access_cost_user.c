@@ -15,6 +15,7 @@ static const char *__doc__=
 
 #include <sys/resource.h>
 #include <getopt.h>
+#include <net/if.h>
 #include <time.h>
 
 #include <arpa/inet.h>
@@ -24,6 +25,8 @@ static const char *__doc__=
 #include "libbpf.h"
 
 static int ifindex = -1;
+static char ifname_buf[IF_NAMESIZE];
+static char *ifname = NULL;
 
 /* Exit return codes */
 #define EXIT_OK                 0
@@ -42,7 +45,7 @@ static void int_exit(int sig)
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
-	{"ifindex",	required_argument,	NULL, 'i' },
+	{"dev",		required_argument,	NULL, 'd' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{"action", 	required_argument,	NULL, 'a' },
 	{"readmem", 	no_argument,		NULL, 'r' },
@@ -282,11 +285,23 @@ int main(int argc, char **argv)
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hir:s:a:",
+	while ((opt = getopt_long(argc, argv, "hd:s:a:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
-		case 'i':
-			ifindex = atoi(optarg);
+		case 'd':
+			if (strlen(optarg) >= IF_NAMESIZE) {
+				fprintf(stderr, "ERR: --dev name too long\n");
+				goto error;
+			}
+			ifname = (char *)&ifname_buf;
+			strncpy(ifname, optarg, IF_NAMESIZE);
+			ifindex = if_nametoindex(ifname);
+			if (ifindex == 0) {
+				fprintf(stderr,
+					"ERR: --dev name unknown err(%d):%s\n",
+					errno, strerror(errno));
+				goto error;
+			}
 			break;
 		case 's':
 			interval = atoi(optarg);
@@ -298,6 +313,7 @@ int main(int argc, char **argv)
 			touch_mem |= READ_MEM;
 			break;
 		case 'h':
+		error:
 		default:
 			usage(argv);
 			list_xdp_action();
@@ -306,7 +322,7 @@ int main(int argc, char **argv)
 	}
 	/* Required options */
 	if (ifindex == -1) {
-		printf("**Error**: required option --ifindex missing");
+		printf("**Error**: required option --dev missing");
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
