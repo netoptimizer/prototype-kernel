@@ -23,8 +23,13 @@ Kernel samples/bpf
 The kernel include some examples of XDP-eBPF programs,
 see `kernel samples/bpf`_.
 
+There are also some XDP eBPF code examples in the prototype-kernel_
+project under `prototype-kernel/kernel/samples/bpf`_.
 
+.. _prototype-kernel: https://github.com/netoptimizer/prototype-kernel
 
+.. prototype-kernel/kernel/samples/bpf:
+   https://github.com/netoptimizer/prototype-kernel/tree/master/kernel/samples/bpf
 
 Special XDP eBPF cases
 ----------------------
