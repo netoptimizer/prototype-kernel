@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hd:s:a:",
+	while ((opt = getopt_long(argc, argv, "hd:s:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'd':
