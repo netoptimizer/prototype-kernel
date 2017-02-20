@@ -95,6 +95,11 @@ program; particularly so in case of error events like :ref:`XDP_ABORTED`,
 and in case an XDP program starts to return invalid and unsupported
 action codes (caught by the :ref:`action fall-through`).
 
+.. Note:: Daniel choose to implement this as tracepoints.
+   See commit: a67edbf4fb6d ("bpf: add initial bpf tracepoints")
+   https://git.kernel.org/davem/net-next/c/a67edbf4fb6d
+   Scheduled for kernel 4.11.
+
 .. Warning::
 
    The current (4.8-rc6) implementation is not optimal in this area.
@@ -124,4 +129,3 @@ and :ref:`action fall-through` should normally be very rare.  This is
 because an external attacker (given the DDoS uses-cases) might find a
 way to trigger these events, which would then serve as an attack
 vector against XDP.
-
