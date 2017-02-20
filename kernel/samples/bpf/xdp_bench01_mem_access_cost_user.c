@@ -101,7 +101,8 @@ static __u64 get_xdp_action(void)
 
 	/* map_fd[1] == map(xdp_action) */
 	if ((bpf_map_lookup_elem(map_fd[1], &key, &value)) != 0) {
-		printf("%s(): bpf_map_lookup_elem failed\n", __func__);
+		fprintf(stderr, "ERR %s(): bpf_map_lookup_elem failed\n",
+			__func__);
 		exit(EXIT_FAIL_XDP);
 	}
 	return value;
@@ -114,7 +115,8 @@ static bool set_xdp_action(__u64 action)
 
 	/* map_fd[1] == map(xdp_action) */
 	if ((bpf_map_update_elem(map_fd[1], &key, &value, BPF_ANY)) != 0) {
-		printf("%s(): bpf_map_update_elem failed\n", __func__);
+		fprintf(stderr, "ERR %s(): bpf_map_update_elem failed\n",
+			__func__);
 		return false;
 	}
 	return true;
@@ -157,7 +159,7 @@ static char* mem2str(enum touch_mem_type touch_mem)
 		return "no_touch";
 	if (touch_mem == READ_MEM)
 		return "read";
-	printf("ERROR: Unknown memory touch type");
+	fprintf(stderr, "ERR: Unknown memory touch type");
 	exit(EXIT_FAIL);
 }
 
@@ -168,7 +170,8 @@ static __u64 get_touch_mem(void)
 
 	/* map_fd[2] == map(touch_memory) */
 	if ((bpf_map_lookup_elem(map_fd[2], &key, &value)) != 0) {
-		printf("%s(): bpf_map_lookup_elem failed\n", __func__);
+		fprintf(stderr, "ERR: %s(): bpf_map_lookup_elem failed\n",
+			__func__);
 		exit(EXIT_FAIL_XDP);
 	}
 	return value;
@@ -181,7 +184,8 @@ static bool set_touch_mem(__u64 action)
 
 	/* map_fd[2] == map(touch_memory) */
 	if ((bpf_map_update_elem(map_fd[2], &key, &value, BPF_ANY)) != 0) {
-		printf("%s(): bpf_map_update_elem failed\n", __func__);
+		fprintf(stderr, "ERR: %s(): bpf_map_update_elem failed\n",
+			__func__);
 		return false;
 	}
 	return true;
@@ -199,7 +203,7 @@ uint64_t gettime(void)
 
 	res = clock_gettime(CLOCK_MONOTONIC, &t);
 	if (res < 0) {
-		printf("Error with gettimeofday! (%i)\n", res);
+		fprintf(stderr, "Error with gettimeofday! (%i)\n", res);
 		exit(EXIT_FAIL);
 	}
 	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
@@ -215,7 +219,7 @@ static bool stats_collect(struct stats_record *record)
 
 	/* Notice map is percpu: BPF_MAP_TYPE_PERCPU_ARRAY */
 	if ((bpf_map_lookup_elem(map_fd[0], &key, values)) != 0) {
-		printf("DEBUG: bpf_map_lookup_elem failed\n");
+		fprintf(stderr, "WARN: bpf_map_lookup_elem failed\n");
 		return false;
 	}
 	/* Sum values from each CPU */
@@ -322,7 +326,7 @@ int main(int argc, char **argv)
 	}
 	/* Required options */
 	if (ifindex == -1) {
-		printf("**Error**: required option --dev missing");
+		fprintf(stderr, "ERR: required option --dev missing");
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
@@ -331,7 +335,7 @@ int main(int argc, char **argv)
 	if (action_str) {
 		action = parse_xdp_action(action_str);
 		if (action < 0) {
-			printf("**Error**: Invalid XDP action\n");
+			fprintf(stderr, "ERR: Invalid XDP action\n");
 			usage(argv);
 			list_xdp_action();
 			return EXIT_FAIL_OPTION;
@@ -345,12 +349,12 @@ int main(int argc, char **argv)
 	}
 
 	if (load_bpf_file(filename)) {
-		printf("%s", bpf_log_buf);
+		fprintf(stderr, "ERR in load_bpf_file(): %s", bpf_log_buf);
 		return EXIT_FAIL;
 	}
 
 	if (!prog_fd[0]) {
-		printf("load_bpf_file: %s\n", strerror(errno));
+		fprintf(stderr, "ERR: load_bpf_file: %s\n", strerror(errno));
 		return EXIT_FAIL;
 	}
 
@@ -362,7 +366,7 @@ int main(int argc, char **argv)
 	signal(SIGINT, int_exit);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
-		printf("link set xdp fd failed\n");
+		fprintf(stderr, "link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
 
