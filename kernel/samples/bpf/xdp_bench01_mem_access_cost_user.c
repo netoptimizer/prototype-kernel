@@ -129,7 +129,7 @@ static int parse_xdp_action(char *action_str)
 	int i;
 
 	for (i = 0; i < XDP_ACTION_MAX; i++) {
-		maxlen = strnlen(xdp_action_names[i], XDP_ACTION_MAX_STRLEN);
+		maxlen = XDP_ACTION_MAX_STRLEN;
 		if (strncmp(xdp_action_names[i], action_str, maxlen) == 0) {
 			action = i;
 			break;
@@ -278,6 +278,7 @@ static void stats_poll(int interval)
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
+	char action_str_buf[XDP_ACTION_MAX_STRLEN + 1 /* for \0 */] = {};
 	char *action_str = NULL;
 	int action = XDP_DROP; /* Default action */
 	char filename[256];
@@ -311,7 +312,8 @@ int main(int argc, char **argv)
 			interval = atoi(optarg);
 			break;
 		case 'a':
-			action_str = optarg;
+			action_str = (char *)&action_str_buf;
+			strncpy(action_str, optarg, XDP_ACTION_MAX_STRLEN);
 			break;
 		case 'r':
 			touch_mem |= READ_MEM;
@@ -335,7 +337,8 @@ int main(int argc, char **argv)
 	if (action_str) {
 		action = parse_xdp_action(action_str);
 		if (action < 0) {
-			fprintf(stderr, "ERR: Invalid XDP action\n");
+			fprintf(stderr, "ERR: Invalid XDP action: %s\n",
+				action_str);
 			usage(argv);
 			list_xdp_action();
 			return EXIT_FAIL_OPTION;
