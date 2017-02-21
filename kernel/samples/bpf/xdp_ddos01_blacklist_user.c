@@ -23,6 +23,9 @@ static const char *__doc__=
 #include <getopt.h>
 #include <net/if.h>
 
+#include <sys/statfs.h>
+#include <libgen.h>  /* dirname */
+
 #include <arpa/inet.h>
 
 #include "bpf_load.h"
@@ -79,10 +82,54 @@ static void usage(char *argv[])
 	printf("\n");
 }
 
+// TODO: change permissions and user for the map file
+
+// TODO: Detect if bpf filesystem is not mounted
+
+#ifndef BPF_FS_MAGIC
+# define BPF_FS_MAGIC   0xcafe4a11
+#endif
+
+static int bpf_fs_check_path(const char *path)
+{
+	struct statfs st_fs;
+	char *dname, *dir;
+	int err = 0;
+
+	if (path == NULL)
+		return -EINVAL;
+
+	dname = strdup(path);
+	if (dname == NULL)
+		return -ENOMEM;
+
+	dir = dirname(dname);
+	if (statfs(dir, &st_fs)) {
+		fprintf(stderr, "ERR: failed to statfs %s: (%d)%s\n",
+			dir, errno, strerror(errno));
+		err = -errno;
+	}
+	free(dname);
+
+	if (!err && st_fs.f_type != BPF_FS_MAGIC) {
+		fprintf(stderr,
+			"ERR: specified path %s is not on BPF FS\n\n"
+			" You need to mount the BPF filesystem type like:\n"
+			"  mount -t bpf bpf /sys/fs/bpf/\n\n",
+			path);
+		err = -EINVAL;
+	}
+
+	return err;
+}
+
 bool export_map(int fd, const char *file)
 {
 	int retries = 2;
 
+	if (bpf_fs_check_path(file) < 0) {
+		exit(EXIT_FAIL_MAP_FS);
+	}
 retry:
 	if (!retries--)
 		return EXIT_FAIL_MAP;
@@ -197,7 +244,7 @@ int main(int argc, char **argv)
 
 	export_map(map_fd[1], file_verdict);
 	if (verbose)
-		printf("Verdict stats exported to file: %s\n", file_verdict);
+		printf(" - Verdict stats exported to file: %s\n", file_verdict);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
 		printf("link set xdp fd failed\n");
