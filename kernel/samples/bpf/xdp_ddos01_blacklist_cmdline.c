@@ -220,6 +220,13 @@ int main(int argc, char **argv)
 		close(fd_blacklist);
 	}
 
+	/* Catch non-option arguments */
+	if (argv[optind] != NULL) {
+		fprintf(stderr, "ERR: Unknown non-option argument: %s\n",
+			argv[optind]);
+		goto fail_opt;
+	}
+
 	/* Show statistics by polling */
 	while (stats) {
 		/* File can be overwritten by (re)loading _kern */
