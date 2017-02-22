@@ -1,6 +1,8 @@
 #ifndef __XDP_DDOS01_BLACKLIST_COMMON_H
 #define __XDP_DDOS01_BLACKLIST_COMMON_H
 
+#include <time.h>
+
 /* Exit return codes */
 #define	EXIT_OK			0
 #define EXIT_FAIL		1
@@ -21,6 +23,24 @@ static int verbose = 1;
 static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
 static const char *file_verdict   = "/sys/fs/bpf/ddos_blacklist_stat_verdict";
 // TODO: create subdir per ifname, to allow more XDP progs
+
+/* gettime returns the current time of day in nanoseconds.
+ * Cost: clock_gettime (ns) => 26ns (CLOCK_MONOTONIC)
+ *       clock_gettime (ns) =>  9ns (CLOCK_MONOTONIC_COARSE)
+ */
+#define NANOSEC_PER_SEC 1000000000 /* 10^9 */
+uint64_t gettime(void)
+{
+	struct timespec t;
+	int res;
+
+	res = clock_gettime(CLOCK_MONOTONIC, &t);
+	if (res < 0) {
+		fprintf(stderr, "Error with gettimeofday! (%i)\n", res);
+		exit(EXIT_FAIL);
+	}
+	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
+}
 
 static void blacklist_add(int fd, char *ip_string)
 {

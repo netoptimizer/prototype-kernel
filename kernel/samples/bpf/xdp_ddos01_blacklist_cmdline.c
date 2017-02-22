@@ -36,6 +36,30 @@ static const struct option long_options[] = {
 	{0, 0, NULL,  0 }
 };
 
+#define XDP_ACTION_MAX (XDP_TX + 1)
+#define XDP_ACTION_MAX_STRLEN 11
+static const char *xdp_action_names[XDP_ACTION_MAX] = {
+	[XDP_ABORTED]	= "XDP_ABORTED",
+	[XDP_DROP]	= "XDP_DROP",
+	[XDP_PASS]	= "XDP_PASS",
+	[XDP_TX]	= "XDP_TX",
+};
+static const char *action2str(int action)
+{
+	if (action < XDP_ACTION_MAX)
+		return xdp_action_names[action];
+	return NULL;
+}
+
+struct record {
+	__u64 counter;
+	__u64 timestamp;
+};
+
+struct stats_record {
+	struct record xdp_action[XDP_ACTION_MAX];
+};
+
 static void usage(char *argv[])
 {
 	int i;
@@ -70,85 +94,6 @@ int open_bpf_map(const char *file)
 	return fd;
 }
 
-static void stats_print_headers(void)
-{
-	static unsigned int i;
-#define DEBUG 1
-#ifdef  DEBUG
-	{
-	int debug_notice_interval = 3;
-	char msg[] =
-		"\nDebug output available via:\n"
-		" sudo cat /sys/kernel/debug/tracing/trace_pipe\n\n";
-	printf(msg, debug_notice_interval);
-	}
-#endif
-	i++;
-	printf("Stats: %d\n", i);
-}
-
-struct stats_key {
-	__u32 key;
-	__u64 value_sum;
-};
-
-static void stats_print(struct stats_key *record)
-{
-	char ip_txt[INET_ADDRSTRLEN] = {0};
-	__u64 count;
-	__u32 key;
-
-	key   = record->key;
-	count = record->value_sum;
-
-	/* Convert IPv4 addresses from binary to text form */
-	if (!inet_ntop(AF_INET, &key, ip_txt, sizeof(ip_txt))) {
-		printf("ERR: Cannot convert key:0x%X to IP-txt\n", key);
-		exit(EXIT_FAIL_IP);
-	}
-	printf("Key: IP:%-15s count:%llu\n", ip_txt, count);
-}
-static bool stats_collect(int fd, struct stats_key *record, __u32 key)
-{
-	unsigned int nr_cpus = bpf_num_possible_cpus();
-	__u64 values[nr_cpus];
-	__u64 sum = 0;
-	int i;
-
-	if ((bpf_map_lookup_elem(fd, &key, values)) != 0) {
-		printf("DEBUG: bpf_map_lookup_elem failed\n");
-		return false;
-	}
-
-	/* Sum values from each CPU */
-	for (i = 0; i < nr_cpus; i++) {
-		sum += values[i];
-	}
-
-	record->value_sum = sum;
-	record->key = key;
-	return true;
-}
-
-static void stats_poll(int fd)
-{
-	struct stats_key record;
-	__u32 key = 0, next_key;
-
-	/* clear screen */
-	printf("\033[2J");
-	stats_print_headers();
-
-	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
-
-		memset(&record, 0, sizeof(record));
-		if (stats_collect(fd, &record, next_key))
-			stats_print(&record);
-
-		key = next_key;
-	}
-}
-
 static __u64 get_key32_value64_percpu(int fd, __u32 key)
 {
 	/* For percpu maps, userspace gets a value per possible CPU */
@@ -170,13 +115,83 @@ static __u64 get_key32_value64_percpu(int fd, __u32 key)
 	return sum;
 }
 
+static void stats_print_headers(void)
+{
+	/* clear screen */
+	printf("\033[2J");
+	printf("%-12s %-10s %-18s %-9s\n",
+	       "XDP_action", "pps ", "pps-human-readable", "period/sec");
+}
+
+static void stats_print(struct stats_record *record,
+			struct stats_record *prev)
+{
+	int i;
+
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		struct record *r = &record->xdp_action[i];
+		struct record *p = &prev->xdp_action[i];
+		__u64 period  = 0;
+		__u64 packets = 0;
+		double pps = 0;
+		double period_ = 0;
+
+		if (p->timestamp) {
+			packets = r->counter - p->counter;
+			period  = r->timestamp - p->timestamp;
+			if (period > 0) {
+				period_ = ((double) period / NANOSEC_PER_SEC);
+				pps = packets / period_;
+			}
+		}
+
+		printf("%-12s %-10.0f %'-18.0f %f\n",
+		       action2str(i), pps, pps, period_);
+	}
+}
+
+static void stats_collect(int fd, struct stats_record *rec)
+{
+	int i;
+
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		rec->xdp_action[i].timestamp = gettime();
+		rec->xdp_action[i].counter = get_key32_value64_percpu(fd, i);
+	}
+}
+
+static void stats_poll(int interval)
+{
+	struct stats_record record, prev;
+	int fd;
+
+	/* TODO: Howto handle reload and clearing of maps */
+	fd = open_bpf_map(file_verdict);
+
+	memset(&record, 0, sizeof(record));
+
+	/* Trick to pretty printf with thousands separators use %' */
+	setlocale(LC_NUMERIC, "en_US");
+
+	while (1) {
+		memcpy(&prev, &record, sizeof(record));
+		stats_print_headers();
+		stats_collect(fd, &record);
+		stats_print(&record, &prev);
+		sleep(interval);
+	}
+	/* Not reached, but (hint) remember to close fd in other code */
+	close(fd);
+}
+
 static void blacklist_print_ip(__u32 ip, __u64 count)
 {
 	char ip_txt[INET_ADDRSTRLEN] = {0};
 
 	/* Convert IPv4 addresses from binary to text form */
 	if (!inet_ntop(AF_INET, &ip, ip_txt, sizeof(ip_txt))) {
-		printf("ERR: Cannot convert u32 IP:0x%X to IP-txt\n", ip);
+		fprintf(stderr,
+			"ERR: Cannot convert u32 IP:0x%X to IP-txt\n", ip);
 		exit(EXIT_FAIL_IP);
 	}
 	printf("\"%s\" : %llu\n", ip_txt, count);
@@ -287,12 +302,8 @@ int main(int argc, char **argv)
 	}
 
 	/* Show statistics by polling */
-	while (stats) {
-		/* Reopen, mapfile can be overwritten by (re)loading _kern */
-		fd_blacklist = open_bpf_map(file_blacklist);
-		stats_poll(fd_blacklist);
-		close(fd_blacklist);
-		sleep(interval);
+	if (stats) {
+		stats_poll(interval);
 	}
 
 	// TODO: implement stats for verdicts
