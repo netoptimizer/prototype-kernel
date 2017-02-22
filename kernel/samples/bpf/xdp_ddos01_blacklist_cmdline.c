@@ -32,6 +32,7 @@ static const struct option long_options[] = {
 	{"ip",		required_argument,	NULL, 'i' },
 	{"stats",	no_argument,		NULL, 's' },
 	{"sec",		required_argument,	NULL, 's' },
+	{"list",	no_argument,		NULL, 'l' },
 	{0, 0, NULL,  0 }
 };
 
@@ -148,6 +149,51 @@ static void stats_poll(int fd)
 	}
 }
 
+static __u64 get_key32_value64_percpu(int fd, __u32 key)
+{
+	/* For percpu maps, userspace gets a value per possible CPU */
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	__u64 values[nr_cpus];
+	__u64 sum = 0;
+	int i;
+
+	if ((bpf_map_lookup_elem(fd, &key, values)) != 0) {
+		fprintf(stderr,
+			"ERR: bpf_map_lookup_elem failed key:0x%X\n", key);
+		return 0;
+	}
+
+	/* Sum values from each CPU */
+	for (i = 0; i < nr_cpus; i++) {
+		sum += values[i];
+	}
+	return sum;
+}
+
+static void blacklist_print_ip(__u32 ip, __u64 count)
+{
+	char ip_txt[INET_ADDRSTRLEN] = {0};
+
+	/* Convert IPv4 addresses from binary to text form */
+	if (!inet_ntop(AF_INET, &ip, ip_txt, sizeof(ip_txt))) {
+		printf("ERR: Cannot convert u32 IP:0x%X to IP-txt\n", ip);
+		exit(EXIT_FAIL_IP);
+	}
+	printf("Key: IP:%-15s count:%llu\n", ip_txt, count);
+}
+
+static void blacklist_list_all(int fd)
+{
+	__u32 key = 0, next_key;
+	__u64 value;
+
+	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+		key = next_key;
+		value = get_key32_value64_percpu(fd, key);
+		blacklist_print_ip(key, value);
+	}
+}
+
 /* Blacklist operations */
 #define ACTION_ADD	(1 << 0)
 #define ACTION_DEL	(1 << 1)
@@ -164,6 +210,7 @@ int main(int argc, char **argv)
 	int fd_blacklist;
 	int fd_verdict;
 	int longindex = 0;
+	bool do_list = false;
 	int opt;
 
 	fd_verdict = open_bpf_map(file_verdict);
@@ -190,6 +237,9 @@ int main(int argc, char **argv)
 			stats = true;
 			if (optarg)
 				interval = atoi(optarg);
+			break;
+		case 'l':
+			do_list = true;
 			break;
 		case 'h':
 		fail_opt:
@@ -225,6 +275,12 @@ int main(int argc, char **argv)
 		fprintf(stderr, "ERR: Unknown non-option argument: %s\n",
 			argv[optind]);
 		goto fail_opt;
+	}
+
+	if (do_list) {
+		fd_blacklist = open_bpf_map(file_blacklist);
+		blacklist_list_all(fd_blacklist);
+		close(fd_blacklist);
 	}
 
 	/* Show statistics by polling */
