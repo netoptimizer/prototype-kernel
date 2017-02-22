@@ -115,6 +115,59 @@ static __u64 get_key32_value64_percpu(int fd, __u32 key)
 	return sum;
 }
 
+/* Blacklist operations */
+#define ACTION_ADD	(1 << 0)
+#define ACTION_DEL	(1 << 1)
+
+static int blacklist_modify(int fd, char *ip_string, unsigned int action)
+{
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	__u64 values[nr_cpus];
+	__u32 key;
+	int res;
+
+	memset(values, 0, sizeof(__u64) * nr_cpus);
+
+	/* Convert IP-string into 32-bit network byte-order value */
+	res = inet_pton(AF_INET, ip_string, &key);
+	if (res <= 0) {
+		if (res == 0)
+			fprintf(stderr,
+				"ERR: IPv4 \"%s\" not in presentation format\n",
+				ip_string);
+		else
+			perror("inet_pton");
+		return EXIT_FAIL_IP;
+	}
+
+	if (action == ACTION_ADD) {
+		res = bpf_map_update_elem(fd, &key, values, BPF_NOEXIST);
+	} else if (action == ACTION_DEL) {
+		res = bpf_map_delete_elem(fd, &key);
+	} else {
+		fprintf(stderr, "ERR: %s() invalid action 0x%x\n",
+			__func__, action);
+		return EXIT_FAIL_OPTION;
+	}
+
+	if (res != 0) { /* 0 == success */
+		fprintf(stderr,
+			"%s() IP:%s key:0x%X errno(%d/%s)",
+			__func__, ip_string, key, errno, strerror(errno));
+
+		if (errno == 17) {
+			fprintf(stderr, ": Already in blacklist\n");
+			return EXIT_OK;
+		}
+		fprintf(stderr, "\n");
+		return EXIT_FAIL_MAP_KEY;
+	}
+	if (verbose)
+		fprintf(stderr,
+			"%s() IP:%s key:0x%X\n", __func__, ip_string, key);
+	return EXIT_OK;
+}
+
 static void stats_print_headers(void)
 {
 	/* clear screen */
@@ -212,10 +265,6 @@ static void blacklist_list_all(int fd)
 	printf("}\n");
 }
 
-/* Blacklist operations */
-#define ACTION_ADD	(1 << 0)
-#define ACTION_DEL	(1 << 1)
-
 int main(int argc, char **argv)
 {
 #	define STR_MAX 42 /* For trivial input validation */
@@ -239,11 +288,10 @@ int main(int argc, char **argv)
 		case 'a':
 			action |= ACTION_ADD;
 			break;
-		case 'd':
+		case 'x':
 			action |= ACTION_DEL;
 			break;
 		case 'i':
-			printf("Blacklist IP:%s\n", optarg);
 			if (!optarg || strlen(optarg) >= STR_MAX) {
 				printf("ERR: src ip too long or NULL\n");
 				goto fail_opt;
@@ -269,23 +317,17 @@ int main(int argc, char **argv)
 
 	/* Update blacklist */
 	if (action) {
+		int res = 0;
+
 		if (!ip_string) {
 			fprintf(stderr,
 			  "ERR: action require type+data, e.g option --ip\n");
 			goto fail_opt;
 		}
 		fd_blacklist = open_bpf_map(file_blacklist);
-		if ((action == ACTION_ADD))
-			blacklist_add(fd_blacklist, ip_string);
-		else if ((action == ACTION_DEL) && ip_string)
-			//blacklist_add(fd_blacklist, ip_string);
-			;
-		else {
-			fprintf(stderr,
-				"WARN: unknown action specified for IP:%s\n",
-				ip_string);
-		}
+		res = blacklist_modify(fd_blacklist, ip_string, action);
 		close(fd_blacklist);
+		return res;
 	}
 
 	/* Catch non-option arguments */
