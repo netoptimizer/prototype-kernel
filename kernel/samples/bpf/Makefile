@@ -149,7 +149,7 @@ $(KERN_OBJECTS): %.o: %.c
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS) Makefile
-	$(CC) $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
+	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
 
 $(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile $(COMMON_H)
-	$(CC) -g $(CFLAGS) $(LDFLAGS) $(OBJECTS) -o $@ $<
+	$(CC) -g $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
