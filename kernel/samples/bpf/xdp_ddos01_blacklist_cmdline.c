@@ -179,7 +179,7 @@ static void blacklist_print_ip(__u32 ip, __u64 count)
 		printf("ERR: Cannot convert u32 IP:0x%X to IP-txt\n", ip);
 		exit(EXIT_FAIL_IP);
 	}
-	printf("Key: IP:%-15s count:%llu\n", ip_txt, count);
+	printf("\"%s\" : %llu\n", ip_txt, count);
 }
 
 static void blacklist_list_all(int fd)
@@ -187,11 +187,14 @@ static void blacklist_list_all(int fd)
 	__u32 key = 0, next_key;
 	__u64 value;
 
+	printf("{\n");
 	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+		printf("%s", key ? "," : " ");
 		key = next_key;
 		value = get_key32_value64_percpu(fd, key);
 		blacklist_print_ip(key, value);
 	}
+	printf("}\n");
 }
 
 /* Blacklist operations */
