@@ -181,7 +181,7 @@ int main(int argc, char **argv)
 			printf("Blacklist IP:%s\n", optarg);
 			if (!optarg || strlen(optarg) >= STR_MAX) {
 				printf("ERR: src ip too long or NULL\n");
-				goto error;
+				goto fail_opt;
 			}
 			ip_string = (char *)&_ip_string_buf;
 			strncpy(ip_string, optarg, STR_MAX);
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 				interval = atoi(optarg);
 			break;
 		case 'h':
-		error:
+		fail_opt:
 		default:
 			usage(argv);
 			return EXIT_FAIL_OPTION;
@@ -200,7 +200,12 @@ int main(int argc, char **argv)
 	}
 
 	/* Update blacklist */
-	if (ip_string) {
+	if (action) {
+		if (!ip_string) {
+			fprintf(stderr,
+			  "ERR: action require type+data, e.g option --ip\n");
+			goto fail_opt;
+		}
 		fd_blacklist = open_bpf_map(file_blacklist);
 		if ((action == ACTION_ADD))
 			blacklist_add(fd_blacklist, ip_string);
@@ -208,7 +213,8 @@ int main(int argc, char **argv)
 			//blacklist_add(fd_blacklist, ip_string);
 			;
 		else {
-			printf("WARN: not action specified for IP:%s\n",
+			fprintf(stderr,
+				"WARN: unknown action specified for IP:%s\n",
 				ip_string);
 		}
 		close(fd_blacklist);
