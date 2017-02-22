@@ -229,7 +229,7 @@ int main(int argc, char **argv)
 
 	/* Show statistics by polling */
 	while (stats) {
-		/* File can be overwritten by (re)loading _kern */
+		/* Reopen, mapfile can be overwritten by (re)loading _kern */
 		fd_blacklist = open_bpf_map(file_blacklist);
 		stats_poll(fd_blacklist);
 		close(fd_blacklist);
