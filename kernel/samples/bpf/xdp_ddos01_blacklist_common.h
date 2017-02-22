@@ -42,7 +42,11 @@ uint64_t gettime(void)
 	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
-static void blacklist_add(int fd, char *ip_string)
+/* Blacklist operations */
+#define ACTION_ADD	(1 << 0)
+#define ACTION_DEL	(1 << 1)
+
+static int blacklist_modify(int fd, char *ip_string, unsigned int action)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
 	__u64 values[nr_cpus];
@@ -56,28 +60,39 @@ static void blacklist_add(int fd, char *ip_string)
 	if (res <= 0) {
 		if (res == 0)
 			fprintf(stderr,
-			"ERROR: IPv4 \"%s\" not in presentation format\n",
+				"ERR: IPv4 \"%s\" not in presentation format\n",
 				ip_string);
 		else
 			perror("inet_pton");
-		exit(EXIT_FAIL_IP);
+		return EXIT_FAIL_IP;
 	}
 
-	res = bpf_map_update_elem(fd, &key, values, BPF_NOEXIST);
-	if (res != 0) { /* 0 == success */
+	if (action == ACTION_ADD) {
+		res = bpf_map_update_elem(fd, &key, values, BPF_NOEXIST);
+	} else if (action == ACTION_DEL) {
+		res = bpf_map_delete_elem(fd, &key);
+	} else {
+		fprintf(stderr, "ERR: %s() invalid action 0x%x\n",
+			__func__, action);
+		return EXIT_FAIL_OPTION;
+	}
 
-		printf("%s() IP:%s key:0x%X errno(%d/%s)",
-		       __func__, ip_string, key, errno, strerror(errno));
+	if (res != 0) { /* 0 == success */
+		fprintf(stderr,
+			"%s() IP:%s key:0x%X errno(%d/%s)",
+			__func__, ip_string, key, errno, strerror(errno));
 
 		if (errno == 17) {
-			printf(": Already in blacklist\n");
-			return;
+			fprintf(stderr, ": Already in blacklist\n");
+			return EXIT_OK;
 		}
-		printf("\n");
-		exit(EXIT_FAIL_MAP_KEY);
+		fprintf(stderr, "\n");
+		return EXIT_FAIL_MAP_KEY;
 	}
 	if (verbose)
-		printf("%s() IP:%s key:0x%X\n", __func__, ip_string, key);
+		fprintf(stderr,
+			"%s() IP:%s key:0x%X\n", __func__, ip_string, key);
+	return EXIT_OK;
 }
 
 #endif

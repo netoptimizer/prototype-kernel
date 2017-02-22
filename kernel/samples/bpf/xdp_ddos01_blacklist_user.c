@@ -252,7 +252,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Add something to the map as a test */
-	blacklist_add(map_fd[0], "198.18.50.3");
+	blacklist_modify(map_fd[0], "198.18.50.3", ACTION_ADD);
 
 	return EXIT_OK;
 }
