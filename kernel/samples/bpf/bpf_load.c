@@ -1,3 +1,6 @@
+/*
+ * Notice: Modified copy of kernel/samples/bpf/bpf_load.c
+ */
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -268,9 +271,9 @@ static int parse_relo_and_apply(Elf_Data *data, Elf_Data *symbols,
 	return 0;
 }
 
-int load_bpf_file(char *path)
+int load_bpf_file_fd(int fd)
 {
-	int fd, i;
+	int i;
 	Elf *elf;
 	GElf_Ehdr ehdr;
 	GElf_Shdr shdr, shdr_prog;
@@ -280,7 +283,6 @@ int load_bpf_file(char *path)
 	if (elf_version(EV_CURRENT) == EV_NONE)
 		return 1;
 
-	fd = open(path, O_RDONLY, 0);
 	if (fd < 0)
 		return 1;
 
@@ -380,8 +382,20 @@ int load_bpf_file(char *path)
 			load_and_attach(shname, data->d_buf, data->d_size);
 	}
 
-	close(fd);
 	return 0;
+}
+
+int load_bpf_file(char *path)
+{
+	int fd, res;
+
+	fd = open(path, O_RDONLY, 0);
+	if (fd < 0)
+		return 1;
+
+	res = load_bpf_file_fd(fd);
+	close(fd);
+	return res;
 }
 
 void read_trace_pipe(void)
