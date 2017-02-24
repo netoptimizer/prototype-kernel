@@ -23,7 +23,8 @@ COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 # samples/bpf/ and tools/lib/bpf/.
 #
 # 1) When loading the ELF eBPF binary is uses the API load_bpf_file()
-#    via "bpf_load.h" (compiles against kernels samples/bpf/bpf_load.c).
+#    via "bpf_load.h" (compiles against a modified local copy of
+#    kernels samples/bpf/bpf_load.c).
 #
 # 2) The API for interacting with eBPF comes from tools/lib/bpf/bpf.h.
 #    For now, tools/lib/bpf/bpf.c is compiled directly, and executable
@@ -131,7 +132,7 @@ verify_llvm_target_bpf: verify_cmds
 $(OBJECT_LIBBPF): $(KERNEL)/tools/lib/bpf/bpf.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-$(OBJECT_LOADBPF): $(KERNEL)/samples/bpf/bpf_load.c
+$(OBJECT_LOADBPF): bpf_load.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 # Compiling of eBPF restricted-C code with LLVM
