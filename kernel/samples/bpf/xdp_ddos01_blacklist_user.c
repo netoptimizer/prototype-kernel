@@ -138,6 +138,12 @@ retry:
 	if (!retries--)
 		return EXIT_FAIL_MAP;
 
+	/*
+	 * TODO: Load existing maps if possible first.  We can simply
+	 * update fd_map[X] and call load_bpf_relocate_maps_and_attach()
+	 * code need to be  restructured.
+	 */
+
 	/* Export map as a file */
 	if (bpf_obj_pin(fd, file) != 0) {
 		if (errno == 17) {
@@ -245,6 +251,15 @@ int main(int argc, char **argv)
 		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
 		return EXIT_FAIL_BPF_ELF;
 	}
+
+	export_map(map_fd[0], file_blacklist);
+	if (verbose)
+		printf(" - Blacklist exported to file: %s\n", file_blacklist);
+
+	export_map(map_fd[1], file_verdict);
+	if (verbose)
+		printf(" - Verdict stats exported to file: %s\n", file_verdict);
+
 	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
 		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
 		return EXIT_FAIL_BPF_RELOCATE;
@@ -255,14 +270,6 @@ int main(int argc, char **argv)
 		printf("load_bpf_file: %s\n", strerror(errno));
 		return 1;
 	}
-
-	export_map(map_fd[0], file_blacklist);
-	if (verbose)
-		printf(" - Blacklist exported to file: %s\n", file_blacklist);
-
-	export_map(map_fd[1], file_verdict);
-	if (verbose)
-		printf(" - Verdict stats exported to file: %s\n", file_verdict);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
 		printf("link set xdp fd failed\n");
