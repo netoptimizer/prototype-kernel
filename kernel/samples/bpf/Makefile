@@ -54,7 +54,7 @@ CFLAGS += -I$(KERNEL)/tools/include
 #CFLAGS += -I$(KERNEL)/tools/perf
 CFLAGS += -I$(KERNEL)/usr/include
 # Strange dependency to "selftests" due to "bpf_util.h"
-CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
+#CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
 
 LDFLAGS= -lelf
 
