@@ -19,6 +19,10 @@ static const char *__doc__=
 #include <string.h>
 #include <unistd.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
 #include <sys/resource.h>
 #include <getopt.h>
 #include <net/if.h>
@@ -170,6 +174,7 @@ int main(int argc, char **argv)
 	bool rm_xdp_prog = false;
 	char filename[256];
 	int longindex = 0;
+	int fd_bpf_prog;
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
@@ -228,10 +233,23 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (load_bpf_file(filename)) {
-		printf("%s", bpf_log_buf);
-		return 1;
+	/* Splitup load_bpf_file() */
+	fd_bpf_prog = open(filename, O_RDONLY, 0);
+	if (fd_bpf_prog < 0) {
+		fprintf(stderr,
+			"ERR: cannot load eBPF file %s err(%d):%s\n",
+			filename, errno, strerror(errno));
+		return EXIT_FAIL_BPF;
 	}
+	if (load_bpf_elf_sections(fd_bpf_prog)) {
+		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
+		return EXIT_FAIL_BPF_ELF;
+	}
+	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
+		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
+		return EXIT_FAIL_BPF_RELOCATE;
+	}
+	close(fd_bpf_prog);
 
 	if (!prog_fd[0]) {
 		printf("load_bpf_file: %s\n", strerror(errno));

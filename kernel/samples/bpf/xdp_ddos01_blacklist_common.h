@@ -13,6 +13,9 @@
 #define EXIT_FAIL_MAP_FILE	22
 #define EXIT_FAIL_MAP_FS	23
 #define EXIT_FAIL_IP		30
+#define EXIT_FAIL_BPF		40
+#define EXIT_FAIL_BPF_ELF	41
+#define EXIT_FAIL_BPF_RELOCATE	42
 
 static int verbose = 1;
 
