@@ -51,7 +51,7 @@ CFLAGS := -O2 -Wall
 CFLAGS += -I./tools/lib
 #CFLAGS += -I$(KERNEL)/tools/lib
 CFLAGS += -I$(KERNEL)/tools/include
-CFLAGS += -I$(KERNEL)/tools/perf
+#CFLAGS += -I$(KERNEL)/tools/perf
 CFLAGS += -I$(KERNEL)/usr/include
 # Strange dependency to "selftests" due to "bpf_util.h"
 CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
