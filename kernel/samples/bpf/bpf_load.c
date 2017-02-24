@@ -27,6 +27,7 @@
 #include "libbpf.h"
 #include "bpf_load.h"
 #include "perf-sys.h"
+#include <linux/version.h>
 
 #define DEBUGFS "/sys/kernel/debug/tracing/"
 
@@ -91,10 +92,12 @@ static int load_and_attach(const char *event, struct bpf_insn *prog, int size)
 		prog_type = BPF_PROG_TYPE_XDP;
 	} else if (is_perf_event) {
 		prog_type = BPF_PROG_TYPE_PERF_EVENT;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 10, 0)
 	} else if (is_cgroup_skb) {
 		prog_type = BPF_PROG_TYPE_CGROUP_SKB;
 	} else if (is_cgroup_sk) {
 		prog_type = BPF_PROG_TYPE_CGROUP_SOCK;
+#endif
 	} else {
 		printf("Unknown event '%s'\n", event);
 		return -1;

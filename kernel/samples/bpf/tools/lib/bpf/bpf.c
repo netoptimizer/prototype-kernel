@@ -168,6 +168,7 @@ int bpf_obj_get(const char *pathname)
 	return sys_bpf(BPF_OBJ_GET, &attr, sizeof(attr));
 }
 
+#ifdef BPF_PROG_ATTACH
 int bpf_prog_attach(int prog_fd, int target_fd, enum bpf_attach_type type,
 		    unsigned int flags)
 {
@@ -192,3 +193,4 @@ int bpf_prog_detach(int target_fd, enum bpf_attach_type type)
 
 	return sys_bpf(BPF_PROG_DETACH, &attr, sizeof(attr));
 }
+#endif /* BPF_PROG_ATTACH */
