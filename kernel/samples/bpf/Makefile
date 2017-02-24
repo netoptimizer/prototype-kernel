@@ -47,17 +47,19 @@ KERNEL=$(kbuilddir)
 
 CFLAGS := -O2 -Wall
 
-CGLAGS += -I$(KERNEL)/include/
-CFLAGS += -I$(KERNEL)/usr/include
-CFLAGS += -I$(KERNEL)/tools/lib -I$(KERNEL)/tools/include
+# Local copy of kernel/tools/lib/
+CFLAGS += -I./tools/lib
+#CFLAGS += -I$(KERNEL)/tools/lib
+CFLAGS += -I$(KERNEL)/tools/include
 CFLAGS += -I$(KERNEL)/tools/perf
+CFLAGS += -I$(KERNEL)/usr/include
 # Strange dependency to "selftests" due to "bpf_util.h"
 CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
 
 LDFLAGS= -lelf
 
 # Objects that xxx_user program is linked with:
-OBJECT_LIBBPF  = bpf.o
+OBJECT_LIBBPF  = tools/lib/bpf/bpf.o
 OBJECT_LOADBPF = bpf_load.o
 OBJECTS = $(OBJECT_LIBBPF) $(OBJECT_LOADBPF)
 
@@ -129,7 +131,7 @@ verify_llvm_target_bpf: verify_cmds
 	else true; fi
 
 # The fake-minimal-libbpf
-$(OBJECT_LIBBPF): $(KERNEL)/tools/lib/bpf/bpf.c
+$(OBJECT_LIBBPF): %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(OBJECT_LOADBPF): bpf_load.c
