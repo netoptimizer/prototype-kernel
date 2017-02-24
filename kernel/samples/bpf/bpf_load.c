@@ -274,14 +274,14 @@ static int parse_relo_and_apply(Elf_Data *data, Elf_Data *symbols,
 	return 0;
 }
 
-int load_bpf_file_fd(int fd)
+int load_bpf_elf_sections(int fd)
 {
 	int i;
 	Elf *elf;
 	GElf_Ehdr ehdr;
-	GElf_Shdr shdr, shdr_prog;
-	Elf_Data *data, *data_prog, *symbols = NULL;
-	char *shname, *shname_prog;
+	GElf_Shdr shdr;
+	Elf_Data *data;
+	char *shname;
 
 	if (elf_version(EV_CURRENT) == EV_NONE)
 		return 1;
@@ -326,8 +326,43 @@ int load_bpf_file_fd(int fd)
 			processed_sec[i] = true;
 			if (load_maps(data->d_buf, data->d_size))
 				return 1;
-		} else if (shdr.sh_type == SHT_SYMTAB) {
+		}
+	}
+	return 0;
+}
+
+int load_bpf_relocate_maps_and_attach(int fd)
+{
+	int i;
+	Elf *elf;
+	GElf_Ehdr ehdr;
+	GElf_Shdr shdr, shdr_prog;
+	Elf_Data *data, *data_prog, *symbols = NULL;
+	char *shname, *shname_prog;
+
+	if (elf_version(EV_CURRENT) == EV_NONE)
+		return 1;
+
+	if (fd < 0)
+		return 1;
+
+	elf = elf_begin(fd, ELF_C_READ, NULL);
+
+	if (!elf)
+		return 1;
+
+	if (gelf_getehdr(elf, &ehdr) != &ehdr)
+		return 1;
+
+	/* scan over all elf sections to find symbols table */
+	for (i = 1; i < ehdr.e_shnum; i++) {
+
+		if (get_sec(elf, i, &ehdr, &shname, &shdr, &data))
+			continue;
+
+		if (shdr.sh_type == SHT_SYMTAB) {
 			symbols = data;
+			break;
 		}
 	}
 
@@ -396,7 +431,11 @@ int load_bpf_file(char *path)
 	if (fd < 0)
 		return 1;
 
-	res = load_bpf_file_fd(fd);
+	res = load_bpf_elf_sections(fd);
+	if (res)
+		goto out;
+	res = load_bpf_relocate_maps_and_attach(fd);
+out:
 	close(fd);
 	return res;
 }

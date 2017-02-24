@@ -27,6 +27,10 @@ extern int prog_cnt;
  */
 int load_bpf_file(char *path);
 
+/* Helpers to splitup load_bpf_file */
+int load_bpf_elf_sections(int fd);
+int load_bpf_relocate_maps_and_attach(int fd);
+
 void read_trace_pipe(void);
 struct ksym {
 	long addr;
