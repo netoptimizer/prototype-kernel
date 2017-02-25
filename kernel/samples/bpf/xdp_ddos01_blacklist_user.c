@@ -94,6 +94,7 @@ static void usage(char *argv[])
 # define BPF_FS_MAGIC   0xcafe4a11
 #endif
 
+/* Verify BPF-filesystem is mounted on given file path */
 static int bpf_fs_check_path(const char *path)
 {
 	struct statfs st_fs;
@@ -127,13 +128,23 @@ static int bpf_fs_check_path(const char *path)
 	return err;
 }
 
-bool export_map(int fd, const char *file)
+
+/* Export and potentially remap map_fd[]
+ *
+ * map_idx is the corresponding map_fd[index]
+ */
+int export_map_fd(int map_idx, const char *file)
 {
 	int retries = 2;
+	int fd_existing;
+
+	// Verify input map_fd[map_idx]
+	// if (!map_fd[map_idx]) ...
 
 	if (bpf_fs_check_path(file) < 0) {
 		exit(EXIT_FAIL_MAP_FS);
 	}
+
 retry:
 	if (!retries--)
 		return EXIT_FAIL_MAP;
@@ -144,8 +155,18 @@ retry:
 	 * code need to be  restructured.
 	 */
 
+	/* Try to open existing already exported map file */
+	fd_existing = bpf_obj_get(file);
+	if (fd_existing > 0) {
+		/* Great: map file already existed use it */
+		// FIXME: Verify map size etc is the same
+		close(map_fd[map_idx]); /* is this enough to cleanup map??? */
+		map_fd[map_idx] = fd_existing;
+		return 0;
+	}
+
 	/* Export map as a file */
-	if (bpf_obj_pin(fd, file) != 0) {
+	if (bpf_obj_pin(map_fd[map_idx], file) != 0) {
 		if (errno == 17) {
 			/* File exists, remove it as this bpf XDP
 			 * program force-fully overwrite/swap existing
@@ -159,10 +180,6 @@ retry:
 			}
 			fprintf(stderr,
 				"WARN: Deleted previous map file: %s\n", file);
-			/* FIXME: shouldn't we let an existing
-			 * blacklist map "survive", and feed it to the
-			 * eBPF program?
-			 */
 			goto retry;
 		} else {
 			fprintf(stderr,
@@ -171,7 +188,7 @@ retry:
 			return EXIT_FAIL_MAP;
 		}
 	}
-	return true;
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -181,6 +198,7 @@ int main(int argc, char **argv)
 	char filename[256];
 	int longindex = 0;
 	int fd_bpf_prog;
+	int res;
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
@@ -252,14 +270,17 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_BPF_ELF;
 	}
 
-	export_map(map_fd[0], file_blacklist);
+	if ((res = export_map_fd(0, file_blacklist)))
+	    return res;
 	if (verbose)
-		printf(" - Blacklist exported to file: %s\n", file_blacklist);
+		printf(" - Blacklist     map file: %s\n", file_blacklist);
 
-	export_map(map_fd[1], file_verdict);
+	if ((res = export_map_fd(1, file_verdict)))
+		return res;
 	if (verbose)
-		printf(" - Verdict stats exported to file: %s\n", file_verdict);
+		printf(" - Verdict stats map file: %s\n", file_verdict);
 
+	/* Notice: updated map_fd[i] takes effect now */
 	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
 		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
 		return EXIT_FAIL_BPF_RELOCATE;
