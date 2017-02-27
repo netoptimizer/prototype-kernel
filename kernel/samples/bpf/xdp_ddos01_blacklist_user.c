@@ -22,6 +22,7 @@ static const char *__doc__=
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <pwd.h>
 
 #include <sys/resource.h>
 #include <getopt.h>
@@ -63,6 +64,7 @@ static const struct option long_options[] = {
 	{"remove",	no_argument,		NULL, 'r' },
 	{"dev",		required_argument,	NULL, 'd' },
 	{"quite",	no_argument,		NULL, 'q' },
+	{"owner",	required_argument,	NULL, 'o' },
 	{0, 0, NULL,  0 }
 };
 
@@ -85,8 +87,6 @@ static void usage(char *argv[])
 	}
 	printf("\n");
 }
-
-// TODO: change permissions and user for the map file
 
 #ifndef BPF_FS_MAGIC
 # define BPF_FS_MAGIC   0xcafe4a11
@@ -126,14 +126,12 @@ static int bpf_fs_check_path(const char *path)
 	return err;
 }
 
-
 /* Export and potentially remap map_fd[]
  *
  * map_idx is the corresponding map_fd[index]
  */
-int export_map_fd(int map_idx, const char *file)
+int export_map_fd(int map_idx, const char *file, uid_t owner, gid_t group)
 {
-	int retries = 2;
 	int fd_existing;
 
 	/* Verify input map_fd[map_idx] */
@@ -154,7 +152,7 @@ int export_map_fd(int map_idx, const char *file)
 		// FIXME: Verify map size etc is the same
 		close(map_fd[map_idx]); /* is this enough to cleanup map??? */
 		map_fd[map_idx] = fd_existing;
-		return 0;
+		goto out;
 	}
 
 	/* Export map as a file */
@@ -163,6 +161,14 @@ int export_map_fd(int map_idx, const char *file)
 			file, errno, strerror(errno));
 		return EXIT_FAIL_MAP;
 	}
+
+out:
+	/* Change permissions and user for the map file, as this allow
+	 * an unpriviliged user to operate the cmdline tool.
+	 */
+	if (chown(file, owner, group) < 0)
+		fprintf(stderr, "WARN: Cannot chown file:%s err(%d):%s\n",
+			file, errno, strerror(errno));
 	return 0;
 }
 
@@ -173,6 +179,9 @@ int main(int argc, char **argv)
 	char filename[256];
 	int longindex = 0;
 	int fd_bpf_prog;
+	uid_t owner = -1; /* -1 result in now change of owner */
+	gid_t group = -1;
+	struct passwd *pwd = NULL;
 	int res;
 	int opt;
 
@@ -187,6 +196,16 @@ int main(int argc, char **argv)
 			break;
 		case 'r':
 			rm_xdp_prog = true;
+			break;
+		case 'o': /* extract owner and group from username */
+			if (!(pwd = getpwnam(optarg))) {
+				fprintf(stderr,
+					"ERR: unknown owner:%s err(%d):%s\n",
+					optarg, errno, strerror(errno));
+				goto error;
+			}
+			owner = pwd->pw_uid;
+			group = pwd->pw_gid;
 			break;
 		case 'd':
 			if (strlen(optarg) >= IF_NAMESIZE) {
@@ -245,12 +264,12 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_BPF_ELF;
 	}
 
-	if ((res = export_map_fd(0, file_blacklist)))
+	if ((res = export_map_fd(0, file_blacklist, owner, group)))
 	    return res;
 	if (verbose)
 		printf(" - Blacklist     map file: %s\n", file_blacklist);
 
-	if ((res = export_map_fd(1, file_verdict)))
+	if ((res = export_map_fd(1, file_verdict, owner, group)))
 		return res;
 	if (verbose)
 		printf(" - Verdict stats map file: %s\n", file_verdict);
