@@ -136,27 +136,21 @@ int export_map_fd(int map_idx, const char *file)
 	int retries = 2;
 	int fd_existing;
 
-	// Verify input map_fd[map_idx]
-	// if (!map_fd[map_idx]) ...
+	/* Verify input map_fd[map_idx] */
+	if (map_idx>= MAX_MAPS)
+		return EXIT_FAIL_MAP;
+	if (map_fd[map_idx] <= 0)
+		return EXIT_FAIL_MAP;
 
 	if (bpf_fs_check_path(file) < 0) {
 		exit(EXIT_FAIL_MAP_FS);
 	}
 
-retry:
-	if (!retries--)
-		return EXIT_FAIL_MAP;
-
 	/*
-	 * TODO: Load existing maps if possible first.  We can simply
-	 * update fd_map[X] and call load_bpf_relocate_maps_and_attach()
-	 * code need to be  restructured.
+	 * Load existing maps via filesystem, if possible first.
 	 */
-
-	/* Try to open existing already exported map file */
 	fd_existing = bpf_obj_get(file);
-	if (fd_existing > 0) {
-		/* Great: map file already existed use it */
+	if (fd_existing > 0) { /* Great: map file already existed use it */
 		// FIXME: Verify map size etc is the same
 		close(map_fd[map_idx]); /* is this enough to cleanup map??? */
 		map_fd[map_idx] = fd_existing;
@@ -165,26 +159,9 @@ retry:
 
 	/* Export map as a file */
 	if (bpf_obj_pin(map_fd[map_idx], file) != 0) {
-		if (errno == 17) {
-			/* File exists, remove it as this bpf XDP
-			 * program force-fully overwrite/swap existing
-			 * XDP prog.
-			 */
-			if (unlink(file) < 0) {
-				fprintf(stderr, "ERR: cannot cleanup old map"
-				       "file:%s err(%d):%s\n",
-				       file, errno, strerror(errno));
-				exit(EXIT_FAIL_MAP);
-			}
-			fprintf(stderr,
-				"WARN: Deleted previous map file: %s\n", file);
-			goto retry;
-		} else {
-			fprintf(stderr,
-				"ERR: Cannot pin map file:%s err(%d):%s\n",
-			       file, errno, strerror(errno));
-			return EXIT_FAIL_MAP;
-		}
+		fprintf(stderr, "ERR: Cannot pin map file:%s err(%d):%s\n",
+			file, errno, strerror(errno));
+		return EXIT_FAIL_MAP;
 	}
 	return 0;
 }
