@@ -88,8 +88,6 @@ static void usage(char *argv[])
 
 // TODO: change permissions and user for the map file
 
-// TODO: Detect if bpf filesystem is not mounted
-
 #ifndef BPF_FS_MAGIC
 # define BPF_FS_MAGIC   0xcafe4a11
 #endif
