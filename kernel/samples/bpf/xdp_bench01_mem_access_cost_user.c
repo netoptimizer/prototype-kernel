@@ -36,8 +36,9 @@ static char *ifname = NULL;
 
 static void int_exit(int sig)
 {
-	fprintf(stderr, "Interrupted: Removing XDP program on ifindex:%d\n",
-		ifindex);
+	fprintf(stderr,
+		"Interrupted: Removing XDP program on ifindex:%d device:%s\n",
+		ifindex, ifname);
 	if (ifindex > -1)
 		set_link_xdp_fd(ifindex, -1);
 	exit(EXIT_OK);
