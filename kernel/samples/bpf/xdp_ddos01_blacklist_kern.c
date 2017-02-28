@@ -35,8 +35,6 @@ struct bpf_map_def SEC("maps") verdict_cnt = {
 	.max_entries = XDP_ACTION_MAX,
 };
 
-// TODO: Add general stats counter-map per XDP action
-
 // TODO: Add map for controlling behavior
 
 // TODO: Add map for port+(protocol) filtering
