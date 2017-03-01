@@ -133,8 +133,9 @@ static int time_alloc_pages_outstanding(
 	int order = page_order; /* <-- GLOBAL variable */
 	int i = 0, j = 0;
 
-	/* Need seperately allocated store to support parallel use */
-	/* Temp store for "outstanding" pages */
+	/* Need seperately allocated store to support parallel use.
+	 * Temp store for "outstanding" pages
+	 */
 #define MAX_STORE 8192
 	void **store;
 
