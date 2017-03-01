@@ -1,4 +1,5 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
+ *  Copyright(c) 2017 Andy Gospodarek, Broadcom Limited, Inc.
  */
 static const char *__doc__=
  " XDP: DDoS protection via IPv4 blacklist\n"
@@ -56,6 +57,14 @@ static void remove_xdp_program(int ifindex, const char *ifname)
 	if (unlink(file_verdict) < 0) {
 		printf("WARN: cannot remove map file:%s err(%d):%s\n",
 		       file_verdict, errno, strerror(errno));
+	}
+	if (unlink(file_port_blacklist) < 0) {
+		printf("WARN: cannot remove map file:%s err(%d):%s\n",
+		       file_port_blacklist, errno, strerror(errno));
+	}
+	if (unlink(file_port_blacklist_count) < 0) {
+		printf("WARN: cannot remove map file:%s err(%d):%s\n",
+		       file_port_blacklist_count, errno, strerror(errno));
 	}
 }
 
@@ -266,13 +275,27 @@ int main(int argc, char **argv)
 
 	if ((res = export_map_fd(0, file_blacklist, owner, group)))
 	    return res;
+
 	if (verbose)
 		printf(" - Blacklist     map file: %s\n", file_blacklist);
 
 	if ((res = export_map_fd(1, file_verdict, owner, group)))
 		return res;
+
 	if (verbose)
 		printf(" - Verdict stats map file: %s\n", file_verdict);
+
+	if ((res = export_map_fd(2, file_port_blacklist, owner, group)))
+	    return res;
+
+	if (verbose)
+		printf(" - Blacklist Port map file: %s\n", file_port_blacklist);
+
+	if ((res = export_map_fd(3, file_port_blacklist_count, owner, group)))
+		return res;
+
+	if (verbose)
+		printf(" - Verdict port stats map file: %s\n", file_port_blacklist_count);
 
 	/* Notice: updated map_fd[i] takes effect now */
 	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
@@ -293,6 +316,7 @@ int main(int argc, char **argv)
 
 	/* Add something to the map as a test */
 	blacklist_modify(map_fd[0], "198.18.50.3", ACTION_ADD);
+	blacklist_port_modify(map_fd[2], map_fd[3], 80, ACTION_ADD, IPPROTO_UDP);
 
 	return EXIT_OK;
 }

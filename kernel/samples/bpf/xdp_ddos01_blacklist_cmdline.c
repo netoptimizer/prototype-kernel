@@ -1,4 +1,5 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
+   Copyright(c) 2017 Andy Gospodarek, Broadcom Limited, Inc.
  */
 static const char *__doc__=
  " XDP ddos01: command line tool";
@@ -12,6 +13,7 @@ static const char *__doc__=
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
+#include <linux/bitops.h>
 
 #include <sys/resource.h>
 #include <getopt.h>
@@ -33,6 +35,8 @@ static const struct option long_options[] = {
 	{"stats",	no_argument,		NULL, 's' },
 	{"sec",		required_argument,	NULL, 's' },
 	{"list",	no_argument,		NULL, 'l' },
+	{"udp-dport",	required_argument,	NULL, 'u' },
+	{"tcp-dport",	required_argument,	NULL, 't' },
 	{0, 0, NULL,  0 }
 };
 
@@ -44,6 +48,15 @@ static const char *xdp_action_names[XDP_ACTION_MAX] = {
 	[XDP_PASS]	= "XDP_PASS",
 	[XDP_TX]	= "XDP_TX",
 };
+
+#define FILTER_TCP	0
+#define FILTER_UDP	1
+#define XDP_PROTO_FILTER_MAX	2
+static const char *xdp_proto_filter_names[XDP_PROTO_FILTER_MAX] = {
+	[FILTER_TCP]	= "TCP",
+	[FILTER_UDP]	= "UDP",
+};
+
 static const char *action2str(int action)
 {
 	if (action < XDP_ACTION_MAX)
@@ -197,6 +210,16 @@ static void blacklist_print_ip(__u32 ip, __u64 count)
 	printf("\"%s\" : %llu\n", ip_txt, count);
 }
 
+static void blacklist_print_port(int key, u32 val, __u64 count)
+{
+	int i;
+	printf(" %d: ", key);
+	for (i = 0; i < XDP_PROTO_FILTER_MAX; i++)
+		if (val & (1 << i))
+			printf("%s ",xdp_proto_filter_names[i]);
+	printf(": %llu\n", count);
+}
+
 static void blacklist_list_all(int fd)
 {
 	__u32 key = 0, next_key;
@@ -204,10 +227,30 @@ static void blacklist_list_all(int fd)
 
 	printf("{\n");
 	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
-		printf("%s", key ? "," : " ");
 		key = next_key;
 		value = get_key32_value64_percpu(fd, key);
 		blacklist_print_ip(key, value);
+	}
+	printf("}\n");
+}
+
+static void blacklist_list_all_ports(int portfd, int countfd)
+{
+	__u32 key = 0, next_key;
+	__u64 value;
+	__u64 count;
+
+	printf("{\n");
+	while (bpf_map_get_next_key(portfd, &key, &next_key) == 0) {
+		if ((bpf_map_lookup_elem(portfd, &key, &value)) != 0) {
+			fprintf(stderr,
+				"ERR: bpf_map_lookup_elem(%d) failed key:0x%X\n", portfd, key);
+		}
+		count = get_key32_value64_percpu(countfd, key);
+		if (value)
+			blacklist_print_port(key, value, count);
+
+		key = next_key;
 	}
 	printf("}\n");
 }
@@ -223,13 +266,17 @@ int main(int argc, char **argv)
 	int interval = 1;
 	int fd_blacklist;
 	int fd_verdict;
+	int fd_port_blacklist;
+	int fd_port_blacklist_count;
 	int longindex = 0;
 	bool do_list = false;
 	int opt;
+	int dport = 0;
+	int proto = IPPROTO_TCP;
 
 	fd_verdict = open_bpf_map(file_verdict);
 
-	while ((opt = getopt_long(argc, argv, "adshi:",
+	while ((opt = getopt_long(argc, argv, "adshi:t:u:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'a':
@@ -245,6 +292,12 @@ int main(int argc, char **argv)
 			}
 			ip_string = (char *)&_ip_string_buf;
 			strncpy(ip_string, optarg, STR_MAX);
+			break;
+		case 'u':
+			proto = IPPROTO_UDP;
+		case 't':
+			if (optarg)
+				dport = atoi(optarg);
 			break;
 		case 's': /* shared: --stats && --sec */
 			stats = true;
@@ -266,14 +319,25 @@ int main(int argc, char **argv)
 	if (action) {
 		int res = 0;
 
-		if (!ip_string) {
+		if (!ip_string && !dport) {
 			fprintf(stderr,
 			  "ERR: action require type+data, e.g option --ip\n");
 			goto fail_opt;
 		}
-		fd_blacklist = open_bpf_map(file_blacklist);
-		res = blacklist_modify(fd_blacklist, ip_string, action);
-		close(fd_blacklist);
+
+		if (ip_string) {
+			fd_blacklist = open_bpf_map(file_blacklist);
+			res = blacklist_modify(fd_blacklist, ip_string, action);
+			close(fd_blacklist);
+		}
+
+		if (dport) {
+			fd_port_blacklist = open_bpf_map(file_port_blacklist);
+			fd_port_blacklist_count = open_bpf_map(file_port_blacklist_count);
+			res = blacklist_port_modify(fd_port_blacklist, fd_port_blacklist_count, dport, action, proto);
+			close(fd_port_blacklist);
+			close(fd_port_blacklist_count);
+		}
 		return res;
 	}
 
@@ -288,6 +352,12 @@ int main(int argc, char **argv)
 		fd_blacklist = open_bpf_map(file_blacklist);
 		blacklist_list_all(fd_blacklist);
 		close(fd_blacklist);
+
+		fd_port_blacklist = open_bpf_map(file_port_blacklist);
+		fd_port_blacklist_count = open_bpf_map(file_port_blacklist_count);
+		blacklist_list_all_ports(fd_port_blacklist, fd_port_blacklist_count);
+		close(fd_port_blacklist);
+		close(fd_port_blacklist_count);
 	}
 
 	/* Show statistics by polling */
