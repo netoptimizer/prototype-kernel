@@ -71,6 +71,19 @@ void noinline run_bench_order0_compare(uint32_t loops)
 			NULL, time_single_cpu_page_alloc_put);
 }
 
+/* TODO: Need a super efficient way to transfer objects between two
+ * CPUs, as the purpose is to isolate the cost the page allocator code
+ * of touching the page.
+ *
+ * Idea(1): Could use ptr_ring as it can avoid the CPU
+ *          producer/consumer head/tail memory bouncing.
+ *
+ * Idea(2): Do bulking into a queue, that don't have the
+ *          producer/consumer head/tail memory bouncing problem, like
+ *          ptr_ring.
+ */
+
+
 int run_timing_tests(void)
 {
 	run_bench_order0_compare(loops);
