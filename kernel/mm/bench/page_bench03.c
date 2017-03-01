@@ -166,7 +166,7 @@ void noinline run_bench_limited_cpus(uint32_t loops, int nr_cpus)
 	for (i = 0; i < nr_cpus ; i++) {
 		cpumask_set_cpu(i, &my_cpumask);
 	}
-	pr_info("Limit to %d parallel CPUs\n", parallel_cpus);
+	pr_info("Limit to %d parallel CPUs\n", nr_cpus);
 	time_bench_run_concurrent(loops, page_order, NULL,
 				  &my_cpumask, &sync, cpu_tasks,
 				  time_alloc_pages);

@@ -8,6 +8,7 @@
 #include <linux/time.h>
 #include <linux/time_bench.h>
 #include <linux/spinlock.h>
+#include <linux/slab.h>
 #include <linux/mm.h>
 
 static int verbose=1;
@@ -27,11 +28,11 @@ MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
 enum benchmark_bit {
 	bit_run_bench_order0_compare,
 	bit_run_bench_orderN,
-	bit_run_bench_outstanding
+	bit_run_bench_outstanding,
+	bit_run_bench_outstanding_parallel_cpus
 };
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
-
 
 #define DEFAULT_ORDER 0
 static int page_order = DEFAULT_ORDER;
@@ -42,9 +43,15 @@ static uint32_t loops = 100000;
 module_param(loops, uint, 0);
 MODULE_PARM_DESC(loops, "Iteration loops");
 
-/* Temp store for "outstanding" pages */
-#define MAX_STORE 8192
-void *store[MAX_STORE];
+static int parallel_cpus = 2;
+module_param(parallel_cpus, uint, 0);
+MODULE_PARM_DESC(parallel_cpus, "Parameter for number of parallel CPUs");
+
+static int parallel_outstanding = 128;
+module_param(parallel_outstanding, uint, 0);
+MODULE_PARM_DESC(parallel_outstanding,
+		 "Number of outstanding pagee in parallel test");
+
 
 /* Most simple case for comparison */
 static int time_single_page_alloc_put(
@@ -124,7 +131,16 @@ static int time_alloc_pages_outstanding(
 	struct page *page;
 	int allocs_before_free = rec->step;
 	int order = page_order; /* <-- GLOBAL variable */
-	int i, j;
+	int i = 0, j = 0;
+
+	/* Need seperately allocated store to support parallel use */
+	/* Temp store for "outstanding" pages */
+#define MAX_STORE 8192
+	void **store;
+
+	store = kzalloc(sizeof(void *) * MAX_STORE, GFP_KERNEL);
+	if (!store)
+		goto out;
 
 	if (allocs_before_free > MAX_STORE) {
 		pr_warn("%s() allocs_before_free(%d) request too big >%d\n",
@@ -170,6 +186,7 @@ out:
 		allocs_before_free, order, i, j);
 	for (i = 0; i < j; i++)
 		__free_pages(store[i], order);
+	kfree(store);
 	return 0;
 }
 
@@ -228,11 +245,45 @@ void noinline run_bench_bench_outstanding(uint32_t loops)
 
 }
 
+void noinline bench_outstanding_parallel_cpus(uint32_t loops, int nr_cpus,
+					      int outstanding_pages)
+{
+	const char *desc = "parallel_cpus";
+	struct time_bench_sync sync;
+	struct time_bench_cpu *cpu_tasks;
+	struct cpumask my_cpumask;
+	int i;
+
+	/* Allocate records for CPUs */
+	cpu_tasks = kzalloc(sizeof(*cpu_tasks) * nr_cpus, GFP_KERNEL);
+
+	/* Reduce number of CPUs to run on */
+	cpumask_clear(&my_cpumask);
+	for (i = 0; i < nr_cpus ; i++) {
+		cpumask_set_cpu(i, &my_cpumask);
+	}
+	pr_info("Limit to %d parallel CPUs\n", nr_cpus);
+	time_bench_run_concurrent(loops, outstanding_pages, NULL,
+				  &my_cpumask, &sync, cpu_tasks,
+				  time_alloc_pages_outstanding);
+	time_bench_print_stats_cpumask(desc, cpu_tasks, &my_cpumask);
+	kfree(cpu_tasks);
+}
+
+void noinline run_bench_outstanding_parallel_cpus(uint32_t loops, int nr_cpus)
+{
+	run_or_return(bit_run_bench_outstanding_parallel_cpus);
+
+	bench_outstanding_parallel_cpus(loops, nr_cpus, parallel_outstanding);
+}
+
+
 int run_timing_tests(void)
 {
 	run_bench_order0_compare(loops);
 	run_bench_orderN(loops);
 	run_bench_bench_outstanding(loops);
+	run_bench_outstanding_parallel_cpus(loops, parallel_cpus);
 	return 0;
 }
 
