@@ -202,6 +202,7 @@ static int time_cross_cpu_page_alloc_put(
 		} else {
 			/* dequeue side */
 			npage = ptr_ring_consume(queue);
+			//prefetchw(npage);
 			if (npage == NULL) {
 				pr_err("%s() WARN: deq emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
@@ -226,6 +227,9 @@ static int time_cross_cpu_page_experiment1(
 	gfp_t gfp_mask = (GFP_KERNEL);
 	struct page *page, *npage;
 	uint64_t loops_cnt = 0;
+#define ARRAY_SZ 64
+	struct page *array[ARRAY_SZ];
+	int stack_cnt = 0;
 	int i;
 
 	bool enq_CPU = false;
@@ -263,6 +267,8 @@ static int time_cross_cpu_page_experiment1(
 				goto finish_early;
 			}
 		} else {
+			int j;
+
 			/* dequeue side */
 			npage = ptr_ring_consume(queue);
 			if (npage == NULL) {
@@ -270,7 +276,20 @@ static int time_cross_cpu_page_experiment1(
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
-			put_page(npage);
+			if (stack_cnt < 2) {
+				prefetchw(npage);
+				array[stack_cnt++] = npage;
+			} else {
+//				while (stack_cnt) {
+//					npage = array[--stack_cnt];
+//					put_page(npage);
+//				}
+				for (j = 0; j < stack_cnt; j++) {
+					npage = array[j];
+					put_page(npage);
+				}
+				stack_cnt = 0;
+			}
 		}
 		loops_cnt++;
 		barrier(); /* compiler barrier */
@@ -461,8 +480,8 @@ int run_timing_tests(void)
 	run_bench_baseline_ptr_ring_cross_cpu(loops, q_size, prefill);
 
 	/* Separate adjust for queue size needed? */
-	//prefill = 16000;
-	//q_size  = 32000;
+	prefill = 32000;
+	q_size  = 64000;
 	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
 	run_bench_cross_cpu_page_experiment1(loops, q_size, prefill);
 
