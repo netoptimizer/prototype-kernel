@@ -50,9 +50,13 @@ MODULE_PARM_DESC(loops, "Iteration loops");
 static int time_single_cpu_page_alloc_put(
 	struct time_bench_record *rec, void *data)
 {
-	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+	gfp_t gfp_mask = GFP_KERNEL;
 	struct page *my_page;
 	int i;
+
+	if (page_order) /* set: __GFP_COMP for compound pages */
+		gfp_mask |= __GFP_COMP;
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -355,12 +359,19 @@ int run_timing_tests(void)
 	 * indicating how many interations were completed.  Thus, you
 	 * can judge if the results are valid.
 	 */
-	int prefill = 8000;
-	int q_size = 32000;
+	int prefill;
+	int q_size;
 
 	run_bench_order0_compare(loops);
 
+	/* baseline ptr_ring test need large queue */
+	prefill = 16000;
+	q_size  = 64000;
 	run_bench_baseline_ptr_ring_cross_cpu(loops, q_size, prefill);
+
+	/* Separate adjust for queue size needed? */
+	//prefill = 16000;
+	//q_size  = 32000;
 	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
 
 	return 0;
