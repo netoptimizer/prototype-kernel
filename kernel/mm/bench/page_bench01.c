@@ -12,6 +12,10 @@
 
 static int verbose=1;
 
+static uint32_t loops = 100000;
+module_param(loops, uint, 0);
+MODULE_PARM_DESC(loops, "Iteration loops");
+
 static int time_single_page_alloc_free(
 	struct time_bench_record *rec, void *data)
 {
@@ -144,7 +148,6 @@ static int time_alloc_pages_with_fallback(
 
 int run_timing_tests(void)
 {
-	uint32_t loops = 100000;
 	int i;
 
 	time_bench_loop(loops, 0, "single_page_alloc_free",
