@@ -51,8 +51,8 @@ MODULE_PARM_DESC(loops, "Iteration loops");
 static int time_single_cpu_page_alloc_put(
 	struct time_bench_record *rec, void *data)
 {
-//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
-	gfp_t gfp_mask = GFP_KERNEL;
+	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = GFP_KERNEL;
 	struct page *my_page;
 	int i;
 
@@ -159,8 +159,8 @@ static int time_cross_cpu_page_alloc_put(
 	struct time_bench_record *rec, void *data)
 {
 	struct ptr_ring *queue = (struct ptr_ring*)data;
-//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
-	gfp_t gfp_mask = (GFP_KERNEL);
+	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_KERNEL);
 	struct page *page, *npage;
 	uint64_t loops_cnt = 0;
 	int i;
@@ -223,8 +223,8 @@ static int time_cross_cpu_page_experiment1(
 	struct time_bench_record *rec, void *data)
 {
 	struct ptr_ring *queue = (struct ptr_ring*)data;
-//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
-	gfp_t gfp_mask = (GFP_KERNEL);
+	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_KERNEL);
 	struct page *page, *npage;
 	uint64_t loops_cnt = 0;
 #define ARRAY_SZ 64
@@ -433,7 +433,7 @@ void noinline run_bench_cross_cpu_page_experiment1(
 	struct ptr_ring *queue;
 	cpumask_t cpumask;
 
-	run_or_return(bit_run_bench_cross_cpu_page_alloc_put);
+	run_or_return(bit_run_bench_cross_cpu_page_experiment1);
 
 	queue = kzalloc(sizeof(*queue), GFP_KERNEL);
 
