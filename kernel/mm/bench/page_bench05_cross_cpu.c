@@ -57,7 +57,7 @@ static int time_single_cpu_page_alloc_put(
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
-		my_page = alloc_page(gfp_mask);
+		my_page = alloc_pages(gfp_mask, page_order);
 		if (unlikely(my_page == NULL))
 			return 0;
 		put_page(my_page);
@@ -155,7 +155,8 @@ static int time_cross_cpu_page_alloc_put(
 	struct time_bench_record *rec, void *data)
 {
 	struct ptr_ring *queue = (struct ptr_ring*)data;
-	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+	gfp_t gfp_mask = (GFP_KERNEL);
 	struct page *page, *npage;
 	uint64_t loops_cnt = 0;
 	int i;
@@ -238,7 +239,8 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 bool init_queue(struct ptr_ring *queue, int q_size, int prefill,
 		bool fake_ptr)
 {
-	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+	gfp_t gfp_mask = (GFP_KERNEL);
 	struct page *page;
 	int result, i;
 
@@ -262,11 +264,14 @@ bool init_queue(struct ptr_ring *queue, int q_size, int prefill,
 	for (i = 0; i < prefill; i++) {
 		if (!fake_ptr) {
 			page = alloc_pages(gfp_mask, page_order);
-			if (unlikely(page == NULL))
+			if (unlikely(page == NULL)) {
+				pr_err("%s() alloc cannot prefill:%d sz:%d\n",
+				       __func__, prefill, q_size);
 				return false;
+			}
 		}
 		if (ptr_ring_produce(queue, page) < 0) {
-			pr_err("%s() err cannot prefill:%d sz:%d\n",
+			pr_err("%s() queue cannot prefill:%d sz:%d\n",
 			       __func__, prefill, q_size);
 			return false;
 		}
@@ -350,8 +355,8 @@ int run_timing_tests(void)
 	 * indicating how many interations were completed.  Thus, you
 	 * can judge if the results are valid.
 	 */
-	int prefill = 16000;
-	int q_size = 64000;
+	int prefill = 8000;
+	int q_size = 32000;
 
 	run_bench_order0_compare(loops);
 
@@ -364,7 +369,7 @@ int run_timing_tests(void)
 static int __init page_bench05_module_init(void)
 {
 	if (verbose)
-		pr_info("Loaded\n");
+		pr_info("Loaded (using page_order:%d)\n", page_order);
 
 	if (run_timing_tests() < 0) {
 		return -ECANCELED;
