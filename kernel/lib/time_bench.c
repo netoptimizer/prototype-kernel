@@ -354,7 +354,7 @@ void time_bench_run_concurrent(
 	int cpu, running = 0;
 
 	if (verbose) // DEBUG
-		pr_warn("%s() Started on CPU:%d)\n",
+		pr_warn("%s() Started on CPU:%d\n",
 			__func__, smp_processor_id());
 
 	/* Reset sync conditions */
@@ -407,7 +407,7 @@ void time_bench_run_concurrent(
 	}
 
 	if (verbose) // DEBUG - happens often, finish on another CPU
-		pr_warn("%s() Finished on CPU:%d)\n",
+		pr_warn("%s() Finished on CPU:%d\n",
 			__func__, smp_processor_id());
 }
 EXPORT_SYMBOL_GPL(time_bench_run_concurrent);
