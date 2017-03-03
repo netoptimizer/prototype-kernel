@@ -313,13 +313,14 @@ static int time_cross_cpu_page_experiment2(
 	struct my_queues *queues = (struct my_queues*)data;
 	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
 //	gfp_t gfp_mask = (GFP_KERNEL);
-	struct page *page, *npage;
+	struct page *page;
 	uint64_t loops_cnt = 0;
 	int i;
 	bool enq_CPU = false;
 	struct ptr_ring *queue1;
 	struct ptr_ring *queue2;
 	int tmp = 0;
+	struct page *page_store = NULL, *page_tmp;
 
 	if (!queues)
 		return 0;
@@ -353,29 +354,37 @@ static int time_cross_cpu_page_experiment2(
 	for (i = 0; i < rec->loops; i++) {
 
 		if (enq_CPU) {
-			page = ptr_ring_consume(queue2);
-			if (page == NULL) {
+			page_tmp = ptr_ring_consume(queue2);
+			if (page_tmp == NULL) {
 				pr_err("%s() WARN: deq2 emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
-			page_ref_inc(page);
-			//tmp = page_ref_count(page);
-			if (ptr_ring_produce(queue1, page) < 0) {
+			prefetchw(page_tmp);
+//			tmp = page_ref_count(page_tmp);
+			if (page_store)
+				page_ref_inc(page_store);
+			page = page_store;
+			page_store = page_tmp;
+			if (page && ptr_ring_produce(queue1, page) < 0) {
 				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
 		} else {
-			npage = ptr_ring_consume(queue1);
-			if (npage == NULL) {
+			page_tmp = ptr_ring_consume(queue1);
+			if (page_tmp == NULL) {
 				pr_err("%s() WARN: deq1 emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
-			page_ref_dec(npage);
-			//tmp = page_ref_count(npage);
-			if (ptr_ring_produce(queue2, npage) < 0) {
+			prefetchw(page_tmp);
+//			tmp = page_ref_count(page_tmp);
+			if (page_store)
+				page_ref_dec(page_store);
+			page = page_store;
+			page_store = page_tmp;
+			if (page && ptr_ring_produce(queue2, page) < 0) {
 				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
@@ -616,8 +625,8 @@ int run_timing_tests(void)
 	q_size  = 64000;
 	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
 	run_bench_cross_cpu_page_experiment1(loops, q_size, prefill);
-	prefill = 3200;
-	q_size  = 6400;
+	prefill = 32000;
+	q_size  = 64000;
 	run_bench_cross_cpu_page_experiment2(loops, q_size, prefill);
 
 	return 0;
