@@ -305,6 +305,8 @@ finish_early:
 struct my_queues {
 	struct ptr_ring *queue1;
 	struct ptr_ring *queue2;
+	atomic_t atom;
+	int false_sharing;
 };
 
 static int time_cross_cpu_page_experiment2(
@@ -354,6 +356,8 @@ static int time_cross_cpu_page_experiment2(
 	for (i = 0; i < rec->loops; i++) {
 
 		if (enq_CPU) {
+//			atomic_inc(&queues->atom);
+//			queues->false_sharing = 42;
 			page_tmp = ptr_ring_consume(queue2);
 			if (page_tmp == NULL) {
 				pr_err("%s() WARN: deq2 emptyq (CPU:%d) i:%d\n",
@@ -372,6 +376,9 @@ static int time_cross_cpu_page_experiment2(
 				goto finish_early;
 			}
 		} else {
+//			atomic_dec(&queues->atom);
+//			tmp = queues->false_sharing;
+//			queues->false_sharing = 43;
 			page_tmp = ptr_ring_consume(queue1);
 			if (page_tmp == NULL) {
 				pr_err("%s() WARN: deq1 emptyq (CPU:%d) i:%d\n",
@@ -566,6 +573,7 @@ void noinline run_bench_cross_cpu_page_experiment2(
 
 	if (!(queues = kzalloc(sizeof(*queues), GFP_KERNEL)))
 		return;
+	atomic_set(&queues->atom, 1);
 	queue1 = kzalloc(sizeof(*queue1), GFP_KERNEL);
 	queue2 = kzalloc(sizeof(*queue2), GFP_KERNEL);
 	/* TODO code alloc err exit code */
