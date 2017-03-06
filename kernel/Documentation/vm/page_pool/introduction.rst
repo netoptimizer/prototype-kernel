@@ -54,6 +54,10 @@ Advantages of a recycling page pool as bullet points:
 2) DMA IOMMU mapping cost is removed by keeping pages mapped.
 
 3) Makes DMA pages writable by predictable DMA unmap point.
+   (**UPDATE** kernel v4.10: This can also be acheived via
+   `Alexander Duyck`_'s changes to the DMA API, namely using
+   DMA_ATTR_SKIP_CPU_SYNC_, which skips DMA sync as a part the unmap,
+   but requires driver to carefully DMA sync needed memory)
 
 4) OOM protection at device level, as having a feedback-loop knows
    number of outstanding pages.
@@ -63,3 +67,9 @@ Advantages of a recycling page pool as bullet points:
 
 6) Less fragmentation of the page buddy algorithm, when driver
    maintains a steady-state working-set.
+
+
+.. _`Alexander Duyck`: https://twitter.com/alexanderduyck
+
+.. _DMA_ATTR_SKIP_CPU_SYNC:
+   https://github.com/torvalds/linux/blob/v4.10/Documentation/DMA-attributes.txt#L71
