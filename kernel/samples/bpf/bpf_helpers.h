@@ -1,5 +1,8 @@
 /* Copied from $(KERNEL)/samples/bpf/bpf_helpers.h
  *  Needed by xxx_kern.c files
+ *
+ * Pulling this in creates a dependency to uapi/linux/bpf.h
+ *  this is maintained under tools/include/uapi/linux/bpf.h
  */
 #ifndef __BPF_HELPERS_H
 #define __BPF_HELPERS_H

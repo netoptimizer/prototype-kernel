@@ -50,6 +50,10 @@ CFLAGS := -O2 -Wall
 # Local copy of kernel/tools/lib/
 CFLAGS += -I./tools/lib
 #CFLAGS += -I$(KERNEL)/tools/lib
+#
+# Local copy of uapi/linux/bpf.h kept under ./tools/include
+# needed due to enum dependency in bpf_helpers.h
+CFLAGS += -I./tools/include
 CFLAGS += -I$(KERNEL)/tools/include
 #CFLAGS += -I$(KERNEL)/tools/perf
 CFLAGS += -I$(KERNEL)/usr/include
@@ -72,7 +76,18 @@ CC = gcc
 
 NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 
-LINUXINCLUDE=-I $(KERNEL)/arch/x86/include -I$(KERNEL)/arch/x86/include/generated/uapi -I$(KERNEL)/arch/x86/include/generated -I$(KERNEL)/include -I$(KERNEL)/arch/x86/include/uapi -I$(KERNEL)/include/uapi -I$(KERNEL)/include/generated/uapi -include $(KERNEL)/include/linux/kconfig.h  -I$(KERNEL)/tools/lib
+# Copy of uapi/linux/bpf.h stored here:
+LINUXINCLUDE := -I./tools/include/
+
+LINUXINCLUDE += -I$(KERNEL)/arch/x86/include
+LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/generated/uapi
+LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/generated
+LINUXINCLUDE += -I$(KERNEL)/include
+LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/uapi
+LINUXINCLUDE += -I$(KERNEL)/include/uapi
+LINUXINCLUDE += -I$(KERNEL)/include/generated/uapi
+LINUXINCLUDE += -include $(KERNEL)/include/linux/kconfig.h
+LINUXINCLUDE += -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
 all: dependencies $(TARGETS) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
