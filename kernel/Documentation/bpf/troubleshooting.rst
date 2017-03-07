@@ -60,6 +60,20 @@ program sections, uses the maps section and relocation section (here
 point to the correct map (which gets created during parsing of the
 maps section, via standard bpf-syscall bpf_create_map).
 
+LLVM disassemble support
+------------------------
+
+.. TODO:: Document what LLVM version this "-S" option got added
+
+In newer versions of LLVM, the tool ``llvm-objdump``, supports showing
+section names, asm code and original C code, if compiled with ``-g``. ::
+
+ llvm-objdump -S prog_kern.o
+
+.. TODO:: What does the option -no-show-raw-insn do?
+
+Until this section is improved, look at mailing list response:
+https://www.spinics.net/lists/netdev/msg407045.html
 
 Extracting eBPF-JIT code
 ========================
