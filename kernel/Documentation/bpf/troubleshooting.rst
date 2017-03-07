@@ -41,20 +41,20 @@ with tools like ``readelf`` or ``llvm-objdump``. ::
   7 .symtab       000000d8 0000000000000000 
 
 From the above output some trivial information can be extracted.  This
-is an XDP program, as the defined program section Idx 3 starts with the
-letters "xdp".  From the same line the size column also show
-the program size 0001b8 in hex, which is easily converted on the
-cmdline to 440 bytes.  Do notice this size is not the JIT'ed program
-size::
-
- $ echo $((0x0001b8))
- 440
+is an XDP program, as the defined program section Idx 3 starts with
+the letters "xdp".  From the same line the size column also show the
+program size in hex 0001b8 equal 440 bytes, or 55 bpf instructions, as
+each insns is 8 bytes (see `struct bpf_insn`_) (shell trick ``echo
+$((0x1b8)) insns=$((0x1b8 / 8))``). Do notice this size is not the
+JIT'ed program size.
 
 The loader code samples/bpf/bpf_load.c parse this elf file, extract needed
 program sections, uses the maps section and relocation section (here
 .relxdp_prog ) to remap the BPF_PSEUDO_MAP_FD instruction to
 point to the correct map (which gets created during parsing of the
 maps section, via standard bpf-syscall bpf_create_map).
+
+.. _struct bpf_insn: http://lxr.free-electrons.com/ident?i=bpf_insn
 
 LLVM disassemble support
 ------------------------
