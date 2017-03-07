@@ -6,6 +6,8 @@
 #include <sys/types.h>
 #include <sys/syscall.h>
 #include <linux/types.h>
+
+/*
 #include <linux/compiler.h>
 #include <linux/perf_event.h>
 #include <asm/barrier.h>
@@ -81,6 +83,7 @@
 #ifndef cpu_relax
 #define cpu_relax() barrier()
 #endif
+*/
 
 static inline int
 sys_perf_event_open(struct perf_event_attr *attr,

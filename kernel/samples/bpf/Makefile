@@ -123,11 +123,11 @@ linux-src-libbpf: linux-src
 
 linux-src-devel-headers: linux-src-libbpf
 	@if ! test -d $(KERNEL)/usr/include/ ; then \
-		echo -n "ERROR: Need kernel source devel headers"; \
+		echo -n "WARNING: Need kernel source devel headers"; \
 		echo    " likely need to run:"; \
 		echo "       (in kernel source dir: $(KERNEL))"; \
 		echo -e "\n  make headers_install\n"; \
-		false; \
+		true ; \
 	else true; fi
 
 verify_cmds: $(CLANG) $(LLC)
