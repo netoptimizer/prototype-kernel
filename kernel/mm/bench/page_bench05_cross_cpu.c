@@ -34,6 +34,7 @@ enum benchmark_bit {
 	bit_run_bench_ptr_ring_baseline,
 	bit_run_bench_cross_cpu_page_alloc_put,
 	bit_run_bench_cross_cpu_page_experiment1,
+	bit_run_bench_cross_cpu_page_experiment2,
 };
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
@@ -301,6 +302,111 @@ finish_early:
 }
 
 
+struct my_queues {
+	struct ptr_ring *queue1;
+	struct ptr_ring *queue2;
+	atomic_t atom;
+	int false_sharing;
+};
+
+static int time_cross_cpu_page_experiment2(
+	struct time_bench_record *rec, void *data)
+{
+	struct my_queues *queues = (struct my_queues*)data;
+	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
+//	gfp_t gfp_mask = (GFP_KERNEL);
+	struct page *page;
+	uint64_t loops_cnt = 0;
+	int i;
+	bool enq_CPU = false;
+	struct ptr_ring *queue1;
+	struct ptr_ring *queue2;
+	int tmp = 0;
+	struct page *page_store = NULL, *page_tmp;
+
+	if (!queues)
+		return 0;
+	queue1 = queues->queue1;
+	queue2 = queues->queue2;
+	if ((queue1 == NULL) || (queue2 == NULL)) {
+		pr_err("Need queue1 and queue2 ptr as input\n");
+		return 0;
+	}
+
+	/* Split CPU between enq/deq based on even/odd */
+	if ((smp_processor_id() % 2)== 0)
+		enq_CPU = true;
+
+	if (page_order) /* set: __GFP_COMP for compound pages */
+		gfp_mask |= __GFP_COMP;
+
+	/* Hack: use "step" to mark enq/deq, as "step" gets printed */
+	rec->step = enq_CPU;
+
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * 2) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+
+	//page = alloc_pages(gfp_mask, page_order);
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+
+		if (enq_CPU) {
+//			atomic_inc(&queues->atom);
+//			queues->false_sharing = 42;
+			page_tmp = ptr_ring_consume(queue2);
+			if (page_tmp == NULL) {
+				pr_err("%s() WARN: deq2 emptyq (CPU:%d) i:%d\n",
+				       __func__, smp_processor_id(), i);
+				goto finish_early;
+			}
+			prefetchw(page_tmp);
+//			tmp = page_ref_count(page_tmp);
+			if (page_store)
+				page_ref_inc(page_store);
+			page = page_store;
+			page_store = page_tmp;
+			if (page && ptr_ring_produce(queue1, page) < 0) {
+				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
+				       __func__, smp_processor_id(), i);
+				goto finish_early;
+			}
+		} else {
+//			atomic_dec(&queues->atom);
+//			tmp = queues->false_sharing;
+//			queues->false_sharing = 43;
+			page_tmp = ptr_ring_consume(queue1);
+			if (page_tmp == NULL) {
+				pr_err("%s() WARN: deq1 emptyq (CPU:%d) i:%d\n",
+				       __func__, smp_processor_id(), i);
+				goto finish_early;
+			}
+			prefetchw(page_tmp);
+//			tmp = page_ref_count(page_tmp);
+			if (page_store)
+				page_ref_dec(page_store);
+			page = page_store;
+			page_store = page_tmp;
+			if (page && ptr_ring_produce(queue2, page) < 0) {
+				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
+				       __func__, smp_processor_id(), i);
+				goto finish_early;
+			}
+		}
+		loops_cnt++;
+		barrier(); /* compiler barrier */
+	}
+finish_early:
+	time_bench_stop(rec, loops_cnt);
+	pr_info("DEBUG:%d\n", tmp);
+
+	return loops_cnt;
+}
+
 int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 		 int step, void *data,
 		 int (*func)(struct time_bench_record *record, void *data)
@@ -455,6 +561,49 @@ fail:
 	kfree(queue);
 }
 
+void noinline run_bench_cross_cpu_page_experiment2(
+	uint32_t loops, int q_size, int prefill)
+{
+	struct my_queues *queues;
+	struct ptr_ring *queue1;
+	struct ptr_ring *queue2;
+	cpumask_t cpumask;
+
+	run_or_return(bit_run_bench_cross_cpu_page_experiment2);
+
+	if (!(queues = kzalloc(sizeof(*queues), GFP_KERNEL)))
+		return;
+	atomic_set(&queues->atom, 1);
+	queue1 = kzalloc(sizeof(*queue1), GFP_KERNEL);
+	queue2 = kzalloc(sizeof(*queue2), GFP_KERNEL);
+	/* TODO code alloc err exit code */
+	queues->queue1 = queue1;
+	queues->queue2 = queue2;
+
+	/* Restrict the CPUs to run on
+	 */
+	cpumask_clear(&cpumask);
+	cpumask_set_cpu(0, &cpumask);
+	cpumask_set_cpu(1, &cpumask);
+
+	if (!init_queue(queue1, q_size, prefill, false))
+		goto fail;
+	if (!init_queue(queue2, q_size, prefill, false))
+		goto fail;
+
+	run_parallel("cross_cpu_page_experiment2",
+		     loops, &cpumask, 0, queues,
+		     time_cross_cpu_page_experiment2);
+
+fail:
+	ptr_ring_cleanup(queue1, destructor_put_page);
+	kfree(queue1);
+	ptr_ring_cleanup(queue2, destructor_put_page);
+	kfree(queue2);
+	kfree(queues);
+}
+
+
 int run_timing_tests(void)
 {
 	/* ADJUST: These likely need some adjustments on different
@@ -484,6 +633,9 @@ int run_timing_tests(void)
 	q_size  = 64000;
 	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
 	run_bench_cross_cpu_page_experiment1(loops, q_size, prefill);
+	prefill = 32000;
+	q_size  = 64000;
+	run_bench_cross_cpu_page_experiment2(loops, q_size, prefill);
 
 	return 0;
 }
