@@ -47,10 +47,10 @@ static int parallel_cpus = 2;
 module_param(parallel_cpus, uint, 0);
 MODULE_PARM_DESC(parallel_cpus, "Parameter for number of parallel CPUs");
 
-static int parallel_outstanding = 128;
+static int parallel_outstanding = 64;
 module_param(parallel_outstanding, uint, 0);
 MODULE_PARM_DESC(parallel_outstanding,
-		 "Number of outstanding pagee in parallel test");
+		 "Number of outstanding pages in parallel test");
 
 
 /* Most simple case for comparison */
@@ -235,9 +235,13 @@ void noinline run_bench_bench_outstanding(uint32_t loops)
 			time_alloc_pages_outstanding);
 	time_bench_loop(loops,  128, "step_outstanding_pages", NULL,
 			time_alloc_pages_outstanding);
+	time_bench_loop(loops,  256, "step_outstanding_pages", NULL,
+			time_alloc_pages_outstanding);
 	time_bench_loop(loops,  512, "step_outstanding_pages", NULL,
 			time_alloc_pages_outstanding);
 	time_bench_loop(loops, 1024, "step_outstanding_pages", NULL,
+			time_alloc_pages_outstanding);
+	time_bench_loop(loops, 2048, "step_outstanding_pages", NULL,
 			time_alloc_pages_outstanding);
 	time_bench_loop(loops, 4096, "step_outstanding_pages", NULL,
 			time_alloc_pages_outstanding);
