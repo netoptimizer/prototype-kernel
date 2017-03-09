@@ -34,7 +34,7 @@ enum benchmark_bit {
 	bit_run_bench_ptr_ring_baseline,
 	bit_run_bench_cross_cpu_page_alloc_put,
 	bit_run_bench_cross_cpu_page_experiment1,
-	bit_run_bench_cross_cpu_page_experiment2,
+	bit_run_bench_cross_cpu_page_experiment3,
 };
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
@@ -309,7 +309,7 @@ struct my_queues {
 	int false_sharing;
 };
 
-static int time_cross_cpu_page_experiment2(
+static int time_cross_cpu_page_experiment3(
 	struct time_bench_record *rec, void *data)
 {
 	struct my_queues *queues = (struct my_queues*)data;
@@ -322,7 +322,8 @@ static int time_cross_cpu_page_experiment2(
 	struct ptr_ring *queue1;
 	struct ptr_ring *queue2;
 	int tmp = 0;
-	struct page *page_store = NULL, *page_tmp;
+	volatile unsigned long flags;
+	volatile void *va; /* virtual address */
 
 	if (!queues)
 		return 0;
@@ -349,7 +350,17 @@ static int time_cross_cpu_page_experiment2(
 		return 0;
 	}
 
-	//page = alloc_pages(gfp_mask, page_order);
+	/* Need to adjust refcnt to keep consistent invarians.
+	 * As queue1 must get inited to have refcnt==2
+	 */
+#define INITED 1
+	while ((page = ptr_ring_consume(queue1))
+	       && page->private != INITED)
+	{
+		page->private = INITED;
+		page_ref_inc(page);
+		ptr_ring_produce(queue1, page); /* Cannot fail */
+	}
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -357,19 +368,17 @@ static int time_cross_cpu_page_experiment2(
 
 		if (enq_CPU) {
 //			atomic_inc(&queues->atom);
+//			tmp = queues->false_sharing;
 //			queues->false_sharing = 42;
-			page_tmp = ptr_ring_consume(queue2);
-			if (page_tmp == NULL) {
+			page = ptr_ring_consume(queue2);
+			if (page == NULL) {
 				pr_err("%s() WARN: deq2 emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
-			prefetchw(page_tmp);
-//			tmp = page_ref_count(page_tmp);
-			if (page_store)
-				page_ref_inc(page_store);
-			page = page_store;
-			page_store = page_tmp;
+			va = page_address(page);
+			flags = page->flags;
+			page_ref_inc(page);
 			if (page && ptr_ring_produce(queue1, page) < 0) {
 				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
@@ -379,18 +388,15 @@ static int time_cross_cpu_page_experiment2(
 //			atomic_dec(&queues->atom);
 //			tmp = queues->false_sharing;
 //			queues->false_sharing = 43;
-			page_tmp = ptr_ring_consume(queue1);
-			if (page_tmp == NULL) {
+			page = ptr_ring_consume(queue1);
+			if (page == NULL) {
 				pr_err("%s() WARN: deq1 emptyq (CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
 				goto finish_early;
 			}
-			prefetchw(page_tmp);
-//			tmp = page_ref_count(page_tmp);
-			if (page_store)
-				page_ref_dec(page_store);
-			page = page_store;
-			page_store = page_tmp;
+			va = page_address(page);
+			flags = page->flags;
+			page_ref_dec(page);
 			if (page && ptr_ring_produce(queue2, page) < 0) {
 				pr_err("%s() WARN: enq1 fullq(CPU:%d) i:%d\n",
 				       __func__, smp_processor_id(), i);
@@ -402,6 +408,16 @@ static int time_cross_cpu_page_experiment2(
 	}
 finish_early:
 	time_bench_stop(rec, loops_cnt);
+
+	/* queue1 maintains refcnt==2, need to dec this before returning */
+	while ((page = ptr_ring_consume(queue1))) {
+		page_ref_dec(page);
+		if (page_ref_count(page) != 1) {
+			pr_err("WARN:%s() queue1 invariance broken refcnt:%d\n",
+			       __func__, page_ref_count(page));
+		}
+	}
+
 	pr_info("DEBUG:%d\n", tmp);
 
 	return loops_cnt;
@@ -429,7 +445,7 @@ int run_parallel(const char *desc, uint32_t loops, const cpumask_t *cpumask,
 }
 
 bool init_queue(struct ptr_ring *queue, int q_size, int prefill,
-		bool fake_ptr)
+		bool fake_ptr, bool clear_private)
 {
 //	gfp_t gfp_mask = (GFP_ATOMIC | ___GFP_NORETRY);
 	gfp_t gfp_mask = (GFP_KERNEL);
@@ -461,6 +477,8 @@ bool init_queue(struct ptr_ring *queue, int q_size, int prefill,
 				       __func__, prefill, q_size);
 				return false;
 			}
+			if (clear_private)
+				page->private = 0;
 		}
 		if (ptr_ring_produce(queue, page) < 0) {
 			pr_err("%s() queue cannot prefill:%d sz:%d\n",
@@ -488,7 +506,7 @@ void noinline run_bench_baseline_ptr_ring_cross_cpu(
 	cpumask_set_cpu(0, &cpumask);
 	cpumask_set_cpu(1, &cpumask);
 
-	if (!init_queue(queue, q_size, prefill, true))
+	if (!init_queue(queue, q_size, prefill, true, false))
 	    goto fail;
 
 	run_parallel("baseline_ptr_ring_cross_cpu",
@@ -502,7 +520,22 @@ fail:
 
 void destructor_put_page(void *ptr)
 {
-	put_page(ptr);
+	struct page *page = ptr;
+	//put_page(page);
+
+	page = compound_head(page);
+
+	/* Extra verbose error checking to catch refcnt bugs */
+	if (page_ref_count(page) == 0)
+		pr_err("ERROR: %s() pages with zero refcnt on queue!\n",
+		       __func__);
+
+	if (put_page_testzero(page)) {
+		__put_page(page);
+	} else {
+		pr_err("ERROR: %s() pages with elevated refcnt:%d not freed!\n",
+		       __func__, page_ref_count(page));
+	}
 }
 
 void noinline run_bench_cross_cpu_page_alloc_put(
@@ -521,7 +554,7 @@ void noinline run_bench_cross_cpu_page_alloc_put(
 	cpumask_set_cpu(0, &cpumask);
 	cpumask_set_cpu(1, &cpumask);
 
-	if (!init_queue(queue, q_size, prefill, false))
+	if (!init_queue(queue, q_size, prefill, false, false))
 	    goto fail;
 
 	run_parallel("cross_cpu_page_alloc_put",
@@ -549,7 +582,7 @@ void noinline run_bench_cross_cpu_page_experiment1(
 	cpumask_set_cpu(0, &cpumask);
 	cpumask_set_cpu(1, &cpumask);
 
-	if (!init_queue(queue, q_size, prefill, false))
+	if (!init_queue(queue, q_size, prefill, false, false))
 	    goto fail;
 
 	run_parallel("cross_cpu_page_experiment1",
@@ -561,7 +594,7 @@ fail:
 	kfree(queue);
 }
 
-void noinline run_bench_cross_cpu_page_experiment2(
+void noinline run_bench_cross_cpu_page_experiment3(
 	uint32_t loops, int q_size, int prefill)
 {
 	struct my_queues *queues;
@@ -569,7 +602,7 @@ void noinline run_bench_cross_cpu_page_experiment2(
 	struct ptr_ring *queue2;
 	cpumask_t cpumask;
 
-	run_or_return(bit_run_bench_cross_cpu_page_experiment2);
+	run_or_return(bit_run_bench_cross_cpu_page_experiment3);
 
 	if (!(queues = kzalloc(sizeof(*queues), GFP_KERNEL)))
 		return;
@@ -586,14 +619,14 @@ void noinline run_bench_cross_cpu_page_experiment2(
 	cpumask_set_cpu(0, &cpumask);
 	cpumask_set_cpu(1, &cpumask);
 
-	if (!init_queue(queue1, q_size, prefill, false))
+	if (!init_queue(queue1, q_size, prefill, false, true))
 		goto fail;
-	if (!init_queue(queue2, q_size, prefill, false))
+	if (!init_queue(queue2, q_size, prefill, false, true))
 		goto fail;
 
-	run_parallel("cross_cpu_page_experiment2",
+	run_parallel("cross_cpu_page_experiment3",
 		     loops, &cpumask, 0, queues,
-		     time_cross_cpu_page_experiment2);
+		     time_cross_cpu_page_experiment3);
 
 fail:
 	ptr_ring_cleanup(queue1, destructor_put_page);
@@ -633,9 +666,9 @@ int run_timing_tests(void)
 	q_size  = 64000;
 	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
 	run_bench_cross_cpu_page_experiment1(loops, q_size, prefill);
-	prefill = 32000;
-	q_size  = 64000;
-	run_bench_cross_cpu_page_experiment2(loops, q_size, prefill);
+	prefill = 3200;
+	q_size  = 6400;
+	run_bench_cross_cpu_page_experiment3(loops, q_size, prefill);
 
 	return 0;
 }
