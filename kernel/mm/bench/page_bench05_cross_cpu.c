@@ -48,6 +48,10 @@ static uint32_t loops = 1000000;
 module_param(loops, uint, 0);
 MODULE_PARM_DESC(loops, "Iteration loops");
 
+static int repeat = 1;
+module_param(repeat, uint, 0);
+MODULE_PARM_DESC(repeat, "Repeating test N times (only for some tests)");
+
 /* Most simple case for comparison */
 static int time_single_cpu_page_alloc_put(
 	struct time_bench_record *rec, void *data)
@@ -653,6 +657,7 @@ int run_timing_tests(void)
 	 */
 	int prefill;
 	int q_size;
+	int _repeat = 1;
 
 	run_bench_order0_compare(loops);
 
@@ -664,7 +669,11 @@ int run_timing_tests(void)
 	/* Separate adjust for queue size needed? */
 	prefill = 32000;
 	q_size  = 64000;
-	run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
+
+	_repeat = repeat;
+	while (repeat--)
+		run_bench_cross_cpu_page_alloc_put(loops, q_size, prefill);
+
 	run_bench_cross_cpu_page_experiment1(loops, q_size, prefill);
 	prefill = 3200;
 	q_size  = 6400;
