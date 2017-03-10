@@ -10,6 +10,7 @@
 #include <linux/spinlock.h>
 #include <linux/mm.h>
 #include <linux/list.h>
+#include <linux/net.h> /* net_warn_ratelimited */
 
 static int verbose=1;
 
@@ -96,7 +97,8 @@ static int time_bulk_page_alloc_free(
 		n = alloc_pages_bulk(gfp, order, bulk, &list);
 
 		if (verbose && (n < bulk))
-			pr_warn("%s(): got less pages: %lu/%lu\n",
+			net_warn_ratelimited(
+				"%s(): got less pages: %lu/%lu\n",
 				__func__, n, bulk);
 		barrier();
 		free_pages_bulk(&list);
