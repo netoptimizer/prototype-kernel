@@ -17,6 +17,33 @@ permitted) when the RLIMIT_MEMLOCK memory size limit is exceeded.
 
 .. _setrlimit(2): http://man7.org/linux/man-pages/man2/setrlimit.2.html
 
+Enable bpf JIT
+==============
+
+Not seeing the expected performance and perf top showing
+``__bpf_prog_run()`` as the top CPU consumer.
+
+Did you remember to enable JIT'ing of the BPF code?
+Like::
+
+ $ sysctl net/core/bpf_jit_enable=1
+ net.core.bpf_jit_enable = 1
+
+Notice there is both JIT'ing of eBPF and cBPF (Classical BPF)
+implemented in the kernel per arch.  You can see current cBPF and eBPF
+JITs that are supported by the kernel via::
+
+ $ git grep BPF_JIT | grep select
+ arch/arm/Kconfig:	select HAVE_CBPF_JIT
+ arch/arm64/Kconfig:	select HAVE_EBPF_JIT
+ arch/mips/Kconfig:	select HAVE_CBPF_JIT if !CPU_MICROMIPS
+ arch/powerpc/Kconfig:	select HAVE_CBPF_JIT if !PPC64
+ arch/powerpc/Kconfig:	select HAVE_EBPF_JIT if PPC64
+ arch/s390/Kconfig:	select HAVE_EBPF_JIT if PACK_STACK && HAVE_MARCH_Z196_FEATURES
+ arch/sparc/Kconfig:	select HAVE_CBPF_JIT
+ arch/x86/Kconfig:	select HAVE_EBPF_JIT			if X86_64
+
+
 ELF binary
 ==========
 
