@@ -87,7 +87,7 @@ multiple pages.
 
 In the future, this strict memory model might be relaxed, but for now
 it is a strict requirement.  With a more flexible
-:ref:`ref_prog_negotiation` is might be possible to negotiate another
+:ref:`ref_prog_negotiation` it might be possible to negotiate another
 memory model. Given some specific XDP use-case might not require this
 strict memory model.
 

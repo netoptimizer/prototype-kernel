@@ -69,7 +69,7 @@ XDP meta-data
 -------------
 
 The ``struct xdp_md`` carry XDP meta-data ("_md").  It is still
-extensible because it have an internal BPF insn rewriter.
+extensible because it has a internal BPF insn rewriter.
 
 .. Daniel: extensibility wrt struct xdp_md, then it's done the same
    way as done for tc with 'shadow' struct __sk_buff. The concept of
