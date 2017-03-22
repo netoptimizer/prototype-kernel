@@ -28,7 +28,7 @@ project under `prototype-kernel/kernel/samples/bpf`_.
 
 .. _prototype-kernel: https://github.com/netoptimizer/prototype-kernel
 
-.. prototype-kernel/kernel/samples/bpf:
+.. _prototype-kernel/kernel/samples/bpf:
    https://github.com/netoptimizer/prototype-kernel/tree/master/kernel/samples/bpf
 
 Special XDP eBPF cases
