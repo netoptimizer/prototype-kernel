@@ -227,6 +227,7 @@ static void blacklist_list_all(int fd)
 
 	printf("{\n");
 	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+		printf("%s", key ? "," : " ");
 		key = next_key;
 		value = get_key32_value64_percpu(fd, key);
 		blacklist_print_ip(key, value);
