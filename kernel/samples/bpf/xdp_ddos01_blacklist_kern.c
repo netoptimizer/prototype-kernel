@@ -1,6 +1,7 @@
 /*  XDP example: DDoS protection via IPv4 blacklist
  *
  *  Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
+ *  Copyright(c) 2017 Andy Gospodarek, Broadcom Limited, Inc.
  */
 #define KBUILD_MODNAME "foo"
 #include <uapi/linux/bpf.h>
@@ -10,7 +11,13 @@
 #include <uapi/linux/ip.h>
 #include <uapi/linux/in.h>
 #include <uapi/linux/tcp.h>
+#include <uapi/linux/udp.h>
 #include "bpf_helpers.h"
+
+enum {
+	DDOS_FILTER_TCP = 0,
+	DDOS_FILTER_UDP,
+};
 
 struct vlan_hdr {
 	__be16 h_vlan_TCI;
@@ -35,9 +42,22 @@ struct bpf_map_def SEC("maps") verdict_cnt = {
 	.max_entries = XDP_ACTION_MAX,
 };
 
-// TODO: Add map for controlling behavior
+struct bpf_map_def SEC("maps") port_blacklist = {
+	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size    = sizeof(u32),
+	.value_size  = sizeof(u32),
+	.max_entries = 65536,
+};
 
-// TODO: Add map for port+(protocol) filtering
+/* Counter per XDP "action" verdict */
+struct bpf_map_def SEC("maps") port_blacklist_drop_count = {
+	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size    = sizeof(u32),
+	.value_size  = sizeof(u64),
+	.max_entries = 65536,
+};
+
+// TODO: Add map for controlling behavior
 
 //#define DEBUG 1
 #ifdef  DEBUG
@@ -107,6 +127,56 @@ bool parse_eth(struct ethhdr *eth, void *data_end,
 	return true;
 }
 
+u32 parse_port(struct xdp_md *ctx, u8 proto, void *hdr)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	struct udphdr *udph;
+	struct tcphdr *tcph;
+	u32 *value;
+	u32 *drops;
+	u32 dport;
+	u32 dport_idx;
+	u32 fproto;
+
+	switch (proto) {
+	case IPPROTO_UDP:
+		udph = hdr;
+		if (udph + 1 > data_end) {
+			bpf_debug("Invalid UDPv4 packet: L4off:%llu\n",
+				  sizeof(struct iphdr) + sizeof(struct udphdr));
+			return XDP_ABORTED;
+		}
+		dport = ntohs(udph->dest);
+		fproto = 1 << DDOS_FILTER_UDP;
+		break;
+	case IPPROTO_TCP:
+		tcph = hdr;
+		if (tcph + 1 > data_end) {
+			bpf_debug("Invalid TCPv4 packet: L4off:%llu\n",
+				  sizeof(struct iphdr) + sizeof(struct tcphdr));
+			return XDP_ABORTED;
+		}
+		dport = ntohs(tcph->dest);
+		fproto = 1 << DDOS_FILTER_TCP;
+		break;
+	default:
+		return XDP_PASS;
+	}
+
+	dport_idx = dport;
+	value = bpf_map_lookup_elem(&port_blacklist, &dport_idx);
+
+	if (value) {
+		if (*value & fproto) {
+			drops = bpf_map_lookup_elem(&port_blacklist_drop_count, &dport_idx);
+			if (drops)
+				*drops += 1; /* Keep a counter for drop matches */
+			return XDP_DROP;
+		}
+	}
+	return XDP_PASS;
+}
+
 static __always_inline
 u32 parse_ipv4(struct xdp_md *ctx, u64 l3_offset)
 {
@@ -134,7 +204,7 @@ u32 parse_ipv4(struct xdp_md *ctx, u64 l3_offset)
 		return XDP_DROP;
 	}
 
-	return XDP_PASS;
+	return parse_port(ctx, iph->protocol, iph + 1);
 }
 
 static __always_inline
