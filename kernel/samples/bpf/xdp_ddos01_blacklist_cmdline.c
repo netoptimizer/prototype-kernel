@@ -197,7 +197,7 @@ static void stats_poll(int interval)
 	close(fd);
 }
 
-static void blacklist_print_ip(__u32 ip, __u64 count)
+static void blacklist_print_ipv4(__u32 ip, __u64 count)
 {
 	char ip_txt[INET_ADDRSTRLEN] = {0};
 
@@ -207,32 +207,43 @@ static void blacklist_print_ip(__u32 ip, __u64 count)
 			"ERR: Cannot convert u32 IP:0x%X to IP-txt\n", ip);
 		exit(EXIT_FAIL_IP);
 	}
-	printf("\"%s\" : %llu\n", ip_txt, count);
+	printf("\n \"%s\" : %llu", ip_txt, count);
+}
+
+static void blacklist_print_proto(int key, __u64 count)
+{
+	printf("\n\t\"%s\" : %llu", xdp_proto_filter_names[key], count);
 }
 
 static void blacklist_print_port(int key, u32 val, __u64 count)
 {
 	int i;
-	printf(" %d: ", key);
-	for (i = 0; i < XDP_PROTO_FILTER_MAX; i++)
-		if (val & (1 << i))
-			printf("%s ",xdp_proto_filter_names[i]);
-	printf(": %llu\n", count);
+	bool started = false;
+
+	printf("\n \"%d\" : ", key);
+	for (i = 0; i < XDP_PROTO_FILTER_MAX; i++) {
+		if (val & (1 << i)) {
+			printf("%s", started ? "," : "{");
+			started = true;
+			blacklist_print_proto(i, count);
+		}
+	}
+	if (started)
+		printf("\n }");
 }
 
-static void blacklist_list_all(int fd)
+static void blacklist_list_all_ipv4(int fd)
 {
 	__u32 key = 0, next_key;
 	__u64 value;
 
-	printf("{\n");
 	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
-		printf("%s", key ? "," : " ");
+		printf("%s", key ? "," : "" );
 		key = next_key;
 		value = get_key32_value64_percpu(fd, key);
-		blacklist_print_ip(key, value);
+		blacklist_print_ipv4(key, value);
 	}
-	printf("}\n");
+	printf("%s", key ? "," : "");
 }
 
 static void blacklist_list_all_ports(int portfd, int countfd)
@@ -240,20 +251,23 @@ static void blacklist_list_all_ports(int portfd, int countfd)
 	__u32 key = 0, next_key;
 	__u64 value;
 	__u64 count;
+	bool started = false;
 
-	printf("{\n");
+	/* printf("{\n"); */
 	while (bpf_map_get_next_key(portfd, &key, &next_key) == 0) {
 		if ((bpf_map_lookup_elem(portfd, &key, &value)) != 0) {
 			fprintf(stderr,
 				"ERR: bpf_map_lookup_elem(%d) failed key:0x%X\n", portfd, key);
 		}
-		count = get_key32_value64_percpu(countfd, key);
-		if (value)
-			blacklist_print_port(key, value, count);
 
+		if (value) {
+			printf("%s", started ? "," : "");
+			started = true;
+			count = get_key32_value64_percpu(countfd, key);
+			blacklist_print_port(key, value, count);
+		}
 		key = next_key;
 	}
-	printf("}\n");
 }
 
 int main(int argc, char **argv)
@@ -350,8 +364,9 @@ int main(int argc, char **argv)
 	}
 
 	if (do_list) {
+		printf("{");
 		fd_blacklist = open_bpf_map(file_blacklist);
-		blacklist_list_all(fd_blacklist);
+		blacklist_list_all_ipv4(fd_blacklist);
 		close(fd_blacklist);
 
 		fd_port_blacklist = open_bpf_map(file_port_blacklist);
@@ -359,6 +374,7 @@ int main(int argc, char **argv)
 		blacklist_list_all_ports(fd_port_blacklist, fd_port_blacklist_count);
 		close(fd_port_blacklist);
 		close(fd_port_blacklist_count);
+		printf("\n}\n");
 	}
 
 	/* Show statistics by polling */
