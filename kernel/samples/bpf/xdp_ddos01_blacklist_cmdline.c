@@ -49,12 +49,9 @@ static const char *xdp_action_names[XDP_ACTION_MAX] = {
 	[XDP_TX]	= "XDP_TX",
 };
 
-#define FILTER_TCP	0
-#define FILTER_UDP	1
-#define XDP_PROTO_FILTER_MAX	2
-static const char *xdp_proto_filter_names[XDP_PROTO_FILTER_MAX] = {
-	[FILTER_TCP]	= "TCP",
-	[FILTER_UDP]	= "UDP",
+static const char *xdp_proto_filter_names[DDOS_FILTER_MAX] = {
+	[DDOS_FILTER_TCP]	= "TCP",
+	[DDOS_FILTER_UDP]	= "UDP",
 };
 
 static const char *action2str(int action)
@@ -215,16 +212,18 @@ static void blacklist_print_proto(int key, __u64 count)
 	printf("\n\t\"%s\" : %llu", xdp_proto_filter_names[key], count);
 }
 
-static void blacklist_print_port(int key, u32 val, __u64 count)
+static void blacklist_print_port(int key, u32 val, int countfds[])
 {
 	int i;
+	__u64 count;
 	bool started = false;
 
 	printf("\n \"%d\" : ", key);
-	for (i = 0; i < XDP_PROTO_FILTER_MAX; i++) {
+	for (i = 0; i < DDOS_FILTER_MAX; i++) {
 		if (val & (1 << i)) {
 			printf("%s", started ? "," : "{");
 			started = true;
+			count = get_key32_value64_percpu(countfds[i], key);
 			blacklist_print_proto(i, count);
 		}
 	}
@@ -246,11 +245,10 @@ static void blacklist_list_all_ipv4(int fd)
 	printf("%s", key ? "," : "");
 }
 
-static void blacklist_list_all_ports(int portfd, int countfd)
+static void blacklist_list_all_ports(int portfd, int countfds[])
 {
 	__u32 key = 0, next_key;
 	__u64 value;
-	__u64 count;
 	bool started = false;
 
 	/* printf("{\n"); */
@@ -263,8 +261,7 @@ static void blacklist_list_all_ports(int portfd, int countfd)
 		if (value) {
 			printf("%s", started ? "," : "");
 			started = true;
-			count = get_key32_value64_percpu(countfd, key);
-			blacklist_print_port(key, value, count);
+			blacklist_print_port(key, value, countfds);
 		}
 		key = next_key;
 	}
@@ -288,6 +285,7 @@ int main(int argc, char **argv)
 	int opt;
 	int dport = 0;
 	int proto = IPPROTO_TCP;
+	int filter = DDOS_FILTER_TCP;
 
 	fd_verdict = open_bpf_map(file_verdict);
 
@@ -310,6 +308,7 @@ int main(int argc, char **argv)
 			break;
 		case 'u':
 			proto = IPPROTO_UDP;
+			filter = DDOS_FILTER_UDP;
 		case 't':
 			if (optarg)
 				dport = atoi(optarg);
@@ -348,7 +347,7 @@ int main(int argc, char **argv)
 
 		if (dport) {
 			fd_port_blacklist = open_bpf_map(file_port_blacklist);
-			fd_port_blacklist_count = open_bpf_map(file_port_blacklist_count);
+			fd_port_blacklist_count = open_bpf_map(file_port_blacklist_count[filter]);
 			res = blacklist_port_modify(fd_port_blacklist, fd_port_blacklist_count, dport, action, proto);
 			close(fd_port_blacklist);
 			close(fd_port_blacklist_count);
@@ -365,16 +364,21 @@ int main(int argc, char **argv)
 
 	if (do_list) {
 		printf("{");
+		int fd_port_blacklist_count_array[DDOS_FILTER_MAX];
+		int i;
+
 		fd_blacklist = open_bpf_map(file_blacklist);
 		blacklist_list_all_ipv4(fd_blacklist);
 		close(fd_blacklist);
 
 		fd_port_blacklist = open_bpf_map(file_port_blacklist);
-		fd_port_blacklist_count = open_bpf_map(file_port_blacklist_count);
-		blacklist_list_all_ports(fd_port_blacklist, fd_port_blacklist_count);
+		for (i = 0; i < DDOS_FILTER_MAX; i++)
+			fd_port_blacklist_count_array[i] = open_bpf_map(file_port_blacklist_count[i]);
+		blacklist_list_all_ports(fd_port_blacklist, fd_port_blacklist_count_array);
 		close(fd_port_blacklist);
-		close(fd_port_blacklist_count);
 		printf("\n}\n");
+		for (i = 0; i < DDOS_FILTER_MAX; i++)
+			close(fd_port_blacklist_count_array[i]);
 	}
 
 	/* Show statistics by polling */
