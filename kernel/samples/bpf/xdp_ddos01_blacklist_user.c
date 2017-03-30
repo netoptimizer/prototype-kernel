@@ -46,6 +46,7 @@ static int ifindex = -1;
 
 static void remove_xdp_program(int ifindex, const char *ifname)
 {
+	int i;
 	fprintf(stderr, "Removing XDP program on ifindex:%d device:%s\n",
 		ifindex, ifname);
 	if (ifindex > -1)
@@ -62,9 +63,11 @@ static void remove_xdp_program(int ifindex, const char *ifname)
 		printf("WARN: cannot remove map file:%s err(%d):%s\n",
 		       file_port_blacklist, errno, strerror(errno));
 	}
-	if (unlink(file_port_blacklist_count) < 0) {
-		printf("WARN: cannot remove map file:%s err(%d):%s\n",
-		       file_port_blacklist_count, errno, strerror(errno));
+	for (i = 0; i < DDOS_FILTER_MAX; i++) {
+		if (unlink(file_port_blacklist_count[i]) < 0) {
+			printf("WARN: cannot remove map file:%s err(%d):%s\n",
+			       file_port_blacklist_count[i], errno, strerror(errno));
+		}
 	}
 }
 
@@ -144,10 +147,14 @@ int export_map_fd(int map_idx, const char *file, uid_t owner, gid_t group)
 	int fd_existing;
 
 	/* Verify input map_fd[map_idx] */
-	if (map_idx>= MAX_MAPS)
+	if (map_idx>= MAX_MAPS) {
+		printf("%s +%d\n",__FILE__,__LINE__);
 		return EXIT_FAIL_MAP;
-	if (map_fd[map_idx] <= 0)
+	}
+	if (map_fd[map_idx] <= 0) {
+		printf("%s +%d\n",__FILE__,__LINE__);
 		return EXIT_FAIL_MAP;
+	}
 
 	if (bpf_fs_check_path(file) < 0) {
 		exit(EXIT_FAIL_MAP_FS);
@@ -193,6 +200,7 @@ int main(int argc, char **argv)
 	struct passwd *pwd = NULL;
 	int res;
 	int opt;
+	int i;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
@@ -291,11 +299,14 @@ int main(int argc, char **argv)
 	if (verbose)
 		printf(" - Blacklist Port map file: %s\n", file_port_blacklist);
 
-	if ((res = export_map_fd(3, file_port_blacklist_count, owner, group)))
-		return res;
+	for (i = 0; i < DDOS_FILTER_MAX; i++) {
 
-	if (verbose)
-		printf(" - Verdict port stats map file: %s\n", file_port_blacklist_count);
+		if ((res = export_map_fd(3 + i, file_port_blacklist_count[i], owner, group)))
+			return res;
+
+		if (verbose)
+			printf(" - Verdict port stats map file: %s\n", file_port_blacklist_count[i]);
+	}
 
 	/* Notice: updated map_fd[i] takes effect now */
 	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
@@ -316,7 +327,7 @@ int main(int argc, char **argv)
 
 	/* Add something to the map as a test */
 	blacklist_modify(map_fd[0], "198.18.50.3", ACTION_ADD);
-	blacklist_port_modify(map_fd[2], map_fd[3], 80, ACTION_ADD, IPPROTO_UDP);
+	blacklist_port_modify(map_fd[2], map_fd[4], 80, ACTION_ADD, IPPROTO_UDP);
 
 	return EXIT_OK;
 }

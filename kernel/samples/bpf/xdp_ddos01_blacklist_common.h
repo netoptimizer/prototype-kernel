@@ -28,7 +28,10 @@ static const char *file_blacklist = "/sys/fs/bpf/ddos_blacklist";
 static const char *file_verdict   = "/sys/fs/bpf/ddos_blacklist_stat_verdict";
 
 static const char *file_port_blacklist = "/sys/fs/bpf/ddos_port_blacklist";
-static const char *file_port_blacklist_count = "/sys/fs/bpf/ddos_port_blacklist_count";
+static const char *file_port_blacklist_count[] = {
+	"/sys/fs/bpf/ddos_port_blacklist_count_tcp",
+	"/sys/fs/bpf/ddos_port_blacklist_count_udp"
+};
 
 
 // TODO: create subdir per ifname, to allow more XDP progs
@@ -56,8 +59,9 @@ uint64_t gettime(void)
 #define ACTION_DEL	(1 << 1)
 
 enum {
-        DDOS_FILTER_TCP = 0,
-        DDOS_FILTER_UDP,
+	DDOS_FILTER_TCP = 0,
+	DDOS_FILTER_UDP,
+	DDOS_FILTER_MAX
 };
 
 static int blacklist_modify(int fd, char *ip_string, unsigned int action)

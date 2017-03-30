@@ -50,12 +50,35 @@ struct bpf_map_def SEC("maps") port_blacklist = {
 };
 
 /* Counter per XDP "action" verdict */
-struct bpf_map_def SEC("maps") port_blacklist_drop_count = {
+
+/* TCP Drop counter */
+struct bpf_map_def SEC("maps") port_blacklist_drop_count_tcp = {
 	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size    = sizeof(u32),
 	.value_size  = sizeof(u64),
 	.max_entries = 65536,
 };
+
+/* UDP Drop counter */
+struct bpf_map_def SEC("maps") port_blacklist_drop_count_udp = {
+	.type        = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size    = sizeof(u32),
+	.value_size  = sizeof(u64),
+	.max_entries = 65536,
+};
+
+static inline struct bpf_map_def *drop_count_by_fproto(int fproto) {
+
+	switch (fproto) {
+	case DDOS_FILTER_UDP:
+		return &port_blacklist_drop_count_udp;
+		break;
+	case DDOS_FILTER_TCP:
+		return &port_blacklist_drop_count_tcp;
+		break;
+	}
+	return NULL;
+}
 
 // TODO: Add map for controlling behavior
 
@@ -168,9 +191,12 @@ u32 parse_port(struct xdp_md *ctx, u8 proto, void *hdr)
 
 	if (value) {
 		if (*value & fproto) {
-			drops = bpf_map_lookup_elem(&port_blacklist_drop_count, &dport_idx);
-			if (drops)
-				*drops += 1; /* Keep a counter for drop matches */
+			struct bpf_map_def *drop_counter = drop_count_by_fproto(fproto);
+			if (drop_counter) {
+				drops = bpf_map_lookup_elem(drop_counter , &dport_idx);
+				if (drops)
+					*drops += 1; /* Keep a counter for drop matches */
+			}
 			return XDP_DROP;
 		}
 	}
