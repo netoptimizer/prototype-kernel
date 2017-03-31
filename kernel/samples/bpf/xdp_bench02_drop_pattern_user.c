@@ -1,7 +1,12 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " XDP bench02: measure effect of different drop patterns";
+" XDP bench02: measure effect of different drop patterns\n\n"
+" This program simply drop half of all incoming packets.\n"
+"  Instead of dropping every second packet, half of the packets can also\n"
+"  be dropped by dropping N-packets followed by accepting N-packets.\n"
+"  Such a N-drop-N-accept pattern, resembles what RX-stages can achieve\n"
+"  by handling the XDP stage before netstack stage.\n";
 
 #include <assert.h>
 #include <errno.h>
