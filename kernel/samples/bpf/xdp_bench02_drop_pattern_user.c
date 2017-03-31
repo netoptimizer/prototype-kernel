@@ -49,30 +49,10 @@ static const struct option long_options[] = {
 	{"dev",		required_argument,	NULL, 'd' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{"pattern1", 	required_argument,	NULL, '1' },
+	{"action", 	required_argument,	NULL, 'a' },
 	{"notouch", 	no_argument,		NULL, 'n' },
 	{0, 0, NULL,  0 }
 };
-
-static void usage(char *argv[])
-{
-	int i;
-	printf("\nDOCUMENTATION:\n%s\n", __doc__);
-	printf("\n");
-	printf(" Usage: %s (options-see-below)\n",
-	       argv[0]);
-	printf(" Listing options:\n");
-	for (i = 0; long_options[i].name != 0; i++) {
-		printf(" --%-12s", long_options[i].name);
-		if (long_options[i].flag != NULL)
-			printf(" flag (internal value:%d)",
-			       *long_options[i].flag);
-		else
-			printf(" short-option: -%c",
-			       long_options[i].val);
-		printf("\n");
-	}
-	printf("\n");
-}
 
 struct pattern {
 	/* Remember: sync with _kern.c */
@@ -100,6 +80,69 @@ static const char *action2str(int action)
 	if (action < XDP_ACTION_MAX)
 		return xdp_action_names[action];
 	return NULL;
+}
+
+static bool set_xdp_action(__u64 action)
+{
+	__u64 value = action;
+	__u32 key = 0;
+
+	/* map_fd[6] == map(xdp_action) */
+	if ((bpf_map_update_elem(map_fd[6], &key, &value, BPF_ANY)) != 0) {
+		fprintf(stderr, "ERR %s(): bpf_map_update_elem failed\n",
+			__func__);
+		return false;
+	}
+	return true;
+}
+
+static int parse_xdp_action(char *action_str)
+{
+	size_t maxlen;
+	__u64 action = -1;
+	int i;
+
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		maxlen = XDP_ACTION_MAX_STRLEN;
+		if (strncmp(xdp_action_names[i], action_str, maxlen) == 0) {
+			action = i;
+			break;
+		}
+	}
+	return action;
+}
+
+static void list_xdp_action(void)
+{
+	int i;
+
+	printf("Available XDP **OVERRIDE** --action <options>\n");
+	for (i = 0; i < XDP_ACTION_MAX; i++) {
+		printf("\t%s\n", xdp_action_names[i]);
+	}
+	printf("\n");
+}
+
+static void usage(char *argv[])
+{
+	int i;
+	printf("\nDOCUMENTATION:\n%s\n", __doc__);
+	printf("\n");
+	printf(" Usage: %s (options-see-below)\n",
+	       argv[0]);
+	printf(" Listing options:\n");
+	for (i = 0; long_options[i].name != 0; i++) {
+		printf(" --%-12s", long_options[i].name);
+		if (long_options[i].flag != NULL)
+			printf(" flag (internal value:%d)",
+			       *long_options[i].flag);
+		else
+			printf(" short-option: -%c",
+			       long_options[i].val);
+		printf("\n");
+	}
+	printf("\n");
+	list_xdp_action();
 }
 
 struct record {
@@ -300,6 +343,9 @@ static void stats_poll(int interval)
 int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
+	char action_str_buf[XDP_ACTION_MAX_STRLEN + 1 /* for \0 */] = {};
+	char *action_str = NULL;
+	__u64 override_action = 0; /* Default disabled */
 	char filename[256];
 	int longindex = 0;
 	int interval = 1;
@@ -332,6 +378,10 @@ int main(int argc, char **argv)
 		case 's':
 			interval = atoi(optarg);
 			break;
+		case 'a':
+			action_str = (char *)&action_str_buf;
+			strncpy(action_str, optarg, XDP_ACTION_MAX_STRLEN);
+			break;
 		case '1':
 			pattern_arg = atoi(optarg);
 			break;
@@ -352,6 +402,18 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_OPTION;
 	}
 
+	/* Parse action string */
+	if (action_str) {
+		override_action = parse_xdp_action(action_str);
+		if (override_action < 0) {
+			fprintf(stderr, "ERR: Invalid XDP action: %s\n",
+				action_str);
+			usage(argv);
+			list_xdp_action();
+			return EXIT_FAIL_OPTION;
+		}
+	}
+
 	/* Increase resource limits */
 	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
 		perror("setrlimit(RLIMIT_MEMLOCK, RLIM_INFINITY)");
@@ -369,6 +431,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Control behavior of XDP program */
+	set_xdp_action(override_action);
 	set_touch_mem(touch_mem);
 	set_xdp_pattern(1, pattern_arg);
 

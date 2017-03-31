@@ -87,6 +87,13 @@ struct bpf_map_def SEC("maps") blacklist = {
 	.map_flags   = BPF_F_NO_PREALLOC,
 };
 
+struct bpf_map_def SEC("maps") xdp_action = {
+	.type = BPF_MAP_TYPE_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = 1,
+};
+
 /*
  * Pattern1: N-drop + N-accept
  *
@@ -211,7 +218,7 @@ int xdp_prog(struct xdp_md *ctx)
 	long *value;
 	u64 offset;
 	u32 action = XDP_DROP;
-	u32 action2;
+	u32 a2, *a3;
 	struct pattern *pattern;
 	u32 key = 0;
 	u64 *touch_mem;
@@ -235,10 +242,11 @@ int xdp_prog(struct xdp_md *ctx)
 
 		if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset)))
 			return XDP_PASS; /* Skip */
-		action2 = handle_eth_protocol(ctx, eth_proto, l3_offset);
-		if (action2 == XDP_DROP) {
-			stats_action_verdict(action);
-			return action2;
+
+		a2 = handle_eth_protocol(ctx, eth_proto, l3_offset);
+		if (a2 == XDP_DROP) {
+			action = a2;
+			goto out;
 		}
 	}
 
@@ -249,8 +257,12 @@ int xdp_prog(struct xdp_md *ctx)
 	if (pattern->type == 1)
 		action = N_drop_N_accept(pattern->arg);
 
-	// TODO: add "always" XDP_DROP to measure baseline cost of program
-
+	/* Override action option: allows measure baseline cost of program */
+	a3 = bpf_map_lookup_elem(&xdp_action, &key);
+	if (a3 && (*a3 > 0) && (*a3 < XDP_ACTION_MAX)) {
+		action = *a3;
+	}
+out:
 	stats_action_verdict(action);
 	return action;
 }
