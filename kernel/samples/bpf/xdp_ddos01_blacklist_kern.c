@@ -17,6 +17,7 @@
 enum {
 	DDOS_FILTER_TCP = 0,
 	DDOS_FILTER_UDP,
+	DDOS_FILTER_MAX,
 };
 
 struct vlan_hdr {
