@@ -17,6 +17,7 @@
 enum {
 	DDOS_FILTER_TCP = 0,
 	DDOS_FILTER_UDP,
+	DDOS_FILTER_MAX,
 };
 
 struct vlan_hdr {
@@ -170,7 +171,7 @@ u32 parse_port(struct xdp_md *ctx, u8 proto, void *hdr)
 			return XDP_ABORTED;
 		}
 		dport = ntohs(udph->dest);
-		fproto = 1 << DDOS_FILTER_UDP;
+		fproto = DDOS_FILTER_UDP;
 		break;
 	case IPPROTO_TCP:
 		tcph = hdr;
@@ -180,7 +181,7 @@ u32 parse_port(struct xdp_md *ctx, u8 proto, void *hdr)
 			return XDP_ABORTED;
 		}
 		dport = ntohs(tcph->dest);
-		fproto = 1 << DDOS_FILTER_TCP;
+		fproto = DDOS_FILTER_TCP;
 		break;
 	default:
 		return XDP_PASS;
@@ -190,7 +191,7 @@ u32 parse_port(struct xdp_md *ctx, u8 proto, void *hdr)
 	value = bpf_map_lookup_elem(&port_blacklist, &dport_idx);
 
 	if (value) {
-		if (*value & fproto) {
+		if (*value & (1 << fproto)) {
 			struct bpf_map_def *drop_counter = drop_count_by_fproto(fproto);
 			if (drop_counter) {
 				drops = bpf_map_lookup_elem(drop_counter , &dport_idx);
