@@ -82,7 +82,7 @@ page.  This simplifies page handling and open up for future
 extensions.
 
 This requirement also (upfront) result in choosing not to support
-things like, jumpo-frames, LRO and generally packets split over
+things like, jumbo-frames, LRO and generally packets split over
 multiple pages.
 
 In the future, this strict memory model might be relaxed, but for now
