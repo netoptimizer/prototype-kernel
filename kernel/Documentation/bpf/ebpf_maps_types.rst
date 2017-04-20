@@ -32,7 +32,7 @@ but remember to `lookup latest`_ available maps in the source code.
 .. section links
 
 .. _lookup latest:
-   http://lxr.free-electrons.com/ident?i=bpf_map_type
+   http://lingrok.org/search?project=linux-net-next&q=bpf_map_type
 
 Implementation details
 ======================
