@@ -135,3 +135,19 @@ The ``proglen`` is the len of opcode sequence generated and ``flen``
 is the number of bpf insns. You can use tools/net/bpf_jit_disasm.c to
 disassemble that output. bpf_jit_disasm -o will dump the related
 opcodes as well.
+
+Perf tool symbols
+=================
+
+For JITed progs, you can do sysctl net/core/bpf_jit_kallsyms=1
+and f.e. perf script --kallsyms=/proc/kallsyms to show them based
+on the tag::
+
+ sysctl net/core/bpf_jit_kallsyms=1
+
+Detail see commit: https://git.kernel.org/torvalds/c/74451e66d516c55e3
+
+Remember to use the perf command-line option --kallsyms=/proc/kallsyms
+to get the symobols resolved, like::
+
+ # perf report --no-children --kallsyms=/proc/kallsyms
