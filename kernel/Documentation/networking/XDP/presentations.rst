@@ -45,6 +45,7 @@ List of related presentations or write-ups:
  * (Sep 2016): `Dive into BPF`_: a list of reading material
  * (Oct 2016): `XDP in OpenStack (video)`_ for DDoS protection
  * (Oct 2016): `NetDev 1.2 video`_ by `David Miller`_
+ * (April 2017): `BPF and XDP Reference Guide`_: Cilium developer's guide
 
 
 .. _Linux Network Stack:
@@ -71,3 +72,6 @@ List of related presentations or write-ups:
 
 .. _David Miller:
    https://en.wikipedia.org/wiki/David_S._Miller
+
+.. _BPF and XDP Reference Guide:
+    http://cilium.readthedocs.io/en/latest/bpf/#bpf-and-xdp-reference-guide
