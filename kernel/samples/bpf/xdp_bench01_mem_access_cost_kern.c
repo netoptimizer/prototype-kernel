@@ -25,6 +25,22 @@ struct bpf_map_def SEC("maps") touch_memory = {
 	.max_entries = 1,
 };
 
+static void swap_src_dst_mac(void *data)
+{
+	unsigned short *p = data;
+	unsigned short dst[3];
+
+	dst[0] = p[0];
+	dst[1] = p[1];
+	dst[2] = p[2];
+	p[0] = p[3];
+	p[1] = p[4];
+	p[2] = p[5];
+	p[3] = dst[0];
+	p[4] = dst[1];
+	p[5] = dst[2];
+}
+
 SEC("xdp_bench01")
 int xdp_prog(struct xdp_md *ctx)
 {
@@ -57,6 +73,13 @@ int xdp_prog(struct xdp_md *ctx)
 		/* Avoid compile removing this: e.g Drop non 802.3 Ethertypes */
 		if (ntohs(eth_type) < ETH_P_802_3_MIN)
 			return XDP_DROP;
+
+		/* If touch_mem, also swap MACs for XDP_TX.  This is
+		 * needed for action XDP_TX, else HW will not TX packet
+		 * (this was observed with mlx5 driver).
+		 */
+		if (*action == XDP_TX)
+			swap_src_dst_mac(data);
 	}
 
 	value = bpf_map_lookup_elem(&rx_cnt, &key);

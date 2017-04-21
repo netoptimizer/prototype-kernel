@@ -366,6 +366,11 @@ int main(int argc, char **argv)
 	set_xdp_action(action);
 	set_touch_mem(touch_mem);
 
+	/* Some NIC drop packets on XDP_TX if MAC-addr isn't changed */
+	if ((action == XDP_TX) && !(touch_mem))
+		fprintf(stderr, "\n **WARNING** "
+		 "XDP_TX without --readmem, might not TX to wire\n\n");
+
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
 
