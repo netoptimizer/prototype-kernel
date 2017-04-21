@@ -50,6 +50,7 @@ static const struct option long_options[] = {
 	{"sec", 	required_argument,	NULL, 's' },
 	{"action", 	required_argument,	NULL, 'a' },
 	{"readmem", 	no_argument,		NULL, 'r' },
+	{"swapmac", 	no_argument,		NULL, 'm' },
 	{0, 0, NULL,  0 }
 };
 
@@ -153,13 +154,17 @@ static void list_xdp_action(void)
 enum touch_mem_type {
 	NO_TOUCH = 0x0ULL,
 	READ_MEM = 0x1ULL,
+	SWAP_MAC = 0x2ULL, /* Used as bit */
 };
+
 static char* mem2str(enum touch_mem_type touch_mem)
 {
 	if (touch_mem == NO_TOUCH)
 		return "no_touch";
 	if (touch_mem == READ_MEM)
 		return "read";
+	if ((touch_mem & SWAP_MAC))
+		return "swap_mac";
 	fprintf(stderr, "ERR: Unknown memory touch type");
 	exit(EXIT_FAIL);
 }
@@ -319,6 +324,9 @@ int main(int argc, char **argv)
 		case 'r':
 			touch_mem |= READ_MEM;
 			break;
+		case 'm':
+			touch_mem |= SWAP_MAC;
+			break;
 		case 'h':
 		error:
 		default:
@@ -368,8 +376,8 @@ int main(int argc, char **argv)
 
 	/* Some NIC drop packets on XDP_TX if MAC-addr isn't changed */
 	if ((action == XDP_TX) && !(touch_mem))
-		fprintf(stderr, "\n **WARNING** "
-		 "XDP_TX without --readmem, might not TX to wire\n\n");
+	     fprintf(stderr, "\n **WARNING** "
+	      "XDP_TX without --readmem or --swapmac might not TX to wire\n\n");
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);

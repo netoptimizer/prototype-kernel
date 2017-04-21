@@ -66,19 +66,26 @@ int xdp_prog(struct xdp_md *ctx)
 
 	/* Default: Don't touch packet data, only count packets */
 	touch_mem = bpf_map_lookup_elem(&touch_memory, &key);
-	if (touch_mem && (*touch_mem == 1)) {
-		struct ethhdr *eth = data;
+	if (touch_mem && (*touch_mem > 0)) {
 
-		eth_type = eth->h_proto;
-		/* Avoid compile removing this: e.g Drop non 802.3 Ethertypes */
-		if (ntohs(eth_type) < ETH_P_802_3_MIN)
-			return XDP_DROP;
+		if (*touch_mem & 1) { /* Enable via --readmem */
+			struct ethhdr *eth = data;
+
+			eth_type = eth->h_proto;
+			/* Avoid compiler removing this:
+			 * e.g Drop non 802.3 Ethertypes
+			 */
+			if (ntohs(eth_type) < ETH_P_802_3_MIN)
+				return XDP_DROP;
+		}
 
 		/* If touch_mem, also swap MACs for XDP_TX.  This is
 		 * needed for action XDP_TX, else HW will not TX packet
 		 * (this was observed with mlx5 driver).
+		 *
+		 * Can also be enabled with --swapmac
 		 */
-		if (*action == XDP_TX)
+		if (*action == XDP_TX || (*touch_mem & 2))
 			swap_src_dst_mac(data);
 	}
 
