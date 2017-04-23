@@ -37,10 +37,11 @@ JITs that are supported by the kernel via::
  arch/arm/Kconfig:	select HAVE_CBPF_JIT
  arch/arm64/Kconfig:	select HAVE_EBPF_JIT
  arch/mips/Kconfig:	select HAVE_CBPF_JIT if !CPU_MICROMIPS
- arch/powerpc/Kconfig:	select HAVE_CBPF_JIT if !PPC64
- arch/powerpc/Kconfig:	select HAVE_EBPF_JIT if PPC64
+ arch/powerpc/Kconfig:	select HAVE_CBPF_JIT			if !PPC64
+ arch/powerpc/Kconfig:	select HAVE_EBPF_JIT			if PPC64
  arch/s390/Kconfig:	select HAVE_EBPF_JIT if PACK_STACK && HAVE_MARCH_Z196_FEATURES
- arch/sparc/Kconfig:	select HAVE_CBPF_JIT
+ arch/sparc/Kconfig:	select HAVE_CBPF_JIT if SPARC32
+ arch/sparc/Kconfig:	select HAVE_EBPF_JIT if SPARC64
  arch/x86/Kconfig:	select HAVE_EBPF_JIT			if X86_64
 
 
