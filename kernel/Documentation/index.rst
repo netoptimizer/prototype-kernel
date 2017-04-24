@@ -24,6 +24,7 @@ Contents:
    networking/index
    vm/index
    bpf/index
+   blogposts/index
 
 
 Indices and tables
