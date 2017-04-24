@@ -1,8 +1,8 @@
-=======================================
-Evaluating Generic netstack XDP patches
-=======================================
+===============================
+Eval Generic netstack XDP patch
+===============================
 :Authors: Jesper Dangaard Brouer
-:Version: 0.3.7
+:Version: 1.0.0
 :Date: 2017-04-24 Mon
 
 Given XDP works at the driver level, developing and testing XDP
@@ -88,9 +88,9 @@ Mellanox have taken over these patches, but they are stalling on that
 on newer E5-26xx v4 CPUs this prefetch already happens in HW.
 
 This is a more realistic XDP_DROP senario where we touch packet data
-(causes cache miss from L3)::
+before dropping it (causes cache miss from L3)::
 
-  [jbrouer@skylake prototype-kernel]$
+ [jbrouer@skylake prototype-kernel]$
    sudo ./xdp_bench01_mem_access_cost --action XDP_DROP --dev mlx5p2 --read
  XDP_action   pps        pps-human-readable mem      
  XDP_DROP     11972515   11,972,515         read     
@@ -203,7 +203,7 @@ tairptr/doorbell update on TX??? ::
  XDP_TX       4484903    4,484,903          read     
  XDP_TX       4571821    4,571,821          read     
  XDP_TX       4574512    4,574,512          read     
- XDP_TX       4574424    4,574,424          read     
+ XDP_TX       4574424    4,574,424          read     (**use in examples**)
  XDP_TX       4575712    4,575,712          read     
  XDP_TX       4505569    4,505,569          read     
  ^CInterrupted: Removing XDP program on ifindex:7 device:mlx5p2
@@ -233,8 +233,8 @@ Perf details for netstack XDP_TX
 
 My first though is that there is a high probability that this could be
 the tairptr/doorbell update. Looking at perf report something else
-lights up... which could still be the tailptr, as it stalls on the
-next lock operation ::
+lights up, which could still be the tailptr, as it stalls on the next
+lock operation ::
 
  Samples: 25K of event 'cycles', Event count (approx.): 25790301710
   Overhead  Symbol
@@ -291,7 +291,7 @@ Inside mlx5e_xmit(10.72%) there is 17.96% spend on a sfence asm
 instruction.  The cost (1/4574424*10^9)*(10.72/100) = 23.43 ns of
 calling mlx5e_xmit() might not be too off-target.
 
-My guess is that this caused the the tailptr/doorbell stall.  And
+My guess is that this is caused the the tailptr/doorbell stall.  And
 doing bulk/xmit_more we can likely reduce mlx5e_handle_rx_cqe(-12ns as
 cache-miss returns) and __build_skb(-27ns).  Thus, the performance
 target should lay around 5.6Mpps ((1/(218-12-27)*10^9) = 5586592).
@@ -492,9 +492,11 @@ the time of __build_skb() is spend on "rep stos %rax,%es:(%rdi)".
 Thus, extrapolating 12.7 ns (12.7*(75.65/100)) cost of 9.6 ns.
 
 This is very CPU specific how fast or slow this is, but I've
-benchmarked different alternative approaches here:
+benchmarked different alternative approaches with
+`time_bench_memset.c`_.
 
-https://github.com/netoptimizer/prototype-kernel/blob/master/kernel/lib/time_bench_memset.c
+.. _time_bench_memset.c:
+   https://github.com/netoptimizer/prototype-kernel/blob/master/kernel/lib/time_bench_memset.c
 
 Memset benchmarks on this Skylake CPU show that hand-optimizing
 ASM-coded memset, can reach 8 bytes per cycles, but only saves approx
@@ -620,14 +622,17 @@ calculated the difference to NIC-level-XDP to be 39 ns:
 The difference to NIC-level-XDP is:
  (1/12006685*10^9)- (1/8148972*10^9) = -39.42 ns
 
+Freeing the SKB is summed up under kfree_skb() with 14.98% => 18.3 ns.
+In this case kfree_skb() should get attributed under napi_gro_receive(),
+due to the direct kfree_skb(skb) call in netif_receive_generic_xdp().
+In other situations kfree_skb() happens during the DMA TX completion,
+but not here.
+
 Creating, allocating and clearing the SKB is all "under" the
 build_skb() call, which attributes to a collective 19.41% or 23.8 ns.
-The build_skb() call happens before, in-driver, before calling
-napi_gro_receive.  Thus, something is not adding up 100% as
-23.8+36=59.8 which is higher than the calculated difference to
-NIC-level-XDP.
+The build_skb() call happens, in-driver, before calling napi_gro_receive.
 
-Freeing the SKB is summed up under kfree_skb() with 14.98% => 18.3 ns.
-I'm not sure what kfree_skb() gets attributed under, but due to the
-direct kfree_skb(skb) call in netif_receive_generic_xdp() I assume
-this is part of napi_gro_receive().
+Thus, one might be lead to conclude that the overhead of the network
+stack is (23.8 ns +36 ns) 59.8 ns, but something is not adding up as
+this is higher the calculated approx 40ns difference to NIC-level-XDP.
+
