@@ -15,3 +15,4 @@ Contents:
 .. toctree::
    :maxdepth: 1
 
+   xdp25_eval_generic_xdp_tx.rst
