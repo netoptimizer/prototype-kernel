@@ -28,10 +28,10 @@ ability to do what I call zoom-in-benchmarking of the network stack
 facilities, that the NIC-XDP programs avoid. Thus, allowing us to
 quantify the cost of these facilities.
 
-.. _`PATCH V3`:
+.. _`PATCH V4`:
    http://lkml.kernel.org/r/20170413.120925.2082322246776478766.davem@davemloft.net
 
-.. _`PATCH v4`:
+.. _`PATCH v3`:
    http://lkml.kernel.org/r/20170412.145415.1441440342830198148.davem@davemloft.net
 
 Benchmark program
