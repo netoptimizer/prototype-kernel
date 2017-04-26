@@ -13,7 +13,6 @@ static const char *__doc__=
 #include <string.h>
 #include <unistd.h>
 #include <locale.h>
-#include <linux/bitops.h>
 
 #include <sys/resource.h>
 #include <getopt.h>
@@ -212,7 +211,7 @@ static void blacklist_print_proto(int key, __u64 count)
 	printf("\n\t\"%s\" : %llu", xdp_proto_filter_names[key], count);
 }
 
-static void blacklist_print_port(int key, u32 val, int countfds[])
+static void blacklist_print_port(int key, __u32 val, int countfds[])
 {
 	int i;
 	__u64 count;
