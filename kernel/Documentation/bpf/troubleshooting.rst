@@ -43,6 +43,11 @@ JITs that are supported by the kernel via::
  arch/sparc/Kconfig:	select HAVE_CBPF_JIT
  arch/x86/Kconfig:	select HAVE_EBPF_JIT			if X86_64
 
+Also see Cilium `JIT`_ section and `BPF sysctl`_ section.
+
+.. _JIT: http://cilium.readthedocs.io/en/latest/bpf/#jit
+
+.. _BPF sysctl: http://cilium.readthedocs.io/en/latest/bpf/#bpf-sysctls.
 
 ELF binary
 ==========
@@ -95,11 +100,16 @@ section names, asm code and original C code, if compiled with ``-g``. ::
 
 .. TODO:: What does the option -no-show-raw-insn do?
 
-Until this section is improved, look at mailing list response:
-https://www.spinics.net/lists/netdev/msg407045.html
+See Cilium `Toolchain LLVM`_ section for more details.
+
+.. _Toolchain LLVM: http://cilium.readthedocs.io/en/latest/bpf/#jit-debugging
 
 Extracting eBPF-JIT code
 ========================
+
+Also see Cilium `JIT Debugging`_.
+
+.. _JIT Debugging: http://cilium.readthedocs.io/en/latest/bpf/#jit-debugging
 
 For debugging/seeing the generated JIT code, is it possible to change
 this proc sysctl::
