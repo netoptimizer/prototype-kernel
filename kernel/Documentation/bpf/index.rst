@@ -33,6 +33,9 @@ Documentation
 The primary user documentation for extended BPF is in the man-page for
 the `bpf(2)`_ syscall.
 
+An excellent `BPF and XDP Reference Guide`_ is being maintained by the
+`Cilium project`_.
+
 This documentation is focused on the kernel tree's `samples/bpf/`_ and
 `tools/lib/bpf/`_.  It is worth mentioning that other projects exist,
 like :doc:`bcc_tool_chain`, that has a slightly different user-facing
@@ -72,3 +75,8 @@ covered by this documentation.
    https://git.kernel.org/cgit/linux/kernel/git/torvalds/linux.git/tree/tools/lib/bpf/
 
 .. _Traffic control: http://man7.org/linux/man-pages/man8/tc-bpf.8.html
+
+.. _BPF and XDP Reference Guide: http://cilium.readthedocs.io/en/latest/bpf/
+
+.. _Cilium project: https://www.cilium.io/
+
