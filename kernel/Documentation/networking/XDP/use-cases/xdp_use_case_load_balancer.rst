@@ -18,6 +18,15 @@ which is a pure-python replacement for ipvsadm_ (`ipvsadm git`_ tree).
 .. _ipvsadm:     https://kernel.org/pub/linux/utils/kernel/ipvsadm/
 .. _ipvsadm git: https://git.kernel.org/cgit/utils/kernel/ipvsadm/ipvsadm.git/
 
+Facebook presented at `NetDevConf 2.1`_ (April 2017) that they are
+starting to deploy an XDP based solution for both this Load Balancer
+solution (that gave a 10x speedup compared to IPVS) and a DDoS
+protection solution named ``droplet``. See: `slides`_ and YouTube
+`video`_.
+
+.. _NetDevConf 2.1: http://netdevconf.org/2.1/session.html?zhou
+.. _slides: http://netdevconf.org/2.1/slides/apr6/zhou-netdev-xdp-2017.pdf
+.. _video: https://www.youtube.com/watch?v=YEU2ClcGqts
 
 Traditional load balancer
 =========================
