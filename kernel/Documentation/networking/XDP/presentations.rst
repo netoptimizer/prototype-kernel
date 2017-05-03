@@ -5,7 +5,11 @@ List of XDP focused presentations:
 
  * `March 2016`_     - Initial presentation by Facebook (Tom and Alexei)
  * `July 2016`_      - IO visor (Brenden Blanco)
- * `September 2016`_ - Red Hat Inc. (Jesper Brouer)
+ * `September 2016`_ - Intro and use-case, Red Hat Inc. (Jesper Brouer)
+ * April 2017        - Keynote NetDevconf 2.1: `XDP Mythbusters`_
+ * April 2017        - XDP/eBPF tutorial: `XDP for the Rest of Us`_
+ * April 2017        - `Facebook Droplet`_
+ * April 2017        - `CloudFlare integrating XDP`_
 
 Historically the `Network Performance BoF`_ at NetDev 1.1 (Feb 2016)
 was the first presentation to propose the idea of processing RX
@@ -23,6 +27,14 @@ packet-pages directly out of the driver RX ring queue.
 .. _September 2016:
    http://people.netfilter.org/hawk/presentations/xdp2016/xdp_intro_and_use_cases_sep2016.pdf
 
+.. _XDP for the Rest of Us:
+   http://netdevconf.org/2.1/session.html?gospodarek
+
+.. _Facebook Droplet: http://netdevconf.org/2.1/session.html?zhou
+
+.. _XDP Mythbusters: http://netdevconf.org/2.1/session.html?miller
+
+.. _CloudFlare integrating XDP: http://netdevconf.org/2.1/session.html?bertin
 
 Press coverage
 --------------
