@@ -24,12 +24,14 @@ static const char *__doc__=
 #include <time.h>
 
 #include <arpa/inet.h>
+#include <linux/if_link.h>
 
 #include "bpf_load.h"
 #include "bpf_util.h"
 #include "libbpf.h"
 
 static int ifindex = -1;
+static __u32 xdp_flags = 0;
 static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 
@@ -45,7 +47,7 @@ static void int_exit(int sig)
 		"Interrupted: Removing XDP program on ifindex:%d device:%s\n",
 		ifindex, ifname);
 	if (ifindex > -1)
-		set_link_xdp_fd(ifindex, -1);
+		set_link_xdp_fd(ifindex, -1, xdp_flags);
 	exit(EXIT_OK);
 }
 
@@ -56,6 +58,7 @@ static const struct option long_options[] = {
 	{"pattern1", 	required_argument,	NULL, '1' },
 	{"action", 	required_argument,	NULL, 'a' },
 	{"notouch", 	no_argument,		NULL, 'n' },
+	{"skbmode", 	no_argument,		NULL, 'S' },
 	{0, 0, NULL,  0 }
 };
 
@@ -362,7 +365,7 @@ int main(int argc, char **argv)
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hd:s:",
+	while ((opt = getopt_long(argc, argv, "hSd:s:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'd':
@@ -392,6 +395,9 @@ int main(int argc, char **argv)
 			break;
 		case 'n':
 			touch_mem = NO_TOUCH;
+			break;
+		case 'S':
+			xdp_flags |= XDP_FLAGS_SKB_MODE;
 			break;
 		case 'h':
 		error:
@@ -443,7 +449,7 @@ int main(int argc, char **argv)
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
 
-	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
+	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
 		fprintf(stderr, "link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}

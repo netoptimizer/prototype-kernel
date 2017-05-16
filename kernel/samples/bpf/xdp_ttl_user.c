@@ -27,7 +27,7 @@ static void int_exit(int sig)
 	fprintf(stderr, "Interrupted: Removing XDP program on ifindex:%d\n",
 		ifindex);
 	if (ifindex > -1)
-		set_link_xdp_fd(ifindex, -1);
+		set_link_xdp_fd(ifindex, -1, 0);
 	exit(0);
 }
 
@@ -192,7 +192,7 @@ int main(int argc, char **argv)
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
 
-	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
+	if (set_link_xdp_fd(ifindex, prog_fd[0], 0) < 0) {
 		printf("link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}

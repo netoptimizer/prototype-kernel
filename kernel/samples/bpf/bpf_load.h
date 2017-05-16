@@ -41,5 +41,12 @@ struct ksym {
 
 int load_kallsyms(void);
 struct ksym *ksym_search(long key);
-int set_link_xdp_fd(int ifindex, int fd);
+
+#ifndef XDP_FLAGS_SKB_MODE
+#define XDP_FLAGS_SKB_MODE	(2U << 0)
+/* Avail in include/uapi/linux/if_link.h
+ *  at kernel commit b5cdae3291f7 ("net: Generic XDP")
+ */
+#endif
+int set_link_xdp_fd(int ifindex, int fd, __u32 flags);
 #endif

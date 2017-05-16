@@ -33,6 +33,7 @@ static const char *__doc__=
 #include <libgen.h>  /* dirname */
 
 #include <arpa/inet.h>
+#include <linux/if_link.h>
 
 #include "bpf_load.h"
 #include "bpf_util.h"
@@ -44,13 +45,13 @@ static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 static int ifindex = -1;
 
-static void remove_xdp_program(int ifindex, const char *ifname)
+static void remove_xdp_program(int ifindex, const char *ifname, __u32 xdp_flags)
 {
 	int i;
 	fprintf(stderr, "Removing XDP program on ifindex:%d device:%s\n",
 		ifindex, ifname);
 	if (ifindex > -1)
-		set_link_xdp_fd(ifindex, -1);
+		set_link_xdp_fd(ifindex, -1, xdp_flags);
 	if (unlink(file_blacklist) < 0) {
 		printf("WARN: cannot remove map file:%s err(%d):%s\n",
 		       file_blacklist, errno, strerror(errno));
@@ -77,6 +78,7 @@ static const struct option long_options[] = {
 	{"dev",		required_argument,	NULL, 'd' },
 	{"quite",	no_argument,		NULL, 'q' },
 	{"owner",	required_argument,	NULL, 'o' },
+	{"skb-mode",	no_argument,		NULL, 'S' },
 	{0, 0, NULL,  0 }
 };
 
@@ -192,12 +194,13 @@ int main(int argc, char **argv)
 {
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	bool rm_xdp_prog = false;
+	struct passwd *pwd = NULL;
+	__u32 xdp_flags = 0;
 	char filename[256];
 	int longindex = 0;
 	int fd_bpf_prog;
 	uid_t owner = -1; /* -1 result in now change of owner */
 	gid_t group = -1;
-	struct passwd *pwd = NULL;
 	int res;
 	int opt;
 	int i;
@@ -205,7 +208,7 @@ int main(int argc, char **argv)
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "hrqd:",
+	while ((opt = getopt_long(argc, argv, "hSrqd:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'q':
@@ -239,6 +242,9 @@ int main(int argc, char **argv)
 				goto error;
 			}
 			break;
+		case 'S':
+			xdp_flags |= XDP_FLAGS_SKB_MODE;
+			break;
 		case 'h':
 		error:
 		default:
@@ -253,7 +259,7 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_OPTION;
 	}
 	if (rm_xdp_prog) {
-		remove_xdp_program(ifindex, ifname);
+		remove_xdp_program(ifindex, ifname, xdp_flags);
 		return EXIT_OK;
 	}
 	if (verbose) {
@@ -320,7 +326,7 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (set_link_xdp_fd(ifindex, prog_fd[0]) < 0) {
+	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
 		printf("link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
