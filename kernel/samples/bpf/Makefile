@@ -153,7 +153,7 @@ verify_llvm_target_bpf: verify_cmds
 $(OBJECT_LIBBPF): %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-$(OBJECT_LOADBPF): bpf_load.c
+$(OBJECT_LOADBPF): bpf_load.c bpf_load.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 # Compiling of eBPF restricted-C code with LLVM
@@ -161,7 +161,7 @@ $(OBJECT_LOADBPF): bpf_load.c
 #   which is the non-binary LLVM assembly language format
 #   (normally LLVM bitcode format .bc is generated)
 #
-$(KERN_OBJECTS): %.o: %.c
+$(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
 	    -Wno-compare-distinct-pointer-types \
