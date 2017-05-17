@@ -22,9 +22,9 @@ static const char *__doc__=
 #include <arpa/inet.h>
 #include <linux/if_link.h>
 
+#include "libbpf.h"
 #include "bpf_load.h"
 #include "bpf_util.h"
-#include "libbpf.h"
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
@@ -50,12 +50,54 @@ static void int_exit(int sig)
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"dev",		required_argument,	NULL, 'd' },
+	{"stats",	no_argument,		NULL, 's' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{"action", 	required_argument,	NULL, 'a' },
 	{"notouch", 	no_argument,		NULL, 'n' },
-	{"skbmode",     no_argument,            NULL, 'S' },
+	{"skbmode",     no_argument,		NULL, 'S' },
+	{"debug",	no_argument,		NULL, 'D' },
 	{0, 0, NULL,  0 }
 };
+
+/* Perhaps move these:   MAX defines to bpf.h ??? */
+#define XDP_HASH_TYPE_L3_MAX	(1 << XDP_HASH_TYPE_L3_BITS)
+#define XDP_HASH_TYPE_L4_MAX	(1 << XDP_HASH_TYPE_L4_BITS)
+
+static const char *L3_type_names[XDP_HASH_TYPE_L3_MAX] = {
+	[0]			= "Unknown",
+	[XDP_HASH_TYPE_L3_IPV4]	= "IPv4",
+	[XDP_HASH_TYPE_L3_IPV6]	= "IPv6",
+	/* Rest is hopefully inited to zero?!? */
+};
+static const char *L3_type2str(unsigned int type)
+{
+	const char *str;
+
+	if (type < XDP_HASH_TYPE_L3_MAX) {
+		str = L3_type_names[type];
+		if (str)
+			return str;
+	}
+	return NULL;
+}
+static const char *L4_type_names[XDP_HASH_TYPE_L4_MAX] = {
+	[0]			= "Unknown",
+	[_XDP_HASH_TYPE_L4_TCP]	= "TCP",
+	[_XDP_HASH_TYPE_L4_UDP]	= "UDP",
+	/* Rest is hopefully inited to zero?!? */
+};
+static const char *L4_type2str(unsigned int type)
+{
+	const char *str;
+
+	if (type < XDP_HASH_TYPE_L4_MAX) {
+		str = L4_type_names[type];
+		if (str)
+			return str;
+	}
+	return NULL;
+}
+
 
 
 #define XDP_ACTION_MAX (XDP_TX + 2) /* Extra fake "rx_total" */
@@ -145,6 +187,8 @@ struct record {
 
 struct stats_record {
 	struct record xdp_action[XDP_ACTION_MAX];
+	struct record hash_type_L3[XDP_HASH_TYPE_L3_MAX];
+	struct record hash_type_L4[XDP_HASH_TYPE_L4_MAX];
 	__u64 touch_mem;
 };
 
@@ -228,35 +272,102 @@ static __u64 get_key32_value64_percpu(int fd, __u32 key)
 	return sum;
 }
 
-static void stats_print(struct stats_record *record,
-			struct stats_record *prev)
+static void calc_pps(struct record *r, struct record *p,
+		     double *pps, double *period_)
+{
+	__u64 period  = 0;
+	__u64 packets = 0;
+
+	if (p->timestamp) {
+		packets = r->counter - p->counter;
+		period  = r->timestamp - p->timestamp;
+		if (period > 0) {
+			*period_ = ((double) period / NANOSEC_PER_SEC);
+			*pps = packets / *period_;
+		}
+	}
+}
+
+/* stats_hash_type */
+#define	STAT_L3 1
+#define	STAT_L4 0
+
+static void stats_print_hash_type(struct stats_record *record,
+				  struct stats_record *prev,
+				  int stat_type)
+{
+	int i, max;
+
+	/* Header */
+	printf("%-14s %-10s %-18s %-9s\n",
+	       stat_type ? "hash_type:L3" : "hash_type:L4",
+	       "pps ", "pps-human-readable", "sample-period");
+
+	max = stat_type ? XDP_HASH_TYPE_L3_MAX : XDP_HASH_TYPE_L4_MAX;
+
+	for (i = 0; i < max; i++) {
+		struct record *r = NULL;
+		struct record *p = NULL;
+		double pps = 0;
+		double period_ = 0;
+		const char *str;
+
+		if (stat_type == STAT_L3) {
+			r = &record->hash_type_L3[i];
+			p = &prev->hash_type_L3[i];
+			str = L3_type2str(i);
+		} else if (stat_type == STAT_L4) {
+			r = &record->hash_type_L4[i];
+			p = &prev->hash_type_L4[i];
+			str = L4_type2str(i);
+		}
+		calc_pps(r, p, &pps, &period_);
+
+		if (str) {
+			printf("%-14s %-10.0f %'-18.0f %f\n",
+			       str, pps, pps, period_);
+		} else {
+			if (!r->counter)
+				continue;
+			printf("%-14d %-10.0f %'-18.0f %f\n",
+			       i, pps, pps, period_);
+		}
+	}
+	printf("\n");
+}
+
+static void stats_print_actions(struct stats_record *record,
+				struct stats_record *prev)
 {
 	int i;
+
+	/* Header - "xdp-action" */
+	printf("%-14s %-10s %-18s %-9s\n",
+	       "xdp-action    ", "pps ", "pps-human-readable", "mem");
 
 	for (i = 0; i < XDP_ACTION_MAX; i++) {
 		struct record *r = &record->xdp_action[i];
 		struct record *p = &prev->xdp_action[i];
-		__u64 period  = 0;
-		__u64 packets = 0;
 		double pps = 0;
 		double period_ = 0;
 
-		if (p->timestamp) {
-			packets = r->counter - p->counter;
-			period  = r->timestamp - p->timestamp;
-			if (period > 0) {
-				period_ = ((double) period / NANOSEC_PER_SEC);
-				pps = packets / period_;
-			}
-		}
+		calc_pps(r, p, &pps, &period_);
 
-		printf("%-12s %-10.0f %'-18.0f %f"
+		printf("%-14s %-10.0f %'-18.0f %f"
 		       "  %s\n",
 		       action2str(i), pps, pps, period_,
 		       mem2str(record->touch_mem)
 			);
 	}
 	printf("\n");
+}
+
+static void stats_print(struct stats_record *record,
+			struct stats_record *prev)
+{
+	stats_print_actions  (record, prev);
+	stats_print_hash_type(record, prev, STAT_L3);
+	stats_print_hash_type(record, prev, STAT_L4);
 }
 
 static bool stats_collect(struct stats_record *rec)
@@ -273,6 +384,18 @@ static bool stats_collect(struct stats_record *rec)
 	rec->xdp_action[RX_TOTAL].timestamp = gettime();
 	rec->xdp_action[RX_TOTAL].counter = get_key32_value64_percpu(fd, 0);
 
+	/* Collect hash_type stats */
+	fd = map_fd[4]; /* map: stats_htype_L3 */
+	for (i = 0; i < XDP_HASH_TYPE_L3_MAX; i++) {
+		rec->hash_type_L3[i].timestamp = gettime();
+		rec->hash_type_L3[i].counter = get_key32_value64_percpu(fd, i);
+	}
+	fd = map_fd[5]; /* map: stats_htype_L4 */
+	for (i = 0; i < XDP_HASH_TYPE_L4_MAX; i++) {
+		rec->hash_type_L4[i].timestamp = gettime();
+		rec->hash_type_L4[i].counter = get_key32_value64_percpu(fd, i);
+	}
+
 	return true;
 }
 
@@ -288,10 +411,6 @@ static void stats_poll(int interval)
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
 
-	/* Header */
-	printf("%-14s %-10s %-18s %-9s\n",
-	       "xdp-action    ", "pps ", "pps-human-readable", "mem");
-
 	while (1) {
 		memcpy(&prev, &record, sizeof(record));
 		stats_collect(&record);
@@ -302,14 +421,16 @@ static void stats_poll(int interval)
 
 int main(int argc, char **argv)
 {
+	__u64 touch_mem = READ_MEM; /* Default: touch packet memory */
+	__u64 override_action = 0; /* Default disabled */
 	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	char action_str_buf[XDP_ACTION_MAX_STRLEN + 1 /* for \0 */] = {};
 	char *action_str = NULL;
-	__u64 override_action = 0; /* Default disabled */
 	char filename[256];
 	int longindex = 0;
+	bool stats = true;
+	bool debug = false;
 	int interval = 1;
-	__u64 touch_mem = READ_MEM; /* Default: touch packet memory */
 	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
@@ -334,7 +455,10 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 's':
-			interval = atoi(optarg);
+			/* shared: --stats && --sec */
+			stats = true;
+			if (optarg)
+				interval = atoi(optarg);
 			break;
 		case 'S':
 			xdp_flags |= XDP_FLAGS_SKB_MODE;
@@ -345,6 +469,9 @@ int main(int argc, char **argv)
 			break;
 		case 'n':
 			touch_mem = NO_TOUCH;
+			break;
+		case 'D':
+			debug = true;
 			break;
 		case 'h':
 		error:
@@ -392,16 +519,24 @@ int main(int argc, char **argv)
 	set_xdp_action(override_action);
 	set_touch_mem(touch_mem);
 
-	/* Remove XDP program when program is interrupted */
+	/* Remove XDP program when program is interrupted or killed */
 	signal(SIGINT, int_exit);
+	signal(SIGTERM, int_exit);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
 		fprintf(stderr, "link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
 
-	//stats_poll(interval);
-	read_trace_pipe();
+	if (debug) {
+		printf("Debug-mode reading trace pipe (fix #define DEBUG)\n");
+		read_trace_pipe();
+	}
+
+	/* Show statistics by polling */
+	if (stats) {
+		stats_poll(interval);
+	}
 
 	return EXIT_OK;
 }

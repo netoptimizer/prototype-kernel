@@ -15,7 +15,7 @@
 
 #include "bpf_helpers.h"
 
-#define DEBUG 1
+//#define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from bpf_trace_printk()
  * end-up in /sys/kernel/debug/tracing/trace_pipe (remember use cat)
@@ -27,7 +27,8 @@
 				 ##__VA_ARGS__);		       \
 	})
 #else
-# define bpf_debug(fmt, ...) { } while (0)
+//# define bpf_debug(fmt, ...) { } while (0)
+# define bpf_debug(fmt, ...)
 #endif
 
 struct bpf_map_def SEC("maps") rx_cnt = {
@@ -76,6 +77,48 @@ void stats_action_verdict(u32 action)
 		*value += 1;
 }
 
+/* Keep stats of hash_type for L3 (e.g IPv4, IPv6) and L4 (e.g UDP, TCP)
+ *
+ * Two small array are sufficient, as the supported types are limited.
+ * The type is stored in a 8-bit value, partitioned with 3-bits for L3
+ * and 5 bits for L4.
+ */
+struct bpf_map_def SEC("maps") stats_htype_L3 = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = (1 << XDP_HASH_TYPE_L3_BITS),
+};
+
+struct bpf_map_def SEC("maps") stats_htype_L4 = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(long),
+	.max_entries = (1 << XDP_HASH_TYPE_L4_BITS),
+};
+
+static __always_inline
+void stats_hash_type(u32 hash_type)
+{
+	u64 *value;
+	u32 L3, L4;
+
+	if (hash_type > XDP_HASH_TYPE_MASK)
+		return;
+
+	L3 = XDP_HASH_TYPE_L3(hash_type);
+	value = bpf_map_lookup_elem(&stats_htype_L3, &L3);
+	if (value)
+		*value += 1;
+
+	/* The L4 value is shifted down to fit within array size */
+	L4 = XDP_HASH_TYPE_L4(hash_type) >> XDP_HASH_TYPE_L4_SHIFT;
+	value = bpf_map_lookup_elem(&stats_htype_L4, &L4);
+	if (value)
+		*value += 1;
+}
+
+
 SEC("xdp_rxhash")
 int  xdp_rxhash_prog(struct xdp_md *ctx)
 {
@@ -87,10 +130,10 @@ int  xdp_rxhash_prog(struct xdp_md *ctx)
 	u32 *a2;
 	struct pattern *pattern;
 	u32 key = 0;
-	u64 *touch_mem;
-	u64 rxhash, h;
+	u64 *touch_mem, h = 0;
 	u32 hash, hash_type;
 	u32 L3, L4;
+	u32 rxhash, rxhash_type;
 
 	/* Validate packet length is minimum Eth header size */
 	if (eth + 1 > data_end)
@@ -98,26 +141,33 @@ int  xdp_rxhash_prog(struct xdp_md *ctx)
 
 	/* Direct reading of xdp_md->rxhash */
 	rxhash = ctx->rxhash;
+	/* Separate (direct) reading xdp_md->rxhash_type */
+	rxhash_type = ctx->rxhash_type;
 
-	/* Call helper bpf_xdp_rxhash, 64-bit return value,
-	 * with hash_type in in upper bits.
+	/* Helper bpf_xdp_rxhash, return 64-bit value with hash_type
+	 * in in upper bits.
 	 */
 	h = bpf_xdp_rxhash(ctx, 0, 0, BPF_F_RXHASH_GET);
 	hash      = XDP_HASH(h);
 	hash_type = XDP_HASH_TYPE(h);
+	stats_hash_type(hash_type);
 
 	//L3 = hash_type & XDP_HASH_TYPE_L3_MASK;
 	//L4 = hash_type & XDP_HASH_TYPE_L4_MASK;
-
+	// or
 	L3 = XDP_HASH_TYPE_L3(hash_type);
 	L4 = XDP_HASH_TYPE_L4(hash_type);
 
-	bpf_debug("xdp_rxhash: hash1=%llu h:%llu hash:%u\n",
-		  rxhash, h, hash);
+	bpf_debug("xdp_rxhash: hash1=%llu h:%llu hash:%u\n", rxhash, h, hash);
+	bpf_debug("helper: type:%u L3:%u L4:%u\n", hash_type, L3, L4);
+	bpf_debug("experiment: type:%u rxhash_type_direct:%u\n",
+		  hash_type, rxhash_type);
 
-	bpf_debug("helper: type:%u L3:%u L4:%u\n",
-		  hash_type, L3, L4);
-
+	/* Drop all IPv4 UDP packets without even reading packet data */
+	if (hash_type == (XDP_HASH_TYPE_L4_UDP + XDP_HASH_TYPE_L3_IPV4)) {
+		action = XDP_ABORTED; /* Notice in --stats output */
+		//goto out;
+	}
 
 	touch_mem = bpf_map_lookup_elem(&touch_memory, &key);
 	if (touch_mem && (*touch_mem == 1)) {
