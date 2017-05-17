@@ -8,6 +8,11 @@
 #include <uapi/linux/tcp.h>
 #include <uapi/linux/udp.h>
 
+// Strange: cannot get endianness includes with LLVM
+//#include <sys/types.h>
+//#include <endian.h>
+// Only __LITTLE_ENDIAN_BITFIELD and __BIG_ENDIAN_BITFIELD do seem to work
+
 #include "bpf_helpers.h"
 
 #define DEBUG 1
@@ -83,14 +88,36 @@ int  xdp_rxhash_prog(struct xdp_md *ctx)
 	struct pattern *pattern;
 	u32 key = 0;
 	u64 *touch_mem;
+	u64 rxhash, h;
+	u32 hash, hash_type;
+	u32 L3, L4;
 
 	/* Validate packet length is minimum Eth header size */
 	if (eth + 1 > data_end)
 		return XDP_DROP;
 
-	// TODO: Add call helper bpf_xdp_rxhash
+	/* Direct reading of xdp_md->rxhash */
+	rxhash = ctx->rxhash;
 
-	// TODO: Add reading of xdp_md->rxhash
+	/* Call helper bpf_xdp_rxhash, 64-bit return value,
+	 * with hash_type in in upper bits.
+	 */
+	h = bpf_xdp_rxhash(ctx, 0, 0, BPF_F_RXHASH_GET);
+	hash      = XDP_HASH(h);
+	hash_type = XDP_HASH_TYPE(h);
+
+	//L3 = hash_type & XDP_HASH_TYPE_L3_MASK;
+	//L4 = hash_type & XDP_HASH_TYPE_L4_MASK;
+
+	L3 = XDP_HASH_TYPE_L3(hash_type);
+	L4 = XDP_HASH_TYPE_L4(hash_type);
+
+	bpf_debug("xdp_rxhash: hash1=%llu h:%llu hash:%u\n",
+		  rxhash, h, hash);
+
+	bpf_debug("helper: type:%u L3:%u L4:%u\n",
+		  hash_type, L3, L4);
+
 
 	touch_mem = bpf_map_lookup_elem(&touch_memory, &key);
 	if (touch_mem && (*touch_mem == 1)) {

@@ -65,6 +65,9 @@ static unsigned long long (*bpf_get_prandom_u32)(void) =
 	(void *) BPF_FUNC_get_prandom_u32;
 static int (*bpf_xdp_adjust_head)(void *ctx, int offset) =
 	(void *) BPF_FUNC_xdp_adjust_head;
+static unsigned long long (*bpf_xdp_rxhash)(void *ctx, __u32 new_hash,
+					    __u32 type, unsigned int flags) =
+	(void *) BPF_FUNC_xdp_rxhash;
 
 /* llvm builtin functions that eBPF C program may use to
  * emit BPF_LD_ABS and BPF_LD_IND instructions

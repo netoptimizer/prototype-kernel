@@ -400,7 +400,8 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_XDP;
 	}
 
-	stats_poll(interval);
+	//stats_poll(interval);
+	read_trace_pipe();
 
 	return EXIT_OK;
 }

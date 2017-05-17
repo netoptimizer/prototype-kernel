@@ -483,8 +483,10 @@ union bpf_attr {
  * u32 bpf_get_socket_uid(skb)
  *     Get the owner uid of the socket stored inside sk_buff.
  *     @skb: pointer to skb
- *     Return: uid of the socket owner on success or 0 if the socket pointer
- *     inside sk_buff is NULL
+ *     Return: uid of the socket owner on success or overflowuid if failed.
+ *
+ * u64 bpf_xdp_rxhash(xdp_md, new_hash, type, flags)
+ *	TODO: MISSING DESC
  */
 #define __BPF_FUNC_MAPPER(FN)		\
 	FN(unspec),			\
@@ -534,7 +536,8 @@ union bpf_attr {
 	FN(xdp_adjust_head),		\
 	FN(probe_read_str),		\
 	FN(get_socket_cookie),		\
-	FN(get_socket_uid),
+	FN(get_socket_uid),		\
+	FN(xdp_rxhash),
 
 /* integer value in 'imm' field of BPF_CALL instruction selects which helper
  * function eBPF program intends to call
@@ -583,6 +586,10 @@ enum bpf_func_id {
 #define BPF_F_CURRENT_CPU		BPF_F_INDEX_MASK
 /* BPF_FUNC_perf_event_output for sk_buff input context. */
 #define BPF_F_CTXLEN_MASK		(0xfffffULL << 32)
+
+/* BPF_FUNC_xdp_rxhash flags */
+#define BPF_F_RXHASH_SET		0ULL
+#define BPF_F_RXHASH_GET		(1ULL << 0)
 
 /* user accessible mirror of in-kernel sk_buff.
  * new fields can only be added to the end of this structure
@@ -663,6 +670,47 @@ enum xdp_action {
 struct xdp_md {
 	__u32 data;
 	__u32 data_end;
+	__u32 rxhash;
+	// Do we need rxhash_type here???
+	__u32 rxhash_type;
+	// Can be done as a translation, reading part of xdp_buff->flags
 };
+
+/* XDP rxhash have an associated type, which is related to the RSS
+ * (Receive Side Scaling) standard, but NIC HW have different mapping
+ * and support. Thus, create mapping that is interesting for XDP.  XDP
+ * would primarly want insight into L3 and L4 protocol info.
+ *
+ * TODO: Likely need to get extended with "L3_IPV6_EX" due RSS standard
+ *
+ * The HASH_TYPE will be returned as the top 32-bit of the 64-bit
+ * rxhash (internally type stored in xdp_buff->flags).
+ */
+#define XDP_HASH(x)		((x) & ((1ULL << 32)-1))
+#define XDP_HASH_TYPE(x)	((x) >> 32)
+
+#define XDP_HASH_TYPE_L3_SHIFT	0
+#define XDP_HASH_TYPE_L3_BITS	3
+#define XDP_HASH_TYPE_L3_MASK	((1ULL << XDP_HASH_TYPE_L3_BITS)-1)
+#define XDP_HASH_TYPE_L3(x)	((x) & XDP_HASH_TYPE_L3_MASK)
+enum {
+	XDP_HASH_TYPE_L3_IPV4 = 1,
+	XDP_HASH_TYPE_L3_IPV6,
+};
+
+#define XDP_HASH_TYPE_L4_SHIFT	XDP_HASH_TYPE_L3_BITS
+#define XDP_HASH_TYPE_L4_BITS	5
+#define XDP_HASH_TYPE_L4_MASK						\
+	(((1ULL << XDP_HASH_TYPE_L4_BITS)-1) << XDP_HASH_TYPE_L4_SHIFT)
+#define XDP_HASH_TYPE_L4(x)	((x) & XDP_HASH_TYPE_L4_MASK)
+enum {
+	_XDP_HASH_TYPE_L4_TCP = 1,
+	_XDP_HASH_TYPE_L4_UDP,
+};
+#define XDP_HASH_TYPE_L4_TCP (_XDP_HASH_TYPE_L4_TCP << XDP_HASH_TYPE_L4_SHIFT)
+#define XDP_HASH_TYPE_L4_UDP (_XDP_HASH_TYPE_L4_UDP << XDP_HASH_TYPE_L4_SHIFT)
+
+#define XDP_HASH_TYPE_BITS   (XDP_HASH_TYPE_L3_BITS + XDP_HASH_TYPE_L4_BITS)
+#define XDP_HASH_TYPE_MASK   (XDP_HASH_TYPE_L3_MASK | XDP_HASH_TYPE_L4_MASK)
 
 #endif /* _UAPI__LINUX_BPF_H__ */
