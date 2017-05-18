@@ -6,8 +6,28 @@
  * modify it under the terms of version 2 of the GNU General Public
  * License as published by the Free Software Foundation.
  */
-#ifndef _UAPI__LINUX_BPF_H__
-#define _UAPI__LINUX_BPF_H__
+
+/* NOTICE: Need to keep a more updated copy of bpf.h UAPI definitions
+ * when developing new bpf features.  Unfortunately there is an
+ * include mess, I haven't solved 100% yet.  Thus, this trick warns
+ * when another (presumably) older version of this bpf.h UAPI got
+ * included (likely from distro or kernel source)
+ */
+#ifdef   __LINUX_BPF_H__
+# ifndef __LINUX_BPF_H__git_repo_copy
+#  warning  "This bpf.h git-repo-copy not getting used"
+//# else
+//#  warning "Double include of this bpf.h (consider cleanup)"
+# endif
+#endif
+
+/* Notice redefine */
+#ifndef __LINUX_BPF_H__
+#define __LINUX_BPF_H__
+//#ifndef _UAPI__LINUX_BPF_H__
+//#define _UAPI__LINUX_BPF_H__
+
+#define __LINUX_BPF_H__git_repo_copy
 
 #include <linux/types.h>
 #include <linux/bpf_common.h>
