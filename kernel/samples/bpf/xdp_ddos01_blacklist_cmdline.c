@@ -20,9 +20,11 @@ static const char *__doc__=
 
 #include <arpa/inet.h>
 
-#include "bpf_load.h"
-#include "bpf_util.h"
+/* libbpf.h defines bpf_* function helpers for syscalls,
+ * indirectly via ./tools/lib/bpf/bpf.h */
 #include "libbpf.h"
+
+#include "bpf_util.h"
 
 #include "xdp_ddos01_blacklist_common.h"
 

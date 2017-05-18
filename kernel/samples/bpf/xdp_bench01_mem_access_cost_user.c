@@ -21,9 +21,9 @@ static const char *__doc__=
 #include <arpa/inet.h>
 #include <linux/if_link.h>
 
+#include "libbpf.h"
 #include "bpf_load.h"
 #include "bpf_util.h"
-#include "libbpf.h"
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];

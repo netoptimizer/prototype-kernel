@@ -3,7 +3,6 @@
 static const char *__doc__=
  " XDP example of parsing TTL value of IP-header.";
 
-#include <linux/bpf.h>
 #include <assert.h>
 #include <errno.h>
 #include <signal.h>
@@ -16,9 +15,9 @@ static const char *__doc__=
 #include <sys/resource.h>
 #include <getopt.h>
 
+#include "libbpf.h"
 #include "bpf_load.h"
 #include "bpf_util.h"
-#include "libbpf.h"
 
 static int ifindex = -1;
 
