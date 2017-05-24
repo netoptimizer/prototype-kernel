@@ -10,6 +10,8 @@ TARGETS += xdp_ttl
 TARGETS += xdp_bench01_mem_access_cost
 TARGETS += xdp_bench02_drop_pattern
 
+TARGETS += bpf_tail_calls01
+
 # Experimental target
 TARGETS += xdp_rxhash
 
