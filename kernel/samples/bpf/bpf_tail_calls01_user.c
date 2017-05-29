@@ -7,7 +7,7 @@ static const char *__doc__= " Test of bpf_tail_call from XDP program\n\n"
 #include <getopt.h>
 #include <signal.h>
 #include <net/if.h>
-
+#include <unistd.h>
 #include <linux/if_link.h>
 
 #include "libbpf.h"
@@ -18,12 +18,14 @@ static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 static __u32 xdp_flags = 0;
+static bool debug = false;
 
 /* Exit return codes */
 #define EXIT_OK                 0
 #define EXIT_FAIL               1
 #define EXIT_FAIL_OPTION        2
 #define EXIT_FAIL_XDP           3
+#define EXIT_FAIL_MAP		20
 
 static void int_exit(int sig)
 {
@@ -64,15 +66,56 @@ static void usage(char *argv[])
 	printf("\n");
 }
 
+/* Helper for adding prog to prog_map */
+void jmp_table_add_prog(int map_jmp_table_idx, int idx, int prog_idx)
+{
+	int jmp_table_fd = map_fd[map_jmp_table_idx];
+	int prog = prog_fd[prog_idx];
+	int err;
+
+	if (prog == 0) {
+		printf("ERR: Invalid zero-FD prog_fd[%d]=%d,"
+		       " did bpf_load.c fail loading program?!?\n",
+		       prog_idx, prog);
+		exit(EXIT_FAIL_MAP);
+	}
+
+	err = bpf_map_update_elem(jmp_table_fd, &idx, &prog, 0);
+	if (err) {
+		printf("ERR(%d/%d): Fail add prog_fd[%d]=%d to jmp_table%d i:%d\n",
+		       err, errno, prog_idx, prog, map_jmp_table_idx+1, idx);
+		exit(EXIT_FAIL_MAP);
+	}
+	if (debug) {
+		printf("Add XDP prog_fd[%d]=%d to jmp_table%d idx:%d\n",
+		       prog_idx, prog, map_jmp_table_idx+1, idx);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	char filename[256];
-	bool debug = false;
 	int longindex = 0;
-	int opt;
+	int opt, i;
+
+	/* Corresponding map_fd[index] for jump tables aka tail calls */
+	int jmp_table1 = 0;
+	int jmp_table2 = 1;
+	int jmp_table3 = 2;
+
+	/*
+	 * WARNING: There were an issue in bpf_load.c that caused bpf
+	 * prog section order in prog_fd[] to get mixed up (if prog
+	 * didn't reference a map)
+	 *
+	 * Corresponding prog_fd[index] for prog section tail calls.
+	 */
+	int prog_xdp_1 = 1;
+	int prog_xdp_5 = 2;
+	int prog_xdp_unrelated = 3;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
-		/* Parse commands line args */
+	/* Parse commands line args */
 	while ((opt = getopt_long(argc, argv, "hd:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
@@ -137,26 +180,8 @@ int main(int argc, char **argv)
 	 * order of SEC map and prog definitions.
 	 */
 	if (1) {
-		int jmp_table_fd = map_fd[0];
-		int xdp_prog1 = prog_fd[1];
-		int xdp_prog5 = prog_fd[2];
-		int idx; /* index in tail call jmp_table */
-		int err;
-
-		if (debug)
-			printf("XXX: FDs xdp_prog0:%d xdp_prog5:%d jmp:%d\n",
-			       xdp_prog1, xdp_prog5, jmp_table_fd);
-
-		idx = 1;
-		err = bpf_map_update_elem(jmp_table_fd, &idx, &xdp_prog1, 0);
-		if (err) {
-			printf("ERR: Fail add jmp to xdp_prog1 err:%d\n", err);
-		}
-		idx = 5;
-		err = bpf_map_update_elem(jmp_table_fd, &idx, &xdp_prog5, 0);
-		if (err) {
-			printf("ERR: Fail add jmp to xdp_prog5 err:%d\n", err);
-		}
+		jmp_table_add_prog(jmp_table1, 1, prog_xdp_1);
+		jmp_table_add_prog(jmp_table1, 5, prog_xdp_5);
 	}
 	/* Notice populating jmp_table is done _before_ attaching the
 	 * main XDP program to a specific device.
@@ -165,17 +190,15 @@ int main(int argc, char **argv)
 	 * changes after a XDP program have been associated with a
 	 * device.
 	 */
-	if (0) { /* Notice jmp_table2 (number 2) */
-		int jmp_table2 = map_fd[1];
-		int prog = prog_fd[3]; /* xdp_another_tail_call */
-		int i; /* index in tail call jmp_table2 */
-		int err;
+	if (1) { /* Notice jmp_table2 (number 2) */
+		for (i = 40; i < 50; i++)
+			jmp_table_add_prog(jmp_table2, i, prog_xdp_unrelated);
+	}
 
-		for (i = 40; i < 50; i++) {
-			err = bpf_map_update_elem(jmp_table2, &i, &prog, 0);
-			if (err)
-				printf("ERR: Fail add jmp_table2 err:%d\n",err);
-		}
+	if (debug) {
+		printf("map_fd[] jmp_table file descriptor mapping:\n");
+		for (i = 0; i < 3; i++)
+			printf(" jmp_table map_fd[%d]=fd:%d\n", i, map_fd[i]);
 	}
 
 	/* Attach XDP program */
@@ -184,26 +207,32 @@ int main(int argc, char **argv)
 		return EXIT_FAIL_XDP;
 	}
 
+	/* Remove XDP program when program is interrupted or killed */
+	signal(SIGINT,  int_exit);
+	signal(SIGTERM, int_exit);
+
 	/* Notice, after XDP prog have been attached, the features
 	 * have been "locked down" (in RFC patch).  Adding something
 	 * to a jmp_table will result in runtime validation.
 	 */
-	if (1) {
-		int jmp_table2 = map_fd[1];
-		int prog = prog_fd[3]; /* xdp_another_tail_call */
-		int i; /* index in tail call jmp_table2 */
-		int err;
 
+	if (1) {
+		/* Populate jmp_table3 with some prog */
 		for (i = 30; i < 32; i++) {
-			err = bpf_map_update_elem(jmp_table2, &i, &prog, 0);
-			if (err)
-				printf("ERR: Fail add jmp_table2 err:%d\n",err);
+			jmp_table_add_prog(jmp_table3, i, prog_xdp_unrelated);
 		}
 	}
 
-	/* Remove XDP program when program is interrupted or killed */
-	signal(SIGINT,  int_exit);
-	signal(SIGTERM, int_exit);
+	if (1) {
+		/* Take over jmp entry 5 */
+		if (debug) {
+			int delay = 2;
+			printf("Delay: %d sec, before taking over idx 5\n",
+			       delay);
+			sleep(delay);
+		}
+		jmp_table_add_prog(jmp_table1, 5, prog_xdp_unrelated);
+	}
 
 	if (debug) {
 		printf("Debug-mode reading trace pipe (fix #define DEBUG)\n");

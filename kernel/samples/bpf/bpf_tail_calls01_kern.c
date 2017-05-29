@@ -23,11 +23,11 @@ char _license[] SEC("license") = "GPL";
 #define bpf_debug(fmt, ...) { } while (0)
 #endif
 
-struct bpf_map_def SEC("maps") jmp_table = {
+struct bpf_map_def SEC("maps") jmp_table1 = {
 	.type = BPF_MAP_TYPE_PROG_ARRAY,
 	.key_size = sizeof(u32),
 	.value_size = sizeof(u32),
-	.max_entries = 8,
+	.max_entries = 100,
 };
 
 struct bpf_map_def SEC("maps") jmp_table2 = {
@@ -37,6 +37,12 @@ struct bpf_map_def SEC("maps") jmp_table2 = {
 	.max_entries = 1000,
 };
 
+struct bpf_map_def SEC("maps") jmp_table3 = {
+	.type = BPF_MAP_TYPE_PROG_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(u32),
+	.max_entries = 100,
+};
 
 /* Main/root ebpf xdp program */
 SEC("xdp")
@@ -52,7 +58,7 @@ int  xdp_prog(struct xdp_md *ctx)
 	if (eth + 1 > data_end)
 		return XDP_ABORTED;
 
-	bpf_tail_call(ctx, &jmp_table, 1);
+	bpf_tail_call(ctx, &jmp_table1, 1);
 
 	/* bpf_tail_call on empty jmp_table entry, cause fall-through.
 	 * (Normally a bpf_tail_call never returns)
@@ -68,23 +74,23 @@ int  xdp_prog(struct xdp_md *ctx)
  */
 
 /* Tail call index=1 */
-SEC("xdp/1")
-int  xdp_some_tail_call_name(struct xdp_md *ctx)
+SEC("xdp_1")
+int  xdp_tail_call_1(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 
-	bpf_debug("XDP: tail call id=1\n");
+	bpf_debug("XDP: tail call (xdp_1) id=1\n");
 
-	bpf_tail_call(ctx, &jmp_table, 5);
+	bpf_tail_call(ctx, &jmp_table1, 5);
 
 	return XDP_PASS;
 }
 
 /* Tail call index=5 */
-SEC("xdp/5")
-int  xdp_random_tail_call_name(struct xdp_md *ctx)
+SEC("xdp_5")
+int  xdp_tail_call_2(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -92,16 +98,15 @@ int  xdp_random_tail_call_name(struct xdp_md *ctx)
 	volatile u32 hash = 0;
 
 	// using experimental rx_hash feature
-	// hash = ctx->rxhash;
-	bpf_debug("XDP: tail call id=5 hash=%u\n", hash);
+	//hash = ctx->rxhash;
+	bpf_debug("XDP: tail call (xdp_5) id=5 hash=%u\n", hash);
 
-	bpf_tail_call(ctx, &jmp_table2, 42);
+//	bpf_tail_call(ctx, &jmp_table2, 0);
 	return XDP_PASS;
 }
 
-/* Another tail call */
-SEC("xdp_test")
-int  xdp_another_tail_call(struct xdp_md *ctx)
+SEC("xdp_unrelated")
+int  xdp_some_tail_call_3(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
@@ -110,9 +115,11 @@ int  xdp_another_tail_call(struct xdp_md *ctx)
 
 	// using experimental rx_hash feature
 	hash = ctx->rxhash;
-	bpf_debug("XDP: xdp_another_tail_call hash=%u\n", hash);
+	bpf_debug("XDP: tail call 'xdp_unrelated' hash=%u\n", hash);
 
-	// none existing jmp entry, just to reference map
+	//bpf_tail_call(ctx, &jmp_table1, 1); // Can give loop (capped runtime)
+
+	bpf_tail_call(ctx, &jmp_table3, 0);
 	bpf_tail_call(ctx, &jmp_table2, 0);
 	return XDP_PASS;
 }
