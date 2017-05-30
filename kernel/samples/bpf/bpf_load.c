@@ -521,6 +521,8 @@ static int do_load_bpf_file(const char *path, fixup_map_cb fixup_map)
 
 	/* process all relo sections, and rewrite bpf insns for maps */
 	for (i = 1; i < ehdr.e_shnum; i++) {
+		if (processed_sec[i])
+			continue;
 
 		if (get_sec(elf, i, &ehdr, &shname, &shdr, &data))
 			continue;
