@@ -1,6 +1,3 @@
-/*
- * Notice: Modified copy of kernel/samples/bpf/bpf_load.c
- */
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -274,18 +271,19 @@ static int parse_relo_and_apply(Elf_Data *data, Elf_Data *symbols,
 	return 0;
 }
 
-int load_bpf_elf_sections(int fd)
+int load_bpf_file(char *path)
 {
-	int i;
+	int fd, i;
 	Elf *elf;
 	GElf_Ehdr ehdr;
-	GElf_Shdr shdr;
-	Elf_Data *data;
-	char *shname;
+	GElf_Shdr shdr, shdr_prog;
+	Elf_Data *data, *data_prog, *symbols = NULL;
+	char *shname, *shname_prog;
 
 	if (elf_version(EV_CURRENT) == EV_NONE)
 		return 1;
 
+	fd = open(path, O_RDONLY, 0);
 	if (fd < 0)
 		return 1;
 
@@ -326,43 +324,8 @@ int load_bpf_elf_sections(int fd)
 			processed_sec[i] = true;
 			if (load_maps(data->d_buf, data->d_size))
 				return 1;
-		}
-	}
-	return 0;
-}
-
-int load_bpf_relocate_maps_and_attach(int fd)
-{
-	int i;
-	Elf *elf;
-	GElf_Ehdr ehdr;
-	GElf_Shdr shdr, shdr_prog;
-	Elf_Data *data, *data_prog, *symbols = NULL;
-	char *shname, *shname_prog;
-
-	if (elf_version(EV_CURRENT) == EV_NONE)
-		return 1;
-
-	if (fd < 0)
-		return 1;
-
-	elf = elf_begin(fd, ELF_C_READ, NULL);
-
-	if (!elf)
-		return 1;
-
-	if (gelf_getehdr(elf, &ehdr) != &ehdr)
-		return 1;
-
-	/* scan over all elf sections to find symbols table */
-	for (i = 1; i < ehdr.e_shnum; i++) {
-
-		if (get_sec(elf, i, &ehdr, &shname, &shdr, &data))
-			continue;
-
-		if (shdr.sh_type == SHT_SYMTAB) {
+		} else if (shdr.sh_type == SHT_SYMTAB) {
 			symbols = data;
-			break;
 		}
 	}
 
@@ -411,24 +374,8 @@ int load_bpf_relocate_maps_and_attach(int fd)
 			load_and_attach(shname, data->d_buf, data->d_size);
 	}
 
-	return 0;
-}
-
-int load_bpf_file(char *path)
-{
-	int fd, res;
-
-	fd = open(path, O_RDONLY, 0);
-	if (fd < 0)
-		return 1;
-
-	res = load_bpf_elf_sections(fd);
-	if (res)
-		goto out;
-	res = load_bpf_relocate_maps_and_attach(fd);
-out:
 	close(fd);
-	return res;
+	return 0;
 }
 
 void read_trace_pipe(void)
