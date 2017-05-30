@@ -1,3 +1,10 @@
+/*
+ * Notice: Modified copy of kernel/samples/bpf/bpf_load.c
+ *  - Up-to-date with kernel v4.12-rc2
+ *
+ * Added features:
+ *  - Fixed load order of prog_fd[] program sections
+ */
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
