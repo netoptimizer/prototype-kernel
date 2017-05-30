@@ -279,7 +279,7 @@ static int parse_relo_and_apply(Elf_Data *data, Elf_Data *symbols,
 		GElf_Rel rel;
 		unsigned int insn_idx;
 		bool match = false;
-		int j, map_idx;
+		int map_idx;
 
 		gelf_getrel(data, i, &rel);
 
@@ -335,7 +335,6 @@ static int load_elf_maps_section(struct bpf_map_data *maps, int maps_shndx,
 	int i, nr_maps;
 	GElf_Sym *sym;
 	Elf_Scn *scn;
-	int copy_sz;
 
 	if (maps_shndx < 0)
 		return -EINVAL;
