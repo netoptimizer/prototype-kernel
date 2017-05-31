@@ -45,6 +45,9 @@ static char ifname_buf[IF_NAMESIZE];
 static char *ifname = NULL;
 static int ifindex = -1;
 
+#define NR_MAPS 5
+int maps_marked_for_export[MAX_MAPS] = { 0 };
+
 static void remove_xdp_program(int ifindex, const char *ifname, __u32 xdp_flags)
 {
 	int i;
@@ -140,54 +143,122 @@ static int bpf_fs_check_path(const char *path)
 	return err;
 }
 
-/* Export and potentially remap map_fd[]
- *
- * map_idx is the corresponding map_fd[index]
- */
-int export_map_fd(int map_idx, const char *file, uid_t owner, gid_t group)
+/* Load existing map via filesystem, if possible */
+int load_map_file(const char *file, struct bpf_map_data *map_data)
 {
-	int fd_existing;
-
-	/* Verify input map_fd[map_idx] */
-	if (map_idx>= MAX_MAPS) {
-		printf("%s +%d\n",__FILE__,__LINE__);
-		return EXIT_FAIL_MAP;
-	}
-	if (map_fd[map_idx] <= 0) {
-		printf("%s +%d\n",__FILE__,__LINE__);
-		return EXIT_FAIL_MAP;
-	}
+	int fd;
 
 	if (bpf_fs_check_path(file) < 0) {
 		exit(EXIT_FAIL_MAP_FS);
 	}
 
-	/*
-	 * Load existing maps via filesystem, if possible first.
-	 */
-	fd_existing = bpf_obj_get(file);
-	if (fd_existing > 0) { /* Great: map file already existed use it */
-		// FIXME: Verify map size etc is the same
-		close(map_fd[map_idx]); /* is this enough to cleanup map??? */
-		map_fd[map_idx] = fd_existing;
-		goto out;
+	fd = bpf_obj_get(file);
+	if (fd > 0) { /* Great: map file already existed use it */
+		// FIXME: Verify map size etc is the same before returning it!
+		// data available via map->def.XXX and fdinfo
+		if (verbose)
+			printf(" - Loaded bpf-map:%-30s from file:%s\n",
+			       map_data->name, file);
+		return fd;
 	}
+	return -1;
+}
+
+static const char* map_idx_to_export_filename(int idx)
+{
+	const char *file = NULL;
+
+	/* Mapping map_fd[idx] to export filenames */
+	switch (idx) {
+	case 0: /* map_fd[0]: blacklist */
+		file =   file_blacklist;
+		break;
+	case 1: /* map_fd[1]: verdict_cnt */
+		file =   file_verdict;
+		break;
+	case 2: /* map_fd[2]: port_blacklist */
+		file =   file_port_blacklist;
+		break;
+	case 3: /* map_fd[3]: port_blacklist_drop_count_tcp */
+		file =   file_port_blacklist_count[DDOS_FILTER_TCP];
+		break;
+	case 4: /* map_fd[4]: port_blacklist_drop_count_udp */
+		file =   file_port_blacklist_count[DDOS_FILTER_UDP];
+		break;
+	default:
+		break;
+	}
+	return file;
+}
+
+/* Map callback
+ * ------------
+ * The bpf-ELF loader (bpf_load.c) got support[1] for a callback, just
+ * before creating the map (via bpf_create_map()).  It allow assigning
+ * another FD and skips map creation.
+ *
+ * Using this to load map FD from via filesystem, if possible.  One
+ * problem, cannot handle exporting the map here, as creation happens
+ * after this step.
+ *
+ * [1] kernel commit 6979bcc731f9 ("samples/bpf: load_bpf.c make
+ * callback fixup more flexible")
+ */
+void pre_load_maps_via_fs(struct bpf_map_data *map_data, int idx)
+{
+	/* This callback gets invoked for every map in ELF file */
+	const char *file;
+	int fd;
+
+	file = map_idx_to_export_filename(idx);
+	fd = load_map_file(file, map_data);
+
+	if (fd > 0) {
+		/* Makes bpf_load.c skip creating map */
+		map_data->fd = fd;
+	} else {
+		/* When map was NOT loaded from filesystem, then
+		 * bpf_load.c will create it. Mark map idx to get
+		 * it exported later
+		 */
+		maps_marked_for_export[idx] = 1;
+	}
+}
+
+int export_map_idx(int map_idx, uid_t owner, gid_t group)
+{
+	const char* file;
+
+	file = map_idx_to_export_filename(map_idx);
 
 	/* Export map as a file */
 	if (bpf_obj_pin(map_fd[map_idx], file) != 0) {
-		fprintf(stderr, "ERR: Cannot pin map file:%s err(%d):%s\n",
-			file, errno, strerror(errno));
+		fprintf(stderr, "ERR: Cannot pin map(%s) file:%s err(%d):%s\n",
+			map_data[map_idx].name, file, errno, strerror(errno));
 		return EXIT_FAIL_MAP;
 	}
+	if (verbose)
+		printf(" - Export bpf-map:%-30s to   file:%s\n",
+		       map_data[map_idx].name, file);
 
-out:
 	/* Change permissions and user for the map file, as this allow
 	 * an unpriviliged user to operate the cmdline tool.
 	 */
 	if (chown(file, owner, group) < 0)
 		fprintf(stderr, "WARN: Cannot chown file:%s err(%d):%s\n",
 			file, errno, strerror(errno));
+
 	return 0;
+}
+
+void export_maps(uid_t owner, gid_t group)
+{
+	int i;
+
+	for (i = 0; i < NR_MAPS; i++) {
+		if (maps_marked_for_export[i] == 1)
+			export_map_idx(i, owner, group);
+	}
 }
 
 int main(int argc, char **argv)
@@ -198,12 +269,9 @@ int main(int argc, char **argv)
 	__u32 xdp_flags = 0;
 	char filename[256];
 	int longindex = 0;
-	int fd_bpf_prog;
 	uid_t owner = -1; /* -1 result in now change of owner */
 	gid_t group = -1;
-	int res;
 	int opt;
-	int i;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
@@ -274,57 +342,19 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	/* Splitup load_bpf_file() */
-	fd_bpf_prog = open(filename, O_RDONLY, 0);
-	if (fd_bpf_prog < 0) {
-		fprintf(stderr,
-			"ERR: cannot load eBPF file %s err(%d):%s\n",
-			filename, errno, strerror(errno));
-		return EXIT_FAIL_BPF;
+	/* Load bpf-ELF file with callback for loading maps via filesystem */
+	if (load_bpf_file_fixup_map(filename, pre_load_maps_via_fs)) {
+		fprintf(stderr, "ERR in load_bpf_file(): %s", bpf_log_buf);
+		return EXIT_FAIL;
 	}
-	if (load_bpf_elf_sections(fd_bpf_prog)) {
-		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
-		return EXIT_FAIL_BPF_ELF;
-	}
-
-	if ((res = export_map_fd(0, file_blacklist, owner, group)))
-	    return res;
-
-	if (verbose)
-		printf(" - Blacklist     map file: %s\n", file_blacklist);
-
-	if ((res = export_map_fd(1, file_verdict, owner, group)))
-		return res;
-
-	if (verbose)
-		printf(" - Verdict stats map file: %s\n", file_verdict);
-
-	if ((res = export_map_fd(2, file_port_blacklist, owner, group)))
-	    return res;
-
-	if (verbose)
-		printf(" - Blacklist Port map file: %s\n", file_port_blacklist);
-
-	for (i = 0; i < DDOS_FILTER_MAX; i++) {
-
-		if ((res = export_map_fd(3 + i, file_port_blacklist_count[i], owner, group)))
-			return res;
-
-		if (verbose)
-			printf(" - Verdict port stats map file: %s\n", file_port_blacklist_count[i]);
-	}
-
-	/* Notice: updated map_fd[i] takes effect now */
-	if (load_bpf_relocate_maps_and_attach(fd_bpf_prog)) {
-		fprintf(stderr, "ERR: %s\n", bpf_log_buf);
-		return EXIT_FAIL_BPF_RELOCATE;
-	}
-	close(fd_bpf_prog);
 
 	if (!prog_fd[0]) {
 		printf("load_bpf_file: %s\n", strerror(errno));
 		return 1;
 	}
+
+	/* Export maps that were not loaded from filesystem */
+	export_maps(owner, group);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
 		printf("link set xdp fd failed\n");
