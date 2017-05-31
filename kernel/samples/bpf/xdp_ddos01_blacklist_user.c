@@ -48,6 +48,33 @@ static int ifindex = -1;
 #define NR_MAPS 5
 int maps_marked_for_export[MAX_MAPS] = { 0 };
 
+static const char* map_idx_to_export_filename(int idx)
+{
+	const char *file = NULL;
+
+	/* Mapping map_fd[idx] to export filenames */
+	switch (idx) {
+	case 0: /* map_fd[0]: blacklist */
+		file =   file_blacklist;
+		break;
+	case 1: /* map_fd[1]: verdict_cnt */
+		file =   file_verdict;
+		break;
+	case 2: /* map_fd[2]: port_blacklist */
+		file =   file_port_blacklist;
+		break;
+	case 3: /* map_fd[3]: port_blacklist_drop_count_tcp */
+		file =   file_port_blacklist_count[DDOS_FILTER_TCP];
+		break;
+	case 4: /* map_fd[4]: port_blacklist_drop_count_udp */
+		file =   file_port_blacklist_count[DDOS_FILTER_UDP];
+		break;
+	default:
+		break;
+	}
+	return file;
+}
+
 static void remove_xdp_program(int ifindex, const char *ifname, __u32 xdp_flags)
 {
 	int i;
@@ -55,22 +82,14 @@ static void remove_xdp_program(int ifindex, const char *ifname, __u32 xdp_flags)
 		ifindex, ifname);
 	if (ifindex > -1)
 		set_link_xdp_fd(ifindex, -1, xdp_flags);
-	if (unlink(file_blacklist) < 0) {
-		printf("WARN: cannot remove map file:%s err(%d):%s\n",
-		       file_blacklist, errno, strerror(errno));
-	}
-	if (unlink(file_verdict) < 0) {
-		printf("WARN: cannot remove map file:%s err(%d):%s\n",
-		       file_verdict, errno, strerror(errno));
-	}
-	if (unlink(file_port_blacklist) < 0) {
-		printf("WARN: cannot remove map file:%s err(%d):%s\n",
-		       file_port_blacklist, errno, strerror(errno));
-	}
-	for (i = 0; i < DDOS_FILTER_MAX; i++) {
-		if (unlink(file_port_blacklist_count[i]) < 0) {
-			printf("WARN: cannot remove map file:%s err(%d):%s\n",
-			       file_port_blacklist_count[i], errno, strerror(errno));
+
+	/* Remove all exported map file */
+	for (i = 0; i < NR_MAPS; i++) {
+		const char *file = map_idx_to_export_filename(i);
+
+		if (unlink(file) < 0) {
+			printf("WARN: cannot rm map(%s) file:%s err(%d):%s\n",
+			       map_data[i].name, file, errno, strerror(errno));
 		}
 	}
 }
@@ -164,33 +183,6 @@ int load_map_file(const char *file, struct bpf_map_data *map_data)
 	return -1;
 }
 
-static const char* map_idx_to_export_filename(int idx)
-{
-	const char *file = NULL;
-
-	/* Mapping map_fd[idx] to export filenames */
-	switch (idx) {
-	case 0: /* map_fd[0]: blacklist */
-		file =   file_blacklist;
-		break;
-	case 1: /* map_fd[1]: verdict_cnt */
-		file =   file_verdict;
-		break;
-	case 2: /* map_fd[2]: port_blacklist */
-		file =   file_port_blacklist;
-		break;
-	case 3: /* map_fd[3]: port_blacklist_drop_count_tcp */
-		file =   file_port_blacklist_count[DDOS_FILTER_TCP];
-		break;
-	case 4: /* map_fd[4]: port_blacklist_drop_count_udp */
-		file =   file_port_blacklist_count[DDOS_FILTER_UDP];
-		break;
-	default:
-		break;
-	}
-	return file;
-}
-
 /* Map callback
  * ------------
  * The bpf-ELF loader (bpf_load.c) got support[1] for a callback, just
@@ -227,7 +219,7 @@ void pre_load_maps_via_fs(struct bpf_map_data *map_data, int idx)
 
 int export_map_idx(int map_idx)
 {
-	const char* file;
+	const char *file;
 
 	file = map_idx_to_export_filename(map_idx);
 
@@ -255,7 +247,7 @@ void export_maps(void)
 
 void chown_maps(uid_t owner, gid_t group)
 {
-	const char* file;
+	const char *file;
 	int i;
 
 	for (i = 0; i < NR_MAPS; i++) {
