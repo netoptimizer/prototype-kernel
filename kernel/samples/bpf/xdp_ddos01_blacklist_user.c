@@ -225,7 +225,7 @@ void pre_load_maps_via_fs(struct bpf_map_data *map_data, int idx)
 	}
 }
 
-int export_map_idx(int map_idx, uid_t owner, gid_t group)
+int export_map_idx(int map_idx)
 {
 	const char* file;
 
@@ -240,24 +240,34 @@ int export_map_idx(int map_idx, uid_t owner, gid_t group)
 	if (verbose)
 		printf(" - Export bpf-map:%-30s to   file:%s\n",
 		       map_data[map_idx].name, file);
-
-	/* Change permissions and user for the map file, as this allow
-	 * an unpriviliged user to operate the cmdline tool.
-	 */
-	if (chown(file, owner, group) < 0)
-		fprintf(stderr, "WARN: Cannot chown file:%s err(%d):%s\n",
-			file, errno, strerror(errno));
-
 	return 0;
 }
 
-void export_maps(uid_t owner, gid_t group)
+void export_maps(void)
 {
 	int i;
 
 	for (i = 0; i < NR_MAPS; i++) {
 		if (maps_marked_for_export[i] == 1)
-			export_map_idx(i, owner, group);
+			export_map_idx(i);
+	}
+}
+
+void chown_maps(uid_t owner, gid_t group)
+{
+	const char* file;
+	int i;
+
+	for (i = 0; i < NR_MAPS; i++) {
+		file = map_idx_to_export_filename(i);
+
+		/* Change permissions and user for the map file, as this allow
+		 * an unpriviliged user to operate the cmdline tool.
+		 */
+		if (chown(file, owner, group) < 0)
+			fprintf(stderr,
+				"WARN: Cannot chown file:%s err(%d):%s\n",
+				file, errno, strerror(errno));
 	}
 }
 
@@ -269,7 +279,7 @@ int main(int argc, char **argv)
 	__u32 xdp_flags = 0;
 	char filename[256];
 	int longindex = 0;
-	uid_t owner = -1; /* -1 result in now change of owner */
+	uid_t owner = -1; /* -1 result in no-change of owner */
 	gid_t group = -1;
 	int opt;
 
@@ -354,7 +364,10 @@ int main(int argc, char **argv)
 	}
 
 	/* Export maps that were not loaded from filesystem */
-	export_maps(owner, group);
+	export_maps();
+
+	if (owner >= 0)
+		chown_maps(owner, group);
 
 	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
 		printf("link set xdp fd failed\n");
