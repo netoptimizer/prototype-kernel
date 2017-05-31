@@ -288,8 +288,6 @@ int main(int argc, char **argv)
 	int proto = IPPROTO_TCP;
 	int filter = DDOS_FILTER_TCP;
 
-	fd_verdict = open_bpf_map(file_verdict);
-
 	while ((opt = getopt_long(argc, argv, "adshi:t:u:",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
@@ -329,6 +327,7 @@ int main(int argc, char **argv)
 			return EXIT_FAIL_OPTION;
 		}
 	}
+	fd_verdict = open_bpf_map(file_verdict);
 
 	/* Update blacklist */
 	if (action) {
