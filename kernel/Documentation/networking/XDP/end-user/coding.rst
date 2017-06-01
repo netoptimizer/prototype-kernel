@@ -24,7 +24,8 @@ The kernel include some examples of XDP-eBPF programs,
 see `kernel samples/bpf`_.
 
 There are also some XDP eBPF code examples in the prototype-kernel_
-project under `prototype-kernel/kernel/samples/bpf`_.
+project under `prototype-kernel/kernel/samples/bpf`_.  Simply run
+``make`` inside this directory to compile the samples.
 
 .. _prototype-kernel: https://github.com/netoptimizer/prototype-kernel
 

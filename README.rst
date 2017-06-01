@@ -7,6 +7,23 @@ Kernel development work, this also includes Documentation_.  The
 directory layout tries to keep close to the Kernel directory layout.
 This helps when/if upstreaming the work.
 
+This prototype-kernel was primarily meant for prototyping kernel
+modules (see blogpost_).
+
+XDP eBPF samples
+================
+
+The Linux kernel tree also contains some `eBPF samples`_ which this
+github repo is also shadowing for easier prototyping, see directory
+`samples/bpf/`_.
+
+This directory `samples/bpf/`_ maintains a different Makefile (than
+depending on the kernels) and maintains a copy of some bpf-header
+files to ease compiling outside the kernel source tree.
+
+Simply run 'make' in that directory to build the bpf samples.
+
+
 Documentation
 =============
 
@@ -20,3 +37,6 @@ to generate pretty documentation).
 .. _auto-generated: https://prototype-kernel.readthedocs.io
 .. _Sphinx: http://www.sphinx-doc.org/
 .. _reStructuredText: http://docutils.sourceforge.net/docs/user/rst/quickref.html
+.. _blogpost: http://netoptimizer.blogspot.dk/2014/11/announce-github-repo-prototype-kernel.html
+.. _eBPF samples: https://github.com/torvalds/linux/blob/master/samples/bpf/
+.. _samples/bpf/: kernel/samples/bpf/
