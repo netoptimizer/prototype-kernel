@@ -26,6 +26,17 @@ it also depend on LLVM.
 
 .. _BCC: https://github.com/iovisor/bcc/blob/master/README.md
 
+Build samples/bpf
+=================
+
+This github repository also contains some bpf and XDP examples in the
+directory `samples/bpf/`_.  Simply run ``make`` in that directory to
+build the bpf samples.
+
+.. _samples/bpf/:
+   https://github.com/netoptimizer/prototype-kernel/tree/master/kernel/samples/bpf
+
+
 Linux distros
 =============
 
