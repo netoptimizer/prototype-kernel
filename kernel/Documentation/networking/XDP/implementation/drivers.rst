@@ -56,3 +56,15 @@ virtio-net
 
 Driver: virtio-net
 Kernel release: v4.10
+
+Broadcom: bnxt
+==============
+
+Driver: bnxt
+ * Kernel release: v4.12
+
+Intel: ixgbe
+============
+
+Driver: ixgbe
+ * Kernel release: v4.12
