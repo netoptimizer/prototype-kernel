@@ -43,6 +43,12 @@ Netronome: nfp
 Driver: nfp
 Kernel release: v4.10
 
+virtio-net
+==========
+
+Driver: virtio-net
+Kernel release: v4.10
+
 
 Cavium/Qlogic: qede
 ===================
@@ -50,12 +56,11 @@ Cavium/Qlogic: qede
 Driver: qede
 Kernel release: v4.10
 
+Cavium: thunder
+===============
 
-virtio-net
-==========
-
-Driver: virtio-net
-Kernel release: v4.10
+Driver: thunder/nicvf
+ * Kernel release: v4.12
 
 Broadcom: bnxt
 ==============
