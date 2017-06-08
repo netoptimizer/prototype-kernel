@@ -2,14 +2,16 @@
 Eval Generic netstack XDP patch
 ===============================
 :Authors: Jesper Dangaard Brouer
-:Version: 1.0.0
+:Version: 1.0.1
 :Date: 2017-04-24 Mon
+:Updated: 2017-06-08
 
 Given XDP works at the driver level, developing and testing XDP
-programs requires access to specific NIC hardware.  (XDP support have
-been added to KVM via the virtio_net driver, but unfortunately it is a
-hassle to configure (given it requires disabling specific options,
-which are default enabled)).
+programs requires access to specific NIC hardware... but this is about
+to change in kernel v4.12.
+
+ **UPDATE (2017-06-08)**: The mentioned/evaluated patches have been
+ accepted_ and will appear in kernel release v4.12
 
 To ease developing and testing XDP programs, a generic netstack-XDP
 patch proposal (`PATCH V3`_ and `PATCH V4`_) have been posted.  This
@@ -34,12 +36,30 @@ quantify the cost of these facilities.
 .. _`PATCH v3`:
    http://lkml.kernel.org/r/20170412.145415.1441440342830198148.davem@davemloft.net
 
+.. _accepted: https://git.kernel.org/torvalds/c/b5cdae3291f7
+
+
+Special note for the KVM driver ``virtio_net``:
+
+ XDP support have been added to KVM via the virtio_net driver, but
+ unfortunately it is a hassle to configure (given it requires
+ `disabling specific options`_, which are default enabled).
+
+.. _disabling specific options:
+   https://marc.info/?l=xdp-newbies&m=149486931113651&w=2
+
 Benchmark program
 =================
 
 The XDP program used is called: ``xdp_bench01_mem_access_cost`` and is
 available in the prototype kernel `samples/bpf`_ directory as
 `xdp_bench01_mem_access_cost_kern.c`_ and `_user.c`_.
+
+ **UPDATE (2017-06-08)**: The ``xdp_bench01_mem_access_cost`` program
+ have gotten an option called ``--skb-mode``, which will force using
+ "Generic XDP" even on interfaces that do support XDP natively. This
+ is practical for doing this kind of comparison as described in the
+ document.
 
 .. _`samples/bpf`:
    https://github.com/netoptimizer/prototype-kernel/tree/master/kernel/samples/bpf
@@ -55,10 +75,12 @@ Baseline testing with NIC-level XDP
 
 First establish a baseline for the performance of NIC-level XDP.  This
 will serve as baseline against the patch being evaluated.  The packet
-generator machine is running pktgen_sample03_burst_single_flow.sh,
+generator machine is running `pktgen_sample03_burst_single_flow.sh`_,
 which implies these tests are single CPU RX performance, as the UDP
 flow will hit a single hardware RX-queue, and thus only activate a
 single CPU.
+
+.. _pktgen_sample03_burst_single_flow.sh: https://github.com/torvalds/linux/blob/master/samples/pktgen/pktgen_sample03_burst_single_flow.sh
 
 Baseline with mlx5 on a Skylake CPU:
 Intel(R) Core(TM) i7-6700K CPU @ 4.00GHz.
