@@ -8,6 +8,7 @@ static const char *__doc__= " Test of bpf_tail_call from XDP program\n\n"
 #include <signal.h>
 #include <net/if.h>
 #include <unistd.h>
+#include <stdbool.h>
 #include <linux/if_link.h>
 
 #include "libbpf.h"
