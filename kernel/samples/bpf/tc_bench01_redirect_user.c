@@ -10,6 +10,7 @@ static const char *__doc__=
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 #include <unistd.h>
 #include <locale.h>
 
@@ -22,9 +23,13 @@ static const char *__doc__=
 static int verbose = 1;
 static const char *mapfile = "/sys/fs/bpf/tc/globals/egress_ifindex";
 
+static const char *tc_cmd = "tc";
+#define CMD_MAX 2048
+
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
-	{"egress",	required_argument,	NULL, 'o' },
+	{"ingress",	required_argument,	NULL, 'i' },
+	{"egress",	required_argument,	NULL, 'e' },
 	{0, 0, NULL,  0 }
 };
 
@@ -49,19 +54,110 @@ static void usage(char *argv[])
 	printf("\n");
 }
 
+/*
+ * TC require attaching the bpf-object via the TC cmdline tool.
+ *
+ * Manually like:
+ *  $TC qdisc   add dev $DEV clsact
+ *  $TC filter  add dev $DEV ingress bpf da obj $BPF_OBJ sec ingress_redirect
+ *  $TC filter show dev $DEV ingress
+ *  $TC filter  del dev $DEV ingress
+ *
+ * (Trick: tc takes a "replace" command)
+ */
+static int tc_ingress_attach_bpf(const char* dev, const char* bpf_obj)
+{
+	char cmd[CMD_MAX];
+	int ret = 0;
+
+	memset(&cmd, 0, CMD_MAX);
+	snprintf(cmd, CMD_MAX,
+		 "%s qdisc replace dev %s clsact",
+		 tc_cmd, dev);
+	if (verbose) printf(" - Run: %s\n", cmd);
+	ret = system(cmd);
+	if (ret) {
+		fprintf(stderr,
+			"ERR(%d): tc cannot attach qdisc hook\n Cmdline:%s\n",
+			ret, cmd);
+		exit(EXIT_FAILURE);
+	}
+
+	memset(&cmd, 0, CMD_MAX);
+	snprintf(cmd, CMD_MAX,
+		 "%s filter replace dev %s "
+		 "ingress bpf da obj %s sec ingress_redirect",
+		 tc_cmd, dev, bpf_obj);
+	if (verbose) printf(" - Run: %s\n", cmd);
+	ret = system(cmd);
+	if (ret) {
+		fprintf(stderr,
+			"ERR(%d): tc cannot attach filter\n Cmdline:%s\n",
+			ret, cmd);
+		exit(EXIT_FAILURE);
+	}
+
+	return ret;
+}
+
+static char ingress_ifname[IF_NAMESIZE];
+
+bool validate_ifname(const char* input_ifname, char *output_ifname)
+{
+	size_t len;
+	int i;
+
+	len = strlen(input_ifname);
+	if (len >= IF_NAMESIZE) {
+		return false;
+	}
+	for (i = 0; i < len; i++) {
+		char c = input_ifname[i];
+
+		if (!(isalpha(c) || isdigit(c)))
+			return false;
+	}
+	strncpy(output_ifname, input_ifname, len);
+	return true;
+}
+
 int main(int argc, char **argv)
 {
 	int longindex = 0, opt, fd = -1;
-	int egress_ifindex = 0;
+	int egress_ifindex = -1;
+	int ingress_ifindex = 0;
 	int ret = EXIT_SUCCESS;
 	int key = 0;
 
+	char bpf_obj[256];
+	snprintf(bpf_obj, sizeof(bpf_obj), "%s_kern.o", argv[0]);
+
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "ho:",
+	while ((opt = getopt_long(argc, argv, "h",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
-		case 'o':
+		case 'e':
 			egress_ifindex = atoi(optarg);
+			break;
+		case 'i':
+			if (!validate_ifname(optarg, (char *)&ingress_ifname)) {
+				fprintf(stderr,
+				  "ERR: input --ingress ifname invalid\n");
+			}
+			if (!(ingress_ifindex= if_nametoindex(ingress_ifname))){
+				fprintf(stderr,
+					"ERR: --ingress \"%s\" not real dev\n",
+					ingress_ifname);
+				return EXIT_FAILURE;
+			}
+			if (verbose)
+				printf("TC attach BPF object %s to device %s\n",
+				       bpf_obj, ingress_ifname);
+			if (tc_ingress_attach_bpf(ingress_ifname, bpf_obj)) {
+				fprintf(stderr, "ERR: TC attach failed\n");
+				exit(EXIT_FAILURE);
+			}
+
 			break;
 		case 'h':
 		default:
@@ -79,7 +175,7 @@ int main(int argc, char **argv)
 	}
 
 	/* Only update/set egress port when set via cmdline */
-	if (egress_ifindex) {
+	if (egress_ifindex != -1) {
 		ret = bpf_map_update_elem(fd, &key, &egress_ifindex, 0);
 		if (ret) {
 			perror("ERROR: bpf_map_update_elem");
