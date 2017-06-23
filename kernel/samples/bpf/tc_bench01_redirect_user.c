@@ -30,6 +30,7 @@ static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"ingress",	required_argument,	NULL, 'i' },
 	{"egress",	required_argument,	NULL, 'e' },
+	{"ifindex-egress", required_argument,	NULL, 'x' },
 	{0, 0, NULL,  0 }
 };
 
@@ -101,6 +102,8 @@ static int tc_ingress_attach_bpf(const char* dev, const char* bpf_obj)
 }
 
 static char ingress_ifname[IF_NAMESIZE];
+static char egress_ifname[IF_NAMESIZE];
+static char buf_ifname[IF_NAMESIZE] = "(unknown-dev)";
 
 bool validate_ifname(const char* input_ifname, char *output_ifname)
 {
@@ -136,8 +139,21 @@ int main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, "h",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
-		case 'e':
+		case 'x':
 			egress_ifindex = atoi(optarg);
+			break;
+		case 'e':
+			if (!validate_ifname(optarg, (char *)&egress_ifname)) {
+				fprintf(stderr,
+				  "ERR: input --egress ifname invalid\n");
+			}
+			egress_ifindex = if_nametoindex(egress_ifname);
+			if (!(egress_ifindex)){
+				fprintf(stderr,
+					"ERR: --egress \"%s\" not real dev\n",
+					egress_ifname);
+				return EXIT_FAILURE;
+			}
 			break;
 		case 'i':
 			if (!validate_ifname(optarg, (char *)&ingress_ifname)) {
@@ -193,9 +209,11 @@ int main(int argc, char **argv)
 			ret = EXIT_FAILURE;
 			goto out;
 		}
-		if (verbose)
-			printf("Current egress redirect ifindex: %d\n",
-			       egress_ifindex);
+		if (verbose) {
+			if_indextoname(egress_ifindex, buf_ifname);
+			printf("Current egress redirect dev: %s ifindex: %d\n",
+			       buf_ifname, egress_ifindex);
+		}
 	}
 out:
 	if (fd != -1)
