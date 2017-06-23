@@ -2,7 +2,7 @@
  */
 static const char *__doc__=
  " TC redirect benchmark\n\n"
- "  You must attach bpf object via TC cmdline tool\n"
+ "  The bpf-object gets attached via TC cmdline tool\n"
 ;
 
 #include <errno.h>
@@ -43,12 +43,12 @@ static void usage(char *argv[])
 	       argv[0]);
 	printf(" Listing options:\n");
 	for (i = 0; long_options[i].name != 0; i++) {
-		printf(" --%-12s", long_options[i].name);
+		printf(" --%-15s", long_options[i].name);
 		if (long_options[i].flag != NULL)
 			printf(" flag (internal value:%d)",
 			       *long_options[i].flag);
 		else
-			printf(" short-option: -%c",
+			printf("(internal short-option: -%c)",
 			       long_options[i].val);
 		printf("\n");
 	}
