@@ -95,6 +95,9 @@ int _ingress_redirect(struct __sk_buff *skb)
 	if (*ifindex == 0)
 		return TC_ACT_OK; // or TC_ACT_SHOT ?
 
+	if (*ifindex == 42)  /* Hack: use ifindex==42 as DROP switch */
+		return TC_ACT_SHOT;
+
 	/* FIXME: with mlx5 we need to update MAC-addr else the HW
 	 * will drop the frames silently.
 	 */
