@@ -23,14 +23,17 @@ static const char *__doc__=
 static int verbose = 1;
 static const char *mapfile = "/sys/fs/bpf/tc/globals/egress_ifindex";
 
-static const char *tc_cmd = "tc";
-#define CMD_MAX 2048
+#define CMD_MAX 	2048
+#define CMD_MAX_TC	256
+static char tc_cmd[CMD_MAX_TC] = "tc";
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"ingress",	required_argument,	NULL, 'i' },
 	{"egress",	required_argument,	NULL, 'e' },
 	{"ifindex-egress", required_argument,	NULL, 'x' },
+	/* Allow specifying tc cmd via argument */
+	{"tc-cmd",	required_argument,	NULL, 't' },
 	{0, 0, NULL,  0 }
 };
 
@@ -133,6 +136,7 @@ int main(int argc, char **argv)
 	int ingress_ifindex = 0;
 	int ret = EXIT_SUCCESS;
 	int key = 0;
+	size_t len;
 
 	char bpf_obj[256];
 	snprintf(bpf_obj, sizeof(bpf_obj), "%s_kern.o", argv[0]);
@@ -168,19 +172,28 @@ int main(int argc, char **argv)
 					ingress_ifname);
 				return EXIT_FAILURE;
 			}
-			if (verbose)
-				printf("TC attach BPF object %s to device %s\n",
-				       bpf_obj, ingress_ifname);
-			if (tc_ingress_attach_bpf(ingress_ifname, bpf_obj)) {
-				fprintf(stderr, "ERR: TC attach failed\n");
-				exit(EXIT_FAILURE);
+			break;
+		case 't':
+			len = strlen(optarg);
+			if (len >= CMD_MAX_TC) {
+				return EXIT_FAILURE;
 			}
-
+			strncpy(tc_cmd, optarg, len);
 			break;
 		case 'h':
 		default:
 			usage(argv);
 			return EXIT_FAILURE;
+		}
+	}
+
+	if (ingress_ifindex) {
+		if (verbose)
+			printf("TC attach BPF object %s to device %s\n",
+			       bpf_obj, ingress_ifname);
+		if (tc_ingress_attach_bpf(ingress_ifname, bpf_obj)) {
+			fprintf(stderr, "ERR: TC attach failed\n");
+			exit(EXIT_FAILURE);
 		}
 	}
 
