@@ -59,6 +59,7 @@ static void usage(char *argv[])
  * TC require attaching the bpf-object via the TC cmdline tool.
  *
  * Manually like:
+ *  $TC qdisc   del dev $DEV clsact
  *  $TC qdisc   add dev $DEV clsact
  *  $TC filter  add dev $DEV ingress bpf da obj $BPF_OBJ sec ingress_redirect
  *  $TC filter show dev $DEV ingress
@@ -85,9 +86,10 @@ static int tc_ingress_attach_bpf(const char* dev, const char* bpf_obj)
 	}
 
 	memset(&cmd, 0, CMD_MAX);
+	/* Notice: tc 'replace' need handle+prio to match previous filter */
 	snprintf(cmd, CMD_MAX,
 		 "%s filter replace dev %s "
-		 "ingress bpf da obj %s sec ingress_redirect",
+		 "ingress prio 1 handle 1 bpf da obj %s sec ingress_redirect",
 		 tc_cmd, dev, bpf_obj);
 	if (verbose) printf(" - Run: %s\n", cmd);
 	ret = system(cmd);
@@ -186,6 +188,7 @@ int main(int argc, char **argv)
 	if (fd < 0) {
 		fprintf(stderr, "ERROR: cannot open bpf_obj_get(%s): %s(%d)\n",
 			mapfile, strerror(errno), errno);
+		usage(argv);
 		ret = EXIT_FAILURE;
 		goto out;
 	}
