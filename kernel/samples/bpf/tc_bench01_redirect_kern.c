@@ -98,12 +98,19 @@ int _ingress_redirect(struct __sk_buff *skb)
 	if (*ifindex == 42)  /* Hack: use ifindex==42 as DROP switch */
 		return TC_ACT_SHOT;
 
-	/* FIXME: with mlx5 we need to update MAC-addr else the HW
-	 * will drop the frames silently.
+	/* Swap src and dst mac-addr if ingress==egress
+	 * --------------------------------------------
+	 * If bouncing packet out ingress device, we need to update
+	 * MAC-addr, as some NIC HW will drop such bounced frames
+	 * silently (e.g mlx5).
+	 *
+	 * Note on eBPF translations:
+	 *  __sk_buff->ingress_ifindex == skb->skb_iif
+	 *   (which is set to skb->dev->ifindex, before sch_handle_ingress)
+	 *  __sk_buff->ifindex == skb->dev->ifindex
+	 *   (which is translated into BPF insns that deref dev->ifindex)
 	 */
-
-	/* Swap src and dst mac-addr if ingress==egress */
-	if (*ifindex == 5)
+	if (*ifindex == skb->ingress_ifindex)
 		swap_src_dst_mac(data);
 
 	//return bpf_redirect(*ifindex, BPF_F_INGRESS); // __bpf_rx_skb
