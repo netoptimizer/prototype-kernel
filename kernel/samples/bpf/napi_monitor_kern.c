@@ -13,6 +13,10 @@ char _license[] SEC("license") = "GPL";
 struct napi_bulk_histogram {
 	/* Keep counters per possible RX bulk value */
 	unsigned long hist[65];
+	unsigned long idle_task;
+	unsigned long idle_task_pkts;
+	unsigned long ksoftirqd;
+	unsigned long ksoftirqd_pkts;
 };
 
 /* Keep system global map (mostly because extracting the ifindex, was
@@ -24,6 +28,14 @@ struct bpf_map_def SEC("maps") napi_hist_map = {
 	.value_size = sizeof(struct napi_bulk_histogram),
 	.max_entries = 1,
 };
+
+struct bpf_map_def SEC("maps") cnt_map = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(u32),
+	.value_size = sizeof(u64),
+	.max_entries = 1,
+};
+
 
 /* Tracepoint format: /sys/kernel/debug/tracing/events/napi/napi_poll/format
  * Code in:                kernel/include/trace/events/napi.h
@@ -63,8 +75,10 @@ int napi_poll(struct napi_poll_ctx *ctx)
 	unsigned int budget = ctx->budget;
 	unsigned int work = ctx->work;
 	struct napi_struct *napi = ctx->napi;
+	u64 pid_tgid = 0;
 	int ifindex = 0;
 	u32 key = 0;
+	u64 *cnt;
 
 	unsigned long	state = 0;
 	unsigned int	napi_id = 0;
@@ -78,12 +92,13 @@ int napi_poll(struct napi_poll_ctx *ctx)
 	// Cannot deref napi pointer directly :-(
 	//if (ctx->napi->dev)
 	//	ifindex = ctx->napi->dev->ifindex;
-	//
+
 	// TODO: look at using bpf_probe_read
 	//  bpf_probe_read(napi,     sizeof(napi),    ctx->napi);
 	//  bpf_probe_read(&ifindex, sizeof(ifindex), dev->ifindex);
 	//  bpf_probe_read(&ifindex, 4, &ctx->napi->dev->ifindex);
 	if (napi) {
+		/* This seems to work: */
 		bpf_probe_read(&napi_id, sizeof(napi_id), &napi->napi_id);
 	}
 //	if (napi && napi->dev) {
@@ -91,6 +106,27 @@ int napi_poll(struct napi_poll_ctx *ctx)
 //		bpf_probe_read(&ifindex, sizeof(ifindex), &(napi->dev->ifindex));
 //	}
 
+	/* State across invocation counter (for hacks) */
+#ifdef DEBUG
+	cnt = bpf_map_lookup_elem(&cnt_map, &key);
+	if (!cnt)
+		return 0;
+	*cnt += 1;
+	if ((*cnt % (1024*10)) == 0) {
+		unsigned int a = 0;
+		unsigned short t = 0;
+		unsigned char c = 0;
+		unsigned int pid = 0; //= ctx->common_pid;
+		u64 z = 0;
+		z = bpf_get_current_pid_tgid();
+		bpf_probe_read(&c, 1, &ctx->common_flags);
+		bpf_probe_read(&t, 2, &ctx->common_type);
+		bpf_probe_read(&a, 1, &ctx->common_preempt_count);
+		bpf_probe_read(&pid, 4, &ctx->common_pid);
+		bpf_debug("TestAAA a:%u c:%u t:%u\n", a, c, t);
+		bpf_debug("TestBBB pid:%u z:%u work:%u\n", pid, z, work);
+	}
+#endif
 	 /* Detect API violation, in DEBUG state */
 	if (work > budget)
 		bpf_debug("API violation ifindex(%d) work(%d)>budget(%d)",
@@ -98,6 +134,16 @@ int napi_poll(struct napi_poll_ctx *ctx)
 
 	if (work < 65)
 		napi_work->hist[work]++;
+
+	/* Detect this gets invoked from idle task or from ksoftirqd */
+	pid_tgid = bpf_get_current_pid_tgid();
+	if (pid_tgid == 0) {
+		napi_work->idle_task++;
+		napi_work->idle_task_pkts += work;
+	} else {
+		napi_work->ksoftirqd++;
+		napi_work->ksoftirqd_pkts += work;
+	}
 
 	return 0;
 }

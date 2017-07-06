@@ -27,6 +27,10 @@ static int verbose = 1;
 struct napi_bulk_histogram {
 	/* Keep counters per possible RX bulk value */
 	unsigned long hist[65];
+	unsigned long idle_task;
+	unsigned long idle_task_pkts;
+	unsigned long ksoftirqd;
+	unsigned long ksoftirqd_pkts;
 };
 
 static const struct option long_options[] = {
@@ -92,6 +96,10 @@ static bool stats_collect(struct stats_record *record)
 		for (j = 0; j < 65; j++) {
 			sum.hist[j] += values[i].hist[j];
 		}
+		sum.idle_task      += values[i].idle_task;
+		sum.idle_task_pkts += values[i].idle_task_pkts;
+		sum.ksoftirqd      += values[i].ksoftirqd;
+		sum.ksoftirqd_pkts += values[i].ksoftirqd_pkts;
 	}
 	memcpy(record, &sum, sizeof(sum));
 	return true;
@@ -99,12 +107,12 @@ static bool stats_collect(struct stats_record *record)
 
 static void stats_poll(int interval)
 {
-	struct stats_record record, prev;
+	struct stats_record rec, prev;
 	__u64 prev_timestamp;
 	__u64 timestamp;
 	__u64 period;
 
-	memset(&record, 0, sizeof(record));
+	memset(&rec, 0, sizeof(rec));
 	timestamp = gettime();
 
 	/* Trick to pretty printf with thousands separators use %' */
@@ -115,15 +123,17 @@ static void stats_poll(int interval)
 	fflush(stdout);
 
 	while (1) {
+		unsigned long cnt;
 		double period_;
+		double pps;
 		int i;
 
 		sleep(interval);
 		prev_timestamp = timestamp;
-		memcpy(&prev, &record, sizeof(record));
+		memcpy(&prev, &rec, sizeof(rec));
 		timestamp = gettime();
 
-		if (!stats_collect(&record))
+		if (!stats_collect(&rec))
 			exit(EXIT_FAILURE);
 
 		period = timestamp - prev_timestamp;
@@ -131,15 +141,45 @@ static void stats_poll(int interval)
 
 		printf("\nNAPI RX bulking (measurement period: %f)\n", period_);
 		for (i = 0; i < 65; i++) {
-			unsigned long cnt;
-			double pps;
 
-			cnt = record.napi_bulk.hist[i] - prev.napi_bulk.hist[i];
+			cnt = (signed long) rec.napi_bulk.hist[i]
+			    - (signed long)prev.napi_bulk.hist[i];
 			if (cnt) {
 				pps = (cnt * i) / period_;
 				printf("bulk[%02d]\t%lu\t( %'11.0f pps)\n",
 				       i, cnt, pps);
 			}
+		}
+		{ /* Watch pkt processing started from idle-task */
+			double avg_idle_bulk = 0;
+			unsigned long cnt2;
+
+			cnt = (signed long) rec.napi_bulk.idle_task_pkts
+			    - (signed long)prev.napi_bulk.idle_task_pkts;
+			// FIXME: idle_task contains work==0
+			cnt2= (signed long) rec.napi_bulk.idle_task
+			    - (signed long)prev.napi_bulk.idle_task;
+			pps = cnt / period_;
+			if (cnt2) avg_idle_bulk = cnt / cnt2;
+
+			printf("NAPI-from-idle,\t%lu\taverage bulk"
+			       "\t%.2f\t( %'11.0f pps)\n",
+			       cnt2, avg_idle_bulk, pps);
+		}
+		{ /* Watch pkt processing started from ksoftirqd */
+			double avg_bulk = 0;
+			unsigned long cnt2;
+
+			cnt = (signed long) rec.napi_bulk.ksoftirqd_pkts
+			    - (signed long)prev.napi_bulk.ksoftirqd_pkts;
+			cnt2= (signed long) rec.napi_bulk.ksoftirqd
+			    - (signed long)prev.napi_bulk.ksoftirqd;
+			pps = cnt / period_;
+			if (cnt2) avg_bulk = cnt / cnt2;
+
+			printf("NAPI-ksoftirqd,\t%lu\taverage bulk"
+			       "\t%.2f\t( %'11.0f pps)\n",
+			       cnt2, avg_bulk, pps);
 		}
 		fflush(stdout);
 	}
