@@ -206,6 +206,10 @@ int main(int argc, char **argv)
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'D':
+			if (!debug_enabled()) {
+				printf("ERR: Not compiled with DEBUG\n");
+				exit(EXIT_FAILURE);
+			}
 			debug = true;
 			break;
 		case 'h':

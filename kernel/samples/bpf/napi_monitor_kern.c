@@ -36,25 +36,19 @@ struct napi_poll_ctx {
 
 	/* Tracepoint specific fields */
 	struct napi_struct *napi;	//	offset:8;  size:8; signed:0;
-	int data_loc_dev_name;		//	offset:16; size:4; signed:1;
+	unsigned int data_loc_dev_name;	//	offset:16; size:4; signed:1;
 	int work;			//	offset:20; size:4; signed:1;
 	int budget;			//	offset:24; size:4; signed:1;
 };
 
-#define DEBUG 1
-#ifdef  DEBUG
-/* Only use this for debug output. Notice output from bpf_trace_printk()
- * end-up in /sys/kernel/debug/tracing/trace_pipe
- */
-#define bpf_debug(fmt, ...)						\
-		({							\
-			char ____fmt[] = fmt;				\
-			bpf_trace_printk(____fmt, sizeof(____fmt),	\
-				     ##__VA_ARGS__);			\
-		})
-#else
-#define bpf_debug(fmt, ...) { } while (0)
-#endif
+/* DATA_LOC_READ not working for some reason?!? */
+#define DATA_LOC_READ(ctx, dst, field, max_len)				\
+do {									\
+	unsigned short __offset = ctx->data_loc_##field & 0xFFFF;	\
+	unsigned short __length = ctx->data_loc_##field >> 16;		\
+	if (__length > 0) /* && __length < max_len)*/			\
+		bpf_probe_read((void *)dst, __length, (char *)ctx + __offset); \
+} while (0)
 
 SEC("tracepoint/napi/napi_poll")
 int napi_poll(struct napi_poll_ctx *ctx)
@@ -77,6 +71,10 @@ int napi_poll(struct napi_poll_ctx *ctx)
 	if (!napi_work)
 		return 0;
 
+	/* TODO: Want to implement limiting tool to collect from a
+	 * specific interface, but I cannot figure out howto extract
+	 * the ifindex here.
+	 */
 	// Cannot deref napi pointer directly :-(
 	//if (ctx->napi->dev)
 	//	ifindex = ctx->napi->dev->ifindex;
@@ -90,12 +88,12 @@ int napi_poll(struct napi_poll_ctx *ctx)
 		bpf_probe_read(&napi_id, sizeof(napi_id), &napi->napi_id);
 	}
 //	if (napi && napi->dev) {
-//              (NOT WORKING:)
+//              (NOT WORKING: rejected by verifier)
 //		bpf_probe_read(&ifindex, sizeof(ifindex), &(napi->dev->ifindex));
 //	}
 
-	/* State across invocation counter (for hacks) */
 #ifdef DEBUG
+	/* Counter that keeps state across invocations (for hacks) */
 	cnt = bpf_map_lookup_elem(&cnt_map, &key);
 	if (!cnt)
 		return 0;
@@ -106,6 +104,9 @@ int napi_poll(struct napi_poll_ctx *ctx)
 		unsigned char c = 0;
 		unsigned int pid = 0; //= ctx->common_pid;
 		u64 z = 0;
+		char devname[IFNAMSIZ] = { 0 };
+
+		unsigned short d_offset = ctx->data_loc_dev_name & 0xFFFF;
 		z = bpf_get_current_pid_tgid();
 		bpf_probe_read(&c, 1, &ctx->common_flags);
 		bpf_probe_read(&t, 2, &ctx->common_type);
@@ -113,6 +114,11 @@ int napi_poll(struct napi_poll_ctx *ctx)
 		bpf_probe_read(&pid, 4, &ctx->common_pid);
 		bpf_debug("TestAAA a:%u c:%u t:%u\n", a, c, t);
 		bpf_debug("TestBBB pid:%u z:%u work:%u\n", pid, z, work);
+
+		//DATA_LOC_READ(ctx, devname, dev_name, IFNAMSIZ);
+		bpf_probe_read(devname, IFNAMSIZ, (char *)ctx + d_offset);
+		bpf_debug("TestCCC data_loc:%u devname:%s\n",
+			  ctx->data_loc_dev_name, devname);
 	}
 #endif
 	/* Detect API violation */

@@ -18,11 +18,23 @@ struct napi_bulk_histogram {
 	/* Keep counters per possible RX bulk value */
 	unsigned long hist[65];
 	struct bulk_event_type type[3];
-// TODO: remove below
-//	unsigned long idle_task;
-//	unsigned long idle_task_pkts;
-//	unsigned long ksoftirqd;
-//	unsigned long ksoftirqd_pkts;
 };
+
+#define DEBUG 1
+#ifdef  DEBUG
+/* Only use this for debug output. Notice output from bpf_trace_printk()
+ * end-up in /sys/kernel/debug/tracing/trace_pipe
+ */
+#define debug_enabled() true
+#define bpf_debug(fmt, ...)						\
+		({							\
+			char ____fmt[] = fmt;				\
+			bpf_trace_printk(____fmt, sizeof(____fmt),	\
+				     ##__VA_ARGS__);			\
+		})
+#else
+#define bpf_debug(fmt, ...) { } while (0)
+#define debug_enabled() false
+#endif
 
 #endif /* __NAPI_MONITOR_H__ */
