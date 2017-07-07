@@ -27,6 +27,7 @@ static int verbose = 1;
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"debug",	no_argument,		NULL, 'D' },
+	{"sec", 	required_argument,	NULL, 's' },
 	{0, 0, NULL,  0 }
 };
 
@@ -246,6 +247,7 @@ int main(int argc, char **argv)
 	int ret = EXIT_SUCCESS;
 	char bpf_obj_file[256];
 	bool debug = false;
+	int interval = 2;
 	// size_t len;
 
 	snprintf(bpf_obj_file, sizeof(bpf_obj_file), "%s_kern.o", argv[0]);
@@ -260,6 +262,9 @@ int main(int argc, char **argv)
 				exit(EXIT_FAILURE);
 			}
 			debug = true;
+			break;
+		case 's':
+			interval = atoi(optarg);
 			break;
 		case 'h':
 		default:
@@ -282,8 +287,7 @@ int main(int argc, char **argv)
 			printf("Read: /sys/kernel/debug/tracing/trace_pipe\n");
 		read_trace_pipe();
 	}
-
-	stats_poll(2);
+	stats_poll(interval);
 
 	return ret;
 }
