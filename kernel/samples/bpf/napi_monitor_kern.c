@@ -4,20 +4,8 @@
  */
 #include <uapi/linux/bpf.h>
 #include "bpf_helpers.h"
-
 #include <linux/netdevice.h> /* Kernel internal: struct napi_struct */
-
-char _license[] SEC("license") = "GPL";
-
-/* Shared struct between _user & _kern */
-struct napi_bulk_histogram {
-	/* Keep counters per possible RX bulk value */
-	unsigned long hist[65];
-	unsigned long idle_task;
-	unsigned long idle_task_pkts;
-	unsigned long ksoftirqd;
-	unsigned long ksoftirqd_pkts;
-};
+#include "napi_monitor.h" /* Shared structs between _user & _kern */
 
 /* Keep system global map (mostly because extracting the ifindex, was
  * not straight forward)
@@ -35,7 +23,6 @@ struct bpf_map_def SEC("maps") cnt_map = {
 	.value_size = sizeof(u64),
 	.max_entries = 1,
 };
-
 
 /* Tracepoint format: /sys/kernel/debug/tracing/events/napi/napi_poll/format
  * Code in:                kernel/include/trace/events/napi.h
@@ -147,3 +134,5 @@ int napi_poll(struct napi_poll_ctx *ctx)
 
 	return 0;
 }
+
+char _license[] SEC("license") = "GPL";

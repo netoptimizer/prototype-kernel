@@ -20,18 +20,9 @@ static const char *__doc__=
 #include "libbpf.h"
 #include "bpf_load.h"
 #include "bpf_util.h"
+#include "napi_monitor.h" /* Shared structs between _user & _kern */
 
 static int verbose = 1;
-
-/* Shared struct between _user & _kern */
-struct napi_bulk_histogram {
-	/* Keep counters per possible RX bulk value */
-	unsigned long hist[65];
-	unsigned long idle_task;
-	unsigned long idle_task_pkts;
-	unsigned long ksoftirqd;
-	unsigned long ksoftirqd_pkts;
-};
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },

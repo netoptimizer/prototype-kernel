@@ -6,12 +6,9 @@
 #
 TARGETS := xdp_ddos01_blacklist
 TARGETS += xdp_ttl
-
 TARGETS += xdp_bench01_mem_access_cost
 TARGETS += xdp_bench02_drop_pattern
-
 TARGETS += bpf_tail_calls01
-
 TARGETS += napi_monitor
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
@@ -106,6 +103,10 @@ EXTRA_CFLAGS=-Werror
 all: dependencies $(TARGETS) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
 
 .PHONY: dependencies clean verify_cmds verify_llvm_target_bpf $(CLANG) $(LLC)
+
+# Manually define dependencies to e.g. include files
+napi_monitor:        napi_monitor.h
+napi_monitor_kern.o: napi_monitor.h
 
 clean:
 	@find . -type f \
