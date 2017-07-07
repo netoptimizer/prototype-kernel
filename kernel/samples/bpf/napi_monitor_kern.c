@@ -59,6 +59,7 @@ struct napi_poll_ctx {
 SEC("tracepoint/napi/napi_poll")
 int napi_poll(struct napi_poll_ctx *ctx)
 {
+	unsigned int event_type = TYPE_VIOLATE;
 	unsigned int budget = ctx->budget;
 	unsigned int work = ctx->work;
 	struct napi_struct *napi = ctx->napi;
@@ -114,23 +115,28 @@ int napi_poll(struct napi_poll_ctx *ctx)
 		bpf_debug("TestBBB pid:%u z:%u work:%u\n", pid, z, work);
 	}
 #endif
-	 /* Detect API violation, in DEBUG state */
-	if (work > budget)
+	/* Detect API violation */
+	if (work > budget) {
 		bpf_debug("API violation ifindex(%d) work(%d)>budget(%d)",
 			  ifindex, work, budget);
+		goto record_event_type;
+	}
 
 	if (work < 65)
 		napi_work->hist[work]++;
 
-	/* Detect this gets invoked from idle task or from ksoftirqd */
+	/* Detect when this gets invoked from idle task or from ksoftirqd */
 	pid_tgid = bpf_get_current_pid_tgid();
-	if (pid_tgid == 0) {
-		napi_work->idle_task++;
-		napi_work->idle_task_pkts += work;
-	} else {
-		napi_work->ksoftirqd++;
-		napi_work->ksoftirqd_pkts += work;
-	}
+	if (pid_tgid == 0)
+		event_type = TYPE_IDLE_TASK;
+	else
+		event_type = TYPE_SOFTIRQ;
+
+record_event_type:
+	napi_work->type[event_type].cnt++;
+	napi_work->type[event_type].pkts += work;
+	if (!work)
+		napi_work->type[event_type].cnt_bulk0++;
 
 	return 0;
 }

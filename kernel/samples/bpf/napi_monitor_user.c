@@ -87,13 +87,56 @@ static bool stats_collect(struct stats_record *record)
 		for (j = 0; j < 65; j++) {
 			sum.hist[j] += values[i].hist[j];
 		}
-		sum.idle_task      += values[i].idle_task;
-		sum.idle_task_pkts += values[i].idle_task_pkts;
-		sum.ksoftirqd      += values[i].ksoftirqd;
-		sum.ksoftirqd_pkts += values[i].ksoftirqd_pkts;
+		for (j = 0; j < 3; j++) {
+			sum.type[j].cnt       += values[i].type[j].cnt;
+			sum.type[j].cnt_bulk0 += values[i].type[j].cnt_bulk0;
+			sum.type[j].pkts      += values[i].type[j].pkts;
+		}
 	}
 	memcpy(record, &sum, sizeof(sum));
 	return true;
+}
+
+static inline
+void stats_type(
+	enum event_t event,
+	struct stats_record *rec, struct stats_record *prev,
+	double period)
+{
+	unsigned long cnt, cnt2, pkts, bulk0;
+	double avg_bulk, pps;
+
+	pkts =  (signed long) rec->napi_bulk.type[event].pkts -
+		(signed long)prev->napi_bulk.type[event].pkts;
+	cnt  =  (signed long) rec->napi_bulk.type[event].cnt -
+		(signed long)prev->napi_bulk.type[event].cnt;
+	bulk0 = (signed long) rec->napi_bulk.type[event].cnt_bulk0 -
+		(signed long)prev->napi_bulk.type[event].cnt_bulk0;
+
+	cnt2 = (cnt - bulk0); /* cnt contains work==0 */
+	avg_bulk = 0;
+	if (cnt2)
+		avg_bulk = pkts / cnt2;
+
+	pps = pkts / period;
+
+	switch (event) {
+	case TYPE_IDLE_TASK:
+		printf("NAPI-from-idle,");
+		break;
+	case TYPE_SOFTIRQ:
+		printf("NAPI-ksoftirqd,");
+		break;
+	case TYPE_VIOLATE:
+		if (!rec->napi_bulk.type[event].cnt)
+			return;
+		printf("NAPI-violation,");
+		break;
+	default:
+		printf("NAPI-(unknown),");
+	}
+	printf("\t%lu\taverage bulk\t%.2f\t( %'11.0f pps) bulk0=%lu\n",
+	       cnt, avg_bulk, pps, bulk0);
 }
 
 static void stats_poll(int interval)
@@ -141,37 +184,9 @@ static void stats_poll(int interval)
 				       i, cnt, pps);
 			}
 		}
-		{ /* Watch pkt processing started from idle-task */
-			double avg_idle_bulk = 0;
-			unsigned long cnt2;
-
-			cnt = (signed long) rec.napi_bulk.idle_task_pkts
-			    - (signed long)prev.napi_bulk.idle_task_pkts;
-			// FIXME: idle_task contains work==0
-			cnt2= (signed long) rec.napi_bulk.idle_task
-			    - (signed long)prev.napi_bulk.idle_task;
-			pps = cnt / period_;
-			if (cnt2) avg_idle_bulk = cnt / cnt2;
-
-			printf("NAPI-from-idle,\t%lu\taverage bulk"
-			       "\t%.2f\t( %'11.0f pps)\n",
-			       cnt2, avg_idle_bulk, pps);
-		}
-		{ /* Watch pkt processing started from ksoftirqd */
-			double avg_bulk = 0;
-			unsigned long cnt2;
-
-			cnt = (signed long) rec.napi_bulk.ksoftirqd_pkts
-			    - (signed long)prev.napi_bulk.ksoftirqd_pkts;
-			cnt2= (signed long) rec.napi_bulk.ksoftirqd
-			    - (signed long)prev.napi_bulk.ksoftirqd;
-			pps = cnt / period_;
-			if (cnt2) avg_bulk = cnt / cnt2;
-
-			printf("NAPI-ksoftirqd,\t%lu\taverage bulk"
-			       "\t%.2f\t( %'11.0f pps)\n",
-			       cnt2, avg_bulk, pps);
-		}
+		stats_type(TYPE_IDLE_TASK, &rec, &prev, period_);
+		stats_type(TYPE_SOFTIRQ,   &rec, &prev, period_);
+		stats_type(TYPE_VIOLATE,   &rec, &prev, period_);
 		fflush(stdout);
 	}
 }
