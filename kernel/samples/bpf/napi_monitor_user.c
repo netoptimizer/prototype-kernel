@@ -32,6 +32,7 @@ static const struct option long_options[] = {
 
 struct stats_record {
 	struct napi_bulk_histogram napi_bulk;
+	struct softirq_data softirq;
 };
 
 static void usage(char *argv[])
@@ -69,7 +70,7 @@ uint64_t gettime(void)
 	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
-static bool stats_collect(struct stats_record *record)
+static bool stats_collect_napi(struct stats_record *record)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
 	struct napi_bulk_histogram values[nr_cpus];
@@ -93,9 +94,35 @@ static bool stats_collect(struct stats_record *record)
 			sum.type[j].pkts      += values[i].type[j].pkts;
 		}
 	}
-	memcpy(record, &sum, sizeof(sum));
+	memcpy(&record->napi_bulk, &sum, sizeof(sum));
 	return true;
 }
+
+static bool stats_collect_softirq(struct stats_record *record)
+{
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	struct softirq_data cpu[nr_cpus];
+	struct softirq_data sum = { 0 };
+	__u32 key = 0;
+	int i, j;
+
+	/* Notice map is percpu: BPF_MAP_TYPE_PERCPU_ARRAY */
+	if ((bpf_map_lookup_elem(map_fd[1], &key, cpu)) != 0) {
+		fprintf(stderr, "WARN: bpf_map_lookup_elem failed\n");
+		return false;
+	}
+	/* Sum values from each CPU */
+	for (i = 0; i < nr_cpus; i++) {
+		for (j = 0; j < SOFTIRQ_MAX; j++) {
+			sum.counters[j].enter += cpu[i].counters[j].enter;
+			sum.counters[j].exit  += cpu[i].counters[j].exit;
+			sum.counters[j].raise += cpu[i].counters[j].raise;
+		}
+	}
+	memcpy(&record->softirq, &sum, sizeof(sum));
+	return true;
+}
+
 
 static inline
 void stats_type(
@@ -139,6 +166,23 @@ void stats_type(
 	       cnt, avg_bulk, pps, bulk0);
 }
 
+static void stats_softirq(struct stats_record *rec, struct stats_record *prev,
+			  double p)
+{
+	unsigned long rx_enter, rx_exit, rx_raise;
+
+	rx_enter= (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].enter
+		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].enter;
+	rx_exit = (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].exit
+		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].exit;
+	rx_raise= (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].raise
+		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].raise;
+//	printf("Stats SOFTIRQ_NET_RX: enter:%lu exit:%lu raise:%lu\n",
+//	       rx_enter, rx_exit, rx_raise);
+	printf("SOFTIRQ_NET_RX/sec enter:%.0f/s exit:%.0f/s raise:%.0f/s\n",
+	       rx_enter/p, rx_exit/p, rx_raise/p);
+}
+
 static void stats_poll(int interval)
 {
 	struct stats_record rec, prev;
@@ -167,7 +211,9 @@ static void stats_poll(int interval)
 		memcpy(&prev, &rec, sizeof(rec));
 		timestamp = gettime();
 
-		if (!stats_collect(&rec))
+		if (!stats_collect_napi(&rec))
+			exit(EXIT_FAILURE);
+		if (!stats_collect_softirq(&rec))
 			exit(EXIT_FAILURE);
 
 		period = timestamp - prev_timestamp;
@@ -187,6 +233,9 @@ static void stats_poll(int interval)
 		stats_type(TYPE_IDLE_TASK, &rec, &prev, period_);
 		stats_type(TYPE_SOFTIRQ,   &rec, &prev, period_);
 		stats_type(TYPE_VIOLATE,   &rec, &prev, period_);
+
+		stats_softirq(&rec, &prev, period_);
+
 		fflush(stdout);
 	}
 }

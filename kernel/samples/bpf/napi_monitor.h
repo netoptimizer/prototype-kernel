@@ -3,6 +3,7 @@
 
 /* Shared struct between _user & _kern */
 
+/* NAPI tracepoint data structures */
 struct bulk_event_type {
 	unsigned long cnt;
 	unsigned long cnt_bulk0;
@@ -13,14 +14,36 @@ enum event_t {
 	TYPE_SOFTIRQ,
 	TYPE_VIOLATE
 };
-
 struct napi_bulk_histogram {
 	/* Keep counters per possible RX bulk value */
 	unsigned long hist[65];
 	struct bulk_event_type type[3];
 };
 
-#define DEBUG 1
+/* SOFTIRQ tracepoint data structures */
+enum vec_nr_t {
+	SOFTIRQ_HI,
+	SOFTIRQ_TIMER,
+	SOFTIRQ_NET_TX,
+	SOFTIRQ_NET_RX,
+	SOFTIRQ_BLOCK,
+	SOFTIRQ_IRQ_POLL,
+	SOFTIRQ_TASKLET,
+	SOFTIRQ_SCHED,
+	SOFTIRQ_HRTIMER,
+	SOFTIRQ_RCU,
+	SOFTIRQ_MAX
+};
+struct softirq_cnt {
+	unsigned long enter;
+	unsigned long exit;
+	unsigned long raise;
+};
+struct softirq_data {
+	struct softirq_cnt counters[SOFTIRQ_MAX];
+};
+
+//#define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from bpf_trace_printk()
  * end-up in /sys/kernel/debug/tracing/trace_pipe

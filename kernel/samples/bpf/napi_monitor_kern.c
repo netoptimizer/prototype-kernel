@@ -17,6 +17,13 @@ struct bpf_map_def SEC("maps") napi_hist_map = {
 	.max_entries = 1,
 };
 
+struct bpf_map_def SEC("maps") softirq_map = {
+	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size = sizeof(unsigned int),
+	.value_size = sizeof(struct softirq_data),
+	.max_entries = 1,
+};
+
 struct bpf_map_def SEC("maps") cnt_map = {
 	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size = sizeof(u32),
@@ -147,4 +154,77 @@ record_event_type:
 	return 0;
 }
 
+/*
+ * IDEA: Use the irq:softirq_* tracepoints, to measure how many times
+ * the system enters and exits softirq.
+ *
+ * Hint look at events used by:
+ *  tools/perf/scripts/python/bin/netdev-times-record
+ *
+ * Tracepoint format: /sys/kernel/debug/tracing/events/irq/softirq.../format
+ * Code in:                kernel/include/trace/events/irq.h
+ */
+struct irq_ctx {
+	/* Tracepoint common fields */
+	unsigned short common_type;	//	offset:0;  size:2; signed:0;
+	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
+	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
+	int common_pid;			//	offset:4;  size:4; signed:1;
+	/* Tracepoint specific fields */
+	unsigned int vec_nr;		//	offset:8;  size:4; signed:0;
+};
+
+SEC("tracepoint/irq/softirq_entry")
+int softirq_entry(struct irq_ctx *ctx)
+{
+	struct softirq_data *data = NULL;
+	unsigned int vec_nr = ctx->vec_nr;
+	u32 key = 0;
+
+	data = bpf_map_lookup_elem(&softirq_map, &key);
+	if (!data)
+		return 0;
+
+	if (vec_nr < SOFTIRQ_MAX)
+		data->counters[vec_nr].enter++;
+
+	return 0;
+}
+
+SEC("tracepoint/irq/softirq_exit")
+int softirq_exit(struct irq_ctx *ctx)
+{
+	struct softirq_data *data = NULL;
+	unsigned int vec_nr = ctx->vec_nr;
+	u32 key = 0;
+
+	data = bpf_map_lookup_elem(&softirq_map, &key);
+	if (!data)
+		return 0;
+
+	if (vec_nr < SOFTIRQ_MAX)
+		data->counters[vec_nr].exit++;
+
+	return 0;
+}
+
+SEC("tracepoint/irq/softirq_raise")
+int softirq_raise(struct irq_ctx *ctx)
+{
+	struct softirq_data *data = NULL;
+	unsigned int vec_nr = ctx->vec_nr;
+	u32 key = 0;
+
+	data = bpf_map_lookup_elem(&softirq_map, &key);
+	if (!data)
+		return 0;
+
+	if (vec_nr < SOFTIRQ_MAX)
+		data->counters[vec_nr].raise++;
+
+	return 0;
+}
+
 char _license[] SEC("license") = "GPL";
+
+
