@@ -43,6 +43,25 @@ struct softirq_data {
 	struct softirq_cnt counters[SOFTIRQ_MAX];
 };
 
+static const char *softirq_names[SOFTIRQ_MAX] = {
+	[SOFTIRQ_HI]		= "SOFTIRQ_HI",
+	[SOFTIRQ_TIMER]		= "SOFTIRQ_TIMER",
+	[SOFTIRQ_NET_TX]	= "SOFTIRQ_NET_TX",
+	[SOFTIRQ_NET_RX]	= "SOFTIRQ_NET_RX",
+	[SOFTIRQ_BLOCK]		= "SOFTIRQ_BLOCK",
+	[SOFTIRQ_IRQ_POLL]	= "SOFTIRQ_IRQ_POLL",
+	[SOFTIRQ_TASKLET]	= "SOFTIRQ_TASKLET",
+	[SOFTIRQ_SCHED]		= "SOFTIRQ_SCHED",
+	[SOFTIRQ_HRTIMER]	= "SOFTIRQ_HRTIMER",
+	[SOFTIRQ_RCU]		= "SOFTIRQ_RCU",
+};
+static const char *softirq2str(enum vec_nr_t softirq)
+{
+	if (softirq < SOFTIRQ_MAX)
+		return softirq_names[softirq];
+	return NULL;
+}
+
 //#define DEBUG 1
 #ifdef  DEBUG
 /* Only use this for debug output. Notice output from bpf_trace_printk()

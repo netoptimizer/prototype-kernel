@@ -119,6 +119,10 @@ static bool stats_collect_softirq(struct stats_record *record)
 			sum.counters[j].exit  += cpu[i].counters[j].exit;
 			sum.counters[j].raise += cpu[i].counters[j].raise;
 		}
+		// TODO: add total counters, idea: avoid displaying
+		// every softirq, but instead show total, which allows
+		// users to see if total's is significantly higher
+		// than RX+TX softirq counters
 	}
 	memcpy(&record->softirq, &sum, sizeof(sum));
 	return true;
@@ -167,21 +171,30 @@ void stats_type(
 	       cnt, avg_bulk, pps, bulk0);
 }
 
-static void stats_softirq(struct stats_record *rec, struct stats_record *prev,
+static void stats_softirq(enum vec_nr_t softirq,
+			  struct stats_record *rec, struct stats_record *prev,
 			  double p)
 {
-	unsigned long rx_enter, rx_exit, rx_raise;
+	unsigned long enter, exit, raise;
 
-	rx_enter= (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].enter
-		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].enter;
-	rx_exit = (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].exit
-		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].exit;
-	rx_raise= (signed long) rec->softirq.counters[SOFTIRQ_NET_RX].raise
-		- (signed long)prev->softirq.counters[SOFTIRQ_NET_RX].raise;
-//	printf("Stats SOFTIRQ_NET_RX: enter:%lu exit:%lu raise:%lu\n",
-//	       rx_enter, rx_exit, rx_raise);
-	printf("SOFTIRQ_NET_RX/sec enter:%.0f/s exit:%.0f/s raise:%.0f/s\n",
-	       rx_enter/p, rx_exit/p, rx_raise/p);
+	enter   = (signed long) rec->softirq.counters[softirq].enter
+		- (signed long)prev->softirq.counters[softirq].enter;
+	exit    = (signed long) rec->softirq.counters[softirq].exit
+		- (signed long)prev->softirq.counters[softirq].exit;
+	raise   = (signed long) rec->softirq.counters[softirq].raise
+		- (signed long)prev->softirq.counters[softirq].raise;
+	printf(" %s/sec\tenter:%.0f/s\texit:%.0f/s\traise:%.0f/s\n",
+	       softirq2str(softirq), enter/p, exit/p, raise/p);
+}
+
+static void stats_softirq_selective(
+	struct stats_record *rec, struct stats_record *prev,
+	double p)
+{
+	printf("\nSystem global SOFTIRQ stats:\n");
+	stats_softirq(SOFTIRQ_NET_RX, rec, prev, p);
+	stats_softirq(SOFTIRQ_NET_TX, rec, prev, p);
+	stats_softirq(SOFTIRQ_TIMER, rec, prev, p);
 }
 
 static void stats_poll(int interval)
@@ -235,7 +248,7 @@ static void stats_poll(int interval)
 		stats_type(TYPE_SOFTIRQ,   &rec, &prev, period_);
 		stats_type(TYPE_VIOLATE,   &rec, &prev, period_);
 
-		stats_softirq(&rec, &prev, period_);
+		stats_softirq_selective(&rec, &prev, period_);
 
 		fflush(stdout);
 	}
