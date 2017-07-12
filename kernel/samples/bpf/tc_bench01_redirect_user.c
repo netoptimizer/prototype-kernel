@@ -36,6 +36,7 @@ static const struct option long_options[] = {
 	{"tc-cmd",	required_argument,	NULL, 't' },
 	/* HINT assign: optional_arguments with '=' */
 	{"list",	optional_argument,	NULL, 'l' },
+	{"remove",	optional_argument,	NULL, 'r' },
 	{0, 0, NULL,  0 }
 };
 
@@ -128,6 +129,32 @@ static int tc_list_ingress_filter(const char* dev)
 	return ret;
 }
 
+static int tc_remove_ingress_filter(const char* dev)
+{
+	char cmd[CMD_MAX];
+	int ret = 0;
+
+	memset(&cmd, 0, CMD_MAX);
+	snprintf(cmd, CMD_MAX,
+		 /* Remove all ingress filters on dev */
+		 "%s filter delete dev %s ingress",
+		 /* Alternatively could remove specific filter handle:
+		 "%s filter delete dev %s ingress prio 1 handle 1 bpf",
+		 */
+		 tc_cmd, dev);
+	if (verbose) printf(" - Run: %s\n", cmd);
+	ret = system(cmd);
+	if (ret) {
+		fprintf(stderr,
+			"ERR(%d): tc cannot remove filters\n Cmdline:%s\n",
+			ret, cmd);
+		exit(EXIT_FAILURE);
+	}
+	return ret;
+}
+
+
+
 static char ingress_ifname[IF_NAMESIZE];
 static char egress_ifname[IF_NAMESIZE];
 static char buf_ifname[IF_NAMESIZE] = "(unknown-dev)";
@@ -154,6 +181,7 @@ bool validate_ifname(const char* input_ifname, char *output_ifname)
 int main(int argc, char **argv)
 {
 	bool list_ingress_tc_filter = false;
+	bool remove_ingress_tc_filter = false;
 	int longindex = 0, opt, fd = -1;
 	int egress_ifindex = -1;
 	int ingress_ifindex = 0;
@@ -199,6 +227,7 @@ int main(int argc, char **argv)
 			}
 			break;
 		case 'l':
+			/* --list use --ingress ifname if specified */
 			if (optarg &&
 			    !validate_ifname(optarg,(char *)&ingress_ifname)) {
 				fprintf(stderr,
@@ -211,6 +240,21 @@ int main(int argc, char **argv)
 				return EXIT_FAILURE;
 			}
 			list_ingress_tc_filter = true;
+			break;
+		case 'r':
+			/* --remove use --ingress ifname if specified */
+			if (optarg &&
+			    !validate_ifname(optarg,(char *)&ingress_ifname)) {
+				fprintf(stderr,
+					"ERR: input --remove=ifname invalid\n");
+				return EXIT_FAILURE;
+			}
+			if (strlen(ingress_ifname) == 0) {
+				fprintf(stderr,
+					"ERR: need input --list=ifname\n");
+				return EXIT_FAILURE;
+			}
+			remove_ingress_tc_filter = true;
 			break;
 		case 't':
 			len = strlen(optarg);
@@ -241,6 +285,14 @@ int main(int argc, char **argv)
 			printf("TC list ingress filters on device %s\n",
 			       ingress_ifname);
 		tc_list_ingress_filter(ingress_ifname);
+	}
+
+	if (remove_ingress_tc_filter) {
+		if (verbose)
+			printf("TC remove ingress filters on device %s\n",
+			       ingress_ifname);
+		tc_remove_ingress_filter(ingress_ifname);
+		return EXIT_SUCCESS;
 	}
 
 	fd = bpf_obj_get(mapfile);
