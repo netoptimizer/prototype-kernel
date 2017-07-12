@@ -172,6 +172,13 @@ static char* mem2str(enum touch_mem_type touch_mem)
 	exit(EXIT_FAIL);
 }
 
+static char* flags2str(__u32 flags)
+{
+	if (flags == XDP_FLAGS_SKB_MODE)
+		return "skb_mode";
+	return "";
+}
+
 static __u64 get_touch_mem(void)
 {
 	__u64 value;
@@ -276,9 +283,10 @@ static void stats_poll(int interval)
 		/* pps  = (count - prev)/interval; */
 		pps_ = (count - prev) / ((double) period / NANOSEC_PER_SEC);
 
-		printf("%-12s %-10.0f %'-18.0f %-9s\n",
+		printf("%-12s %-10.0f %'-18.0f %-9s %s\n",
 		       action2str(record.action), pps_, pps_,
-		       mem2str(record.touch_mem));
+		       mem2str(record.touch_mem),
+		       flags2str(xdp_flags));
 
 		// TODO: add nanosec variation measurement to assess accuracy
 	}
