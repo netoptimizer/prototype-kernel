@@ -10,6 +10,7 @@ TARGETS += xdp_bench01_mem_access_cost
 TARGETS += xdp_bench02_drop_pattern
 TARGETS += bpf_tail_calls01
 TARGETS += napi_monitor
+TARGETS += xdp_monitor
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
 # it is unnecessary to link "user" binary with bpf_load.c.  TODO, if
@@ -125,6 +126,7 @@ dependencies: verify_llvm_target_bpf linux-src-devel-headers
 linux-src:
 	@if ! test -d $(KERNEL)/; then \
 		echo "ERROR: Need kernel source code to compile against" ;\
+		echo "(Cannot open directory: $(KERNEL))" ;\
 		exit 1; \
 	else true; fi
 
