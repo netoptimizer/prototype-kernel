@@ -25,12 +25,12 @@ struct xdp_redirect_ctx {
 	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
 	int common_pid;			//	offset:4;  size:4; signed:1;
 
-	int from_index;			//	offset:8;  size:4; signed:1;
-	int to_index;			//	offset:12;  size:4;signed:1;
-	u8 prog_tag[8];			//	offset:16;  size:8;signed:0;
-	u32 act;			//	offset:24;  size:4;signed:0;
-	int err;			//	offset:28;  size:4;signed:1;
-};
+	u8 prog_tag[8];			//	offset:8;  size:8; signed:0;
+	u32 act;			//	offset:16  size:4; signed:0;
+	int from_index;			//	offset:20  size:4; signed:1;
+	int to_index;			//	offset:24  size:4; signed:1;
+	int err;			//	offset:28  size:4; signed:1;
+};					//	offset:32
 
 enum {
 	XDP_REDIRECT_SUCCESS = 0,
