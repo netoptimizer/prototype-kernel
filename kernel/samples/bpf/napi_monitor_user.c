@@ -12,6 +12,7 @@ static const char *__doc__=
 #include <ctype.h>
 #include <unistd.h>
 #include <locale.h>
+#include <stdint.h>
 
 #include <getopt.h>
 #include <net/if.h>
