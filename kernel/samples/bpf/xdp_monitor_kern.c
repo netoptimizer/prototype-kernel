@@ -28,9 +28,11 @@ struct xdp_redirect_ctx {
 	u8 prog_tag[8];			//	offset:8;  size:8; signed:0;
 	u32 act;			//	offset:16  size:4; signed:0;
 	int ifindex;			//	offset:20  size:4; signed:1;
-	int to_index;			//	offset:24  size:4; signed:1;
+	int to_ifindex;			//	offset:24  size:4; signed:1;
 	int err;			//	offset:28  size:4; signed:1;
-};					//	offset:32
+	u32 map_id;			//	offset:32  size:4; signed:0;
+	int map_index;			//	offset:36  size:4; signed:1;
+};					//	offset:40
 
 enum {
 	XDP_REDIRECT_SUCCESS = 0,
