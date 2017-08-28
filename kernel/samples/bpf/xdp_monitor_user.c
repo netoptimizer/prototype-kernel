@@ -26,6 +26,7 @@ static int verbose = 1;
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
+	{"debug",	no_argument,		NULL, 'D' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{0, 0, NULL,  0 }
 };
@@ -188,12 +189,40 @@ static void stats_poll(int interval)
 	}
 }
 
+void print_bpf_prog_info()
+{
+	int i;
+
+	/* Prog info */
+	printf("Loaded BPF prog have %d bpf program(s)\n", prog_cnt);
+	for (i = 0; i < prog_cnt; i++) {
+		printf(" - prog_fd[%d] = fd(%d)\n", i, prog_fd[i]);
+	}
+
+	/* Maps info */
+	printf("Loaded BPF prog have %d map(s)\n", map_data_count);
+	for (i = 0; i < map_data_count; i++) {
+		char *name = map_data[i].name;
+		int fd     = map_data[i].fd;
+
+		printf(" - map_data[%d] = fd(%d) name:%s\n", i, fd, name);
+	}
+
+	/* Event info */
+	printf("Searching for (max:%d) event file descriptor(s)\n", prog_cnt);
+	for (i = 0; i < prog_cnt; i++) {
+		if (event_fd[i] != -1)
+			printf(" - event_fd[%d] = fd(%d)\n", i, event_fd[i]);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	int longindex = 0, opt;
 	int ret = EXIT_SUCCESS;
 	char bpf_obj_file[256];
 	int interval = 2;
+	bool debug = 0;
 
 	snprintf(bpf_obj_file, sizeof(bpf_obj_file), "%s_kern.o", argv[0]);
 
@@ -201,6 +230,9 @@ int main(int argc, char **argv)
 	while ((opt = getopt_long(argc, argv, "h",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
+		case 'D':
+			debug = true;
+			break;
 		case 's':
 			interval = atoi(optarg);
 			break;
@@ -218,6 +250,12 @@ int main(int argc, char **argv)
 	if (!prog_fd[0]) {
 		printf("ERROR - load_bpf_file: %s\n", strerror(errno));
 		return 1;
+	}
+
+	if (debug) {
+		print_bpf_prog_info();
+		//close(prog_fd[1]);
+		close(event_fd[1]);
 	}
 
 	stats_poll(interval);
