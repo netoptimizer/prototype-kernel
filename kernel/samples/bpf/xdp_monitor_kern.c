@@ -37,8 +37,8 @@ enum {
 	XDP_REDIRECT_ERROR = 1
 };
 
-SEC("tracepoint/xdp/xdp_redirect")
-int xdp_redirect(struct xdp_redirect_ctx *ctx)
+static __always_inline
+int xdp_redirect_collect_stat(struct xdp_redirect_ctx *ctx)
 {
 	u32 key = XDP_REDIRECT_ERROR;
 	int err = ctx->err;
@@ -55,3 +55,16 @@ int xdp_redirect(struct xdp_redirect_ctx *ctx)
 	return 0; /* Indicate event was filtered (no further processing)*/
 	// return 1; // allow normal trace points to get info, but slower
 }
+
+SEC("tracepoint/xdp/xdp_redirect_err")
+int xdp_redirect_err(struct xdp_redirect_ctx *ctx)
+{
+	return xdp_redirect_collect_stat(ctx);
+}
+
+SEC("tracepoint/xdp/xdp_redirect")
+int xdp_redirect(struct xdp_redirect_ctx *ctx)
+{
+	return xdp_redirect_collect_stat(ctx);
+}
+
