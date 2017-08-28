@@ -8,6 +8,7 @@ static const char *__doc__=
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 #include <ctype.h>
 #include <unistd.h>
