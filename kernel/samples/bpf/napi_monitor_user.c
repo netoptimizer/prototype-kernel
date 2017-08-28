@@ -1,7 +1,11 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " NAPI montor tool\n"
+ "NAPI monitor tool, via tracepoints+bpf\n"
+ "\n"
+ "NOTICE: Counter for bulk 64 can be higher than actual processed\n"
+ " packets.  Drivers can signal the NAPI API to keep polling via\n"
+ " returning the full budget (64)\n"
 ;
 
 #include <errno.h>
@@ -40,7 +44,7 @@ struct stats_record {
 static void usage(char *argv[])
 {
 	int i;
-	printf("\nDOCUMENTATION:\n%s\n", __doc__);
+	printf("\nDOCUMENTATION:\n %s\n", __doc__);
 	printf("\n");
 	printf(" Usage: %s (options-see-below)\n",
 	       argv[0]);
@@ -212,7 +216,8 @@ static void stats_poll(int interval)
 	setlocale(LC_NUMERIC, "en_US");
 
 	/* Header */
-	// printf("Header\n");
+	if (verbose)
+		printf("%s\n", __doc__);
 	fflush(stdout);
 
 	while (1) {

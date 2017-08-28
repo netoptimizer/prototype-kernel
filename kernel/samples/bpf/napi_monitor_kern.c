@@ -1,4 +1,4 @@
-/* NAPI monitor tool
+/* NAPI monitor tool, via tracepoints+bpf
  *
  *  Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat Inc.
  */
@@ -24,7 +24,7 @@ struct bpf_map_def SEC("maps") softirq_map = {
 	.max_entries = 1,
 };
 
-struct bpf_map_def SEC("maps") cnt_map = {
+struct bpf_map_def SEC("maps") cnt_map = { /* For debugging */
 	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size = sizeof(u32),
 	.value_size = sizeof(u64),
@@ -134,6 +134,8 @@ int napi_poll(struct napi_poll_ctx *ctx)
 			  ifindex, work, budget);
 		goto record_event_type;
 	}
+
+	/* TODO: Detect */
 
 	if (work < 65)
 		napi_work->hist[work]++;
