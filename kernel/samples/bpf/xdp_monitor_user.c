@@ -1,7 +1,13 @@
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
- " XDP monitor tool, based on tracepoints\n"
+ "XDP monitor tool, based on tracepoints\n"
+;
+
+static const char *__doc_err_only__=
+ " NOTICE: Only tracking XDP redirect errors\n"
+ "         Enable TX success stats via '--stats'\n"
+ "         (which comes with a per packet processing overhead)\n"
 ;
 
 #include <errno.h>
@@ -27,6 +33,7 @@ static int verbose = 1;
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"debug",	no_argument,		NULL, 'D' },
+	{"stats",	no_argument,		NULL, 'S' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{0, 0, NULL,  0 }
 };
@@ -91,20 +98,28 @@ struct stats_record {
 	struct record xdp_redir[REDIR_RES_MAX];
 };
 
-static void stats_print_headers(void)
+static void stats_print_headers(bool err_only)
 {
 	/* clear screen */
 	// printf("\033[2J");
+
+	if (err_only)
+		printf("\n%s\n", __doc_err_only__);
+
 	printf("%-14s %-10s %-18s %-9s\n",
 	       "XDP_REDIRECT", "pps ", "pps-human-readable", "period/sec");
 }
 
 static void stats_print(struct stats_record *rec,
-			struct stats_record *prev)
+			struct stats_record *prev,
+			bool err_only)
 {
-	int i;
+	int i = 0;
 
-	for (i = 0; i < REDIR_RES_MAX; i++) {
+	if (err_only)
+		i = REDIR_ERROR;
+
+	for (; i < REDIR_RES_MAX; i++) {
 		struct record *r = &rec->xdp_redir[i];
 		struct record *p = &prev->xdp_redir[i];
 		__u64 period  = 0;
@@ -158,7 +173,7 @@ static bool stats_collect(int fd, struct stats_record *rec)
 	return true;
 }
 
-static void stats_poll(int interval)
+static void stats_poll(int interval, bool err_only)
 {
 	struct stats_record rec, prev;
 	int map_fd;
@@ -170,20 +185,20 @@ static void stats_poll(int interval)
 
 	/* Header */
 	if (verbose)
-		printf("%s", __doc__);
+		printf("\n%s", __doc__);
 
 	/* TODO Need more advanced stats on error types */
 	if (verbose)
 		printf(" - Stats map: %s\n", map_data[0].name);
 	map_fd = map_data[0].fd;
 
-	stats_print_headers();
+	stats_print_headers(err_only);
 	fflush(stdout);
 
 	while (1) {
 		memcpy(&prev, &rec, sizeof(rec));
 		stats_collect(map_fd, &rec);
-		stats_print(&rec, &prev);
+		stats_print(&rec, &prev, err_only);
 		fflush(stdout);
 		sleep(interval);
 	}
@@ -221,8 +236,11 @@ int main(int argc, char **argv)
 	int longindex = 0, opt;
 	int ret = EXIT_SUCCESS;
 	char bpf_obj_file[256];
+
+	/* Default settings: */
+	bool errors_only = true;
+	bool debug = false;
 	int interval = 2;
-	bool debug = 0;
 
 	snprintf(bpf_obj_file, sizeof(bpf_obj_file), "%s_kern.o", argv[0]);
 
@@ -232,6 +250,9 @@ int main(int argc, char **argv)
 		switch (opt) {
 		case 'D':
 			debug = true;
+			break;
+		case 'S':
+			errors_only = false;
 			break;
 		case 's':
 			interval = atoi(optarg);
@@ -254,11 +275,18 @@ int main(int argc, char **argv)
 
 	if (debug) {
 		print_bpf_prog_info();
-		//close(prog_fd[1]);
-		close(event_fd[1]);
 	}
 
-	stats_poll(interval);
+	/* Unload/stop tracepoint event by closing fd's */
+	if (errors_only) {
+		/* The prog_fd[i] and event_fd[i] depend on the
+		 * order the functions was defined in _kern.c
+		 */
+		close(event_fd[1]); /* tracepoint/xdp/xdp_redirect */
+		close(prog_fd[1]);  /* func: xdp_redirect*/
+	}
+
+	stats_poll(interval, errors_only);
 
 	return ret;
 }
