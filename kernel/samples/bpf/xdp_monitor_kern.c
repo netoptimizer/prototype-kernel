@@ -10,14 +10,11 @@ struct bpf_map_def SEC("maps") cnt_err_map = {
 	.key_size = sizeof(u32),
 	.value_size = sizeof(u64),
 	.max_entries = 2,
-	// TODO: have entries for all possible errno's
+	/* TODO: have entries for all possible errno's */
 };
 
 /* Tracepoint format: /sys/kernel/debug/tracing/events/xdp/xdp_redirect/format
  * Code in:                kernel/include/trace/events/xdp.h
- *
- * -=-WARNING-=-:
- *   THIS IS AFTER I CHANGED THE LAYOUT **PATCH NOT UPSTREAM***
  */
 struct xdp_redirect_ctx {
 	unsigned short common_type;	//	offset:0;  size:2; signed:0;
@@ -55,7 +52,12 @@ int xdp_redirect_collect_stat(struct xdp_redirect_ctx *ctx)
 	*cnt += 1;
 
 	return 0; /* Indicate event was filtered (no further processing)*/
-	// return 1; // allow normal trace points to get info, but slower
+	/*
+	 * Returning 1 here would allow e.g. a perf-record tracepoint
+	 * to see and record these events, but it doesn't work well
+	 * in-practice as stopping perf-record also unload this
+	 * bpf_prog.  Plus, there is additional overhead of doing so.
+	 */
 }
 
 SEC("tracepoint/xdp/xdp_redirect_err")

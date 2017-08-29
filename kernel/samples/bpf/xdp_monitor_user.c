@@ -29,6 +29,7 @@ static const char *__doc_err_only__=
 #include "bpf_util.h"
 
 static int verbose = 1;
+static bool debug = false;
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
@@ -60,7 +61,7 @@ static void usage(char *argv[])
 }
 
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
-uint64_t gettime(void)
+__u64 gettime(void)
 {
 	struct timespec t;
 	int res;
@@ -70,7 +71,7 @@ uint64_t gettime(void)
 		fprintf(stderr, "Error with gettimeofday! (%i)\n", res);
 		exit(EXIT_FAILURE);
 	}
-	return (uint64_t) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
+	return (__u64) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
 enum {
@@ -100,9 +101,6 @@ struct stats_record {
 
 static void stats_print_headers(bool err_only)
 {
-	/* clear screen */
-	// printf("\033[2J");
-
 	if (err_only)
 		printf("\n%s\n", __doc_err_only__);
 
@@ -239,7 +237,6 @@ int main(int argc, char **argv)
 
 	/* Default settings: */
 	bool errors_only = true;
-	bool debug = false;
 	int interval = 2;
 
 	snprintf(bpf_obj_file, sizeof(bpf_obj_file), "%s_kern.o", argv[0]);
