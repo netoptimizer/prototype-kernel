@@ -164,6 +164,10 @@ static bool stats_collect(int fd, struct stats_record *rec)
 {
 	int i;
 
+	/* TODO: Detect if someone unloaded the perf event_fd's, as
+	 * this can happen by someone running perf-record -e
+	 */
+
 	for (i = 0; i < REDIR_RES_MAX; i++) {
 		rec->xdp_redir[i].timestamp = gettime();
 		rec->xdp_redir[i].counter = get_key32_value64_percpu(fd, i);
