@@ -5,7 +5,7 @@
 #include <uapi/linux/bpf.h>
 #include "bpf_helpers.h"
 
-struct bpf_map_def SEC("maps") cnt_err_map = {
+struct bpf_map_def SEC("maps") redirect_err_cnt = {
 	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size = sizeof(u32),
 	.value_size = sizeof(u64),
@@ -46,7 +46,7 @@ int xdp_redirect_collect_stat(struct xdp_redirect_ctx *ctx)
 	if (!err)
 		key = XDP_REDIRECT_SUCCESS;
 
-	cnt  = bpf_map_lookup_elem(&cnt_err_map, &key);
+	cnt  = bpf_map_lookup_elem(&redirect_err_cnt, &key);
 	if (!cnt)
 		return 0;
 	*cnt += 1;
