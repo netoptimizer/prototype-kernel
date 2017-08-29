@@ -282,8 +282,10 @@ int main(int argc, char **argv)
 		/* The prog_fd[i] and event_fd[i] depend on the
 		 * order the functions was defined in _kern.c
 		 */
-		close(event_fd[1]); /* tracepoint/xdp/xdp_redirect */
-		close(prog_fd[1]);  /* func: xdp_redirect*/
+		close(event_fd[2]); /* tracepoint/xdp/xdp_redirect */
+		close(prog_fd[2]);  /* func: xdp_redirect */
+		close(event_fd[3]); /* tracepoint/xdp/xdp_redirect_map */
+		close(prog_fd[3]);  /* func: xdp_redirect_map */
 	}
 
 	stats_poll(interval, errors_only);
