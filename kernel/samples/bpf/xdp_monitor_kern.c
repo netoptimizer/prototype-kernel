@@ -61,28 +61,28 @@ int xdp_redirect_collect_stat(struct xdp_redirect_ctx *ctx)
 }
 
 SEC("tracepoint/xdp/xdp_redirect_err")
-int xdp_redirect_err(struct xdp_redirect_ctx *ctx)
+int trace_xdp_redirect_err(struct xdp_redirect_ctx *ctx)
 {
 	return xdp_redirect_collect_stat(ctx);
 }
 
 
 SEC("tracepoint/xdp/xdp_redirect_map_err")
-int xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
+int trace_xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
 {
 	return xdp_redirect_collect_stat(ctx);
 }
 
 /* Likely unloaded when prog starts */
 SEC("tracepoint/xdp/xdp_redirect")
-int xdp_redirect(struct xdp_redirect_ctx *ctx)
+int trace_xdp_redirect(struct xdp_redirect_ctx *ctx)
 {
 	return xdp_redirect_collect_stat(ctx);
 }
 
 /* Likely unloaded when prog starts */
 SEC("tracepoint/xdp/xdp_redirect_map")
-int xdp_redirect_map(struct xdp_redirect_ctx *ctx)
+int trace_xdp_redirect_map(struct xdp_redirect_ctx *ctx)
 {
 	return xdp_redirect_collect_stat(ctx);
 }

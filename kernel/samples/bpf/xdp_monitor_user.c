@@ -105,7 +105,7 @@ static void stats_print_headers(bool err_only)
 		printf("\n%s\n", __doc_err_only__);
 
 	printf("%-14s %-10s %-18s %-9s\n",
-	       "XDP_REDIRECT", "pps ", "pps-human-readable", "period/sec");
+	       "XDP_REDIRECT", "pps ", "pps-human-readable", "measure-period");
 }
 
 static void stats_print(struct stats_record *rec,
@@ -280,9 +280,9 @@ int main(int argc, char **argv)
 		 * order the functions was defined in _kern.c
 		 */
 		close(event_fd[2]); /* tracepoint/xdp/xdp_redirect */
-		close(prog_fd[2]);  /* func: xdp_redirect */
+		close(prog_fd[2]);  /* func: trace_xdp_redirect */
 		close(event_fd[3]); /* tracepoint/xdp/xdp_redirect_map */
-		close(prog_fd[3]);  /* func: xdp_redirect_map */
+		close(prog_fd[3]);  /* func: trace_xdp_redirect_map */
 	}
 
 	stats_poll(interval, errors_only);
