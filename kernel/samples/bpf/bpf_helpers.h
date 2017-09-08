@@ -37,12 +37,15 @@ static unsigned long long (*bpf_get_current_uid_gid)(void) =
 	(void *) BPF_FUNC_get_current_uid_gid;
 static int (*bpf_get_current_comm)(void *buf, int buf_size) =
 	(void *) BPF_FUNC_get_current_comm;
-static int (*bpf_perf_event_read)(void *map, int index) =
+static unsigned long long (*bpf_perf_event_read)(void *map,
+						 unsigned long long flags) =
 	(void *) BPF_FUNC_perf_event_read;
 static int (*bpf_clone_redirect)(void *ctx, int ifindex, int flags) =
 	(void *) BPF_FUNC_clone_redirect;
 static int (*bpf_redirect)(int ifindex, int flags) =
 	(void *) BPF_FUNC_redirect;
+static int (*bpf_redirect_map)(void *map, int key, int flags) =
+	(void *) BPF_FUNC_redirect_map;
 static int (*bpf_perf_event_output)(void *ctx, void *map,
 				    unsigned long long flags, void *data,
 				    int size) =
@@ -65,9 +68,18 @@ static unsigned long long (*bpf_get_prandom_u32)(void) =
 	(void *) BPF_FUNC_get_prandom_u32;
 static int (*bpf_xdp_adjust_head)(void *ctx, int offset) =
 	(void *) BPF_FUNC_xdp_adjust_head;
+static int (*bpf_setsockopt)(void *ctx, int level, int optname, void *optval,
+			     int optlen) =
+	(void *) BPF_FUNC_setsockopt;
+static int (*bpf_sk_redirect_map)(void *map, int key, int flags) =
+	(void *) BPF_FUNC_sk_redirect_map;
+static int (*bpf_sock_map_update)(void *map, void *key, void *value,
+				  unsigned long long flags) =
+	(void *) BPF_FUNC_sock_map_update;
 static unsigned long long (*bpf_xdp_rxhash)(void *ctx, __u32 new_hash,
 					    __u32 type, unsigned int flags) =
 	(void *) BPF_FUNC_xdp_rxhash;
+
 
 /* llvm builtin functions that eBPF C program may use to
  * emit BPF_LD_ABS and BPF_LD_IND instructions
@@ -90,6 +102,7 @@ struct bpf_map_def {
 	unsigned int max_entries;
 	unsigned int map_flags;
 	unsigned int inner_map_idx;
+	unsigned int numa_node;
 };
 
 static int (*bpf_skb_load_bytes)(void *ctx, int off, void *to, int len) =
@@ -143,6 +156,19 @@ static int (*bpf_skb_change_head)(void *, int len, int flags) =
 #define PT_REGS_RC(x) ((x)->regs[0])
 #define PT_REGS_SP(x) ((x)->sp)
 #define PT_REGS_IP(x) ((x)->pc)
+
+#elif defined(__mips__)
+
+#define PT_REGS_PARM1(x) ((x)->regs[4])
+#define PT_REGS_PARM2(x) ((x)->regs[5])
+#define PT_REGS_PARM3(x) ((x)->regs[6])
+#define PT_REGS_PARM4(x) ((x)->regs[7])
+#define PT_REGS_PARM5(x) ((x)->regs[8])
+#define PT_REGS_RET(x) ((x)->regs[31])
+#define PT_REGS_FP(x) ((x)->regs[30]) /* Works only with CONFIG_FRAME_POINTER */
+#define PT_REGS_RC(x) ((x)->regs[1])
+#define PT_REGS_SP(x) ((x)->regs[29])
+#define PT_REGS_IP(x) ((x)->cp0_epc)
 
 #elif defined(__powerpc__)
 
