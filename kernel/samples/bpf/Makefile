@@ -11,6 +11,7 @@ TARGETS += xdp_bench02_drop_pattern
 TARGETS += bpf_tail_calls01
 TARGETS += napi_monitor
 TARGETS += xdp_monitor
+TARGETS += xdp_redirect_err
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
 # it is unnecessary to link "user" binary with bpf_load.c.  TODO, if
