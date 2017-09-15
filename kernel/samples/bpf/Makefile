@@ -18,8 +18,9 @@ TARGETS += xdp_redirect_err
 # somone cares, makefile should have separate target for TC.
 TARGETS += tc_bench01_redirect
 
-# Experimental target
+# Experimental targets
 TARGETS += xdp_rxhash
+TARGETS += xdp_redirect_cpu
 
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
 COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
