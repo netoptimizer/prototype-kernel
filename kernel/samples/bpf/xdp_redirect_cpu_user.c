@@ -38,6 +38,7 @@ static __u32 xdp_flags = 0;
 #define EXIT_FAIL               1
 #define EXIT_FAIL_OPTION        2
 #define EXIT_FAIL_XDP           3
+#define EXIT_FAIL_BPF           4
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
@@ -188,7 +189,8 @@ int main(int argc, char **argv)
 	bool debug = false;
 	int interval = 2;
 	int longindex = 0;
-	int opt;
+	int opt, ret;
+	__u32 cpu, qsize;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
@@ -242,6 +244,17 @@ int main(int argc, char **argv)
 	if (!prog_fd[0]) {
 		fprintf(stderr, "ERR: load_bpf_file: %s\n", strerror(errno));
 		return EXIT_FAIL;
+	}
+
+	/* Add a CPU entry 0 to map, as this allocate a cpu entry in
+	 * the kernel for cpu 0.
+	 */
+	cpu = 0;
+	qsize = 128;
+	ret = bpf_map_update_elem(map_fd[0], &cpu, &qsize, 0);
+	if (ret) {
+		fprintf(stderr, "Create CPU entry failed\n");
+		return EXIT_FAIL_BPF;
 	}
 
 	/* Remove XDP program when program is interrupted */
