@@ -19,9 +19,11 @@ static const char *__doc__=
 #include <arpa/inet.h>
 #include <linux/if_link.h>
 
+#include <bpf/libbpf.h>  /* bpf_object based elf-loader */
+
 /* Want to get rid of bpf_load, but (currently) needed for XDP
  * attaching to a device via set_link_xdp_fd() */
-#include "bpf_load.h"
+// #include "bpf_load.h"
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
@@ -46,8 +48,9 @@ static void int_exit(int sig)
 	fprintf(stderr,
 		"Interrupted: Removing XDP program on ifindex:%d device:%s\n",
 		ifindex, ifname);
-	if (ifindex > -1)
-		set_link_xdp_fd(ifindex, -1, xdp_flags);
+// FIXME: dependency of load_bpf.h due to set_link_xdp_fd
+//	if (ifindex > -1)
+//		set_link_xdp_fd(ifindex, -1, xdp_flags);
 	exit(EXIT_OK);
 }
 
