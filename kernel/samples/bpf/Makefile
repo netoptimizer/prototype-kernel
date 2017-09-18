@@ -25,6 +25,9 @@ TARGETS += xdp_redirect_cpu
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
 COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 
+# Targets that use the library bpf/libbpf
+### TARGETS_USING_LIBBPF += xdp_monitor_user
+
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
 # The eBPF program is called xxx_kern.c. This is the restricted-C
@@ -67,6 +70,7 @@ CFLAGS += -I./tools/lib
 # Local copy of uapi/linux/bpf.h kept under ./tools/include
 # needed due to enum dependency in bpf_helpers.h
 CFLAGS += -I./tools/include
+# For building libbpf there is a lot of kernel includes in tools/include/
 CFLAGS += -I$(KERNEL)/tools/include
 #CFLAGS += -I$(KERNEL)/tools/perf
 CFLAGS += -I$(KERNEL)/usr/include
@@ -76,9 +80,12 @@ CFLAGS += -I$(KERNEL)/usr/include
 LDFLAGS= -lelf
 
 # Objects that xxx_user program is linked with:
-OBJECT_LIBBPF  = tools/lib/bpf/bpf.o
+OBJECT_BPF_SYSCALLS  = tools/lib/bpf/bpf.o
 OBJECT_LOADBPF = bpf_load.o
-OBJECTS = $(OBJECT_LIBBPF) $(OBJECT_LOADBPF)
+OBJECTS = $(OBJECT_BPF_SYSCALLS) $(OBJECT_LOADBPF)
+#
+# The tools/lib/bpf/libbpf is avail via a library
+OBJECT_BPF_LIBBPF  = tools/lib/bpf/libbpf.o
 
 # Allows pointing LLC/CLANG to another LLVM backend, redefine on cmdline:
 #  make LLC=~/git/llvm/build/bin/llc CLANG=~/git/llvm/build/bin/clang
@@ -122,6 +129,7 @@ clean:
 	rm -f $(TARGETS)
 	rm -f $(KERN_OBJECTS)
 	rm -f $(USER_OBJECTS)
+	rm -f $(OBJECT_BPF_LIBBPF) libbpf.a
 
 dependencies: verify_llvm_target_bpf linux-src-devel-headers
 
@@ -163,12 +171,20 @@ verify_llvm_target_bpf: verify_cmds
 		exit 2; \
 	else true; fi
 
-# The fake-minimal-libbpf
-$(OBJECT_LIBBPF): %.o: %.c
+# Helpers for bpf syscalls (from tools/lib/bpf/bpf.c)
+$(OBJECT_BPF_SYSCALLS): %.o: %.c
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(OBJECT_LOADBPF): bpf_load.c bpf_load.h
 	$(CC) $(CFLAGS) -o $@ -c $<
+
+# ISSUE: The libbpf.a library creates a kernel source dependency, for
+# include files from tools/include/
+$(OBJECT_BPF_LIBBPF): %.o: %.c
+	$(CC) $(CFLAGS) -o $@ -c $<
+#
+libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
+	$(RM) $@; $(AR) rcs $@ $^
 
 # Compiling of eBPF restricted-C code with LLVM
 #  clang option -S generated output file with suffix .ll
