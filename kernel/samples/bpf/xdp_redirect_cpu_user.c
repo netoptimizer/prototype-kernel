@@ -19,11 +19,12 @@ static const char *__doc__=
 #include <arpa/inet.h>
 #include <linux/if_link.h>
 
-#include <bpf/libbpf.h>  /* bpf_object based elf-loader */
-
-/* Want to get rid of bpf_load, but (currently) needed for XDP
- * attaching to a device via set_link_xdp_fd() */
-// #include "bpf_load.h"
+/* Wanted to get rid of bpf_load.h and fake-"libbpf.h" (and instead
+ * use bpf/libbpf.h), but cannot as (currently) needed for XDP
+ * attaching to a device via set_link_xdp_fd()
+ */
+#include "libbpf.h"
+#include "bpf_load.h"
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
