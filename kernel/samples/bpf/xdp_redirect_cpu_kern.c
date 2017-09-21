@@ -183,10 +183,8 @@ int  xdp_prog_cpu_map_prognum1(struct xdp_md *ctx)
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
 
-/* Disabled this RR prog as verifier doesn't like it */
-#if 0
 SEC("xdp_cpu_map_round_robin")
-int  xdp_prog_cpu_map2(struct xdp_md *ctx)
+int  xdp_prog_cpu_map_prognum2(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
@@ -195,20 +193,17 @@ int  xdp_prog_cpu_map2(struct xdp_md *ctx)
 	u32 key = 0;
 	long *value;
 
-	// Count RX packet in map
+	/* Count RX packet in map */
 	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value)
+	if (value) {
 		*value += 1;
-
-//	cpu_dest = (u32)(*value) % 2;
-	if (*value == 42)
-		cpu_dest = 1;
+		cpu_dest = (u32)(*value) % 2;
+	}
 
 	if (cpu_dest >= MAX_CPUS )
 		return XDP_ABORTED;
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
-#endif
 
 char _license[] SEC("license") = "GPL";

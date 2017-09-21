@@ -109,11 +109,10 @@ int xdp_prog_redirect_map_rr(struct xdp_md *ctx)
 
 	// count packet in global counter
 	value = bpf_map_lookup_elem(&rxcnt, &key);
-	if (value)
+	if (value) {
 		*value += 1;
-
-	/* Strange, verifier reject this (with LLVM version 3.9.1) */
-	vport = *value % 2;
+		vport = *value % 2;
+	}
 
 	if (vport >= 10)
 		return XDP_ABORTED;
