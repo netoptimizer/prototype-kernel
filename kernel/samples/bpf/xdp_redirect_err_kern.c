@@ -97,4 +97,28 @@ int xdp_redirect_dummy_prog(struct xdp_md *ctx)
 	return XDP_PASS;
 }
 
+SEC("xdp_redirect_map_rr")
+int xdp_prog_redirect_map_rr(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	int vport = 0;
+	u32 key = 0;
+	long *value;
+
+	// count packet in global counter
+	value = bpf_map_lookup_elem(&rxcnt, &key);
+	if (value)
+		*value += 1;
+
+	/* Strange, verifier reject this (with LLVM version 3.9.1) */
+	vport = *value % 2;
+
+	if (vport >= 10)
+		return XDP_ABORTED;
+
+	return bpf_redirect_map(&tx_port, vport, 0);
+}
+
 char _license[] SEC("license") = "GPL";
