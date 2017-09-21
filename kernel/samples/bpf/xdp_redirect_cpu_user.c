@@ -46,6 +46,7 @@ static const struct option long_options[] = {
 	{"skb-mode", 	no_argument,		NULL, 'S' },
 	{"debug",	no_argument,		NULL, 'D' },
 	{"sec", 	required_argument,	NULL, 's' },
+	{"prognum", 	required_argument,	NULL, 'p' },
 	{0, 0, NULL,  0 }
 };
 
@@ -198,14 +199,18 @@ int create_cpu_entry(u32 cpu, u32 queue_size)
 	return 0;
 }
 
+/* How many xdp_progs are defined in _kern.c */
+#define MAX_PROG 2
+
 int main(int argc, char **argv)
 {
 	char filename[256];
 	bool debug = false;
-	int interval = 2;
 	int longindex = 0;
-	int opt, ret;
+	int interval = 2;
+	int prog_num = 0;
 	__u32 qsize;
+	int opt;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
@@ -236,6 +241,16 @@ int main(int argc, char **argv)
 			break;
 		case 'D':
 			debug = true;
+			break;
+		case 'p':
+			/* Selecting eBPF prog to load */
+			prog_num = atoi(optarg);
+			if (prog_num < 0 || prog_num >= MAX_PROG) {
+				fprintf(stderr,
+					"prognum too large err(%d):%s\n",
+					errno, strerror(errno));
+				goto error;
+			}
 			break;
 		case 'h':
 		error:
@@ -275,7 +290,7 @@ int main(int argc, char **argv)
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
 
-	if (set_link_xdp_fd(ifindex, prog_fd[0], xdp_flags) < 0) {
+	if (set_link_xdp_fd(ifindex, prog_fd[prog_num], xdp_flags) < 0) {
 		fprintf(stderr, "link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
 	}
