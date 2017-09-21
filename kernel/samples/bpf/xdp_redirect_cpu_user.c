@@ -286,6 +286,7 @@ int main(int argc, char **argv)
 	create_cpu_entry(0, qsize);
 	create_cpu_entry(1, qsize);
 	create_cpu_entry(2, qsize);
+	create_cpu_entry(3, qsize);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);

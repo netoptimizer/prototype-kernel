@@ -259,6 +259,7 @@ int  xdp_program(struct xdp_md *ctx)
 	struct ethhdr *eth = data;
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
+	u32 ipproto;
 	u32 action;
 
 	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
