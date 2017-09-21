@@ -183,6 +183,21 @@ static void stats_poll(int interval)
 	}
 }
 
+int create_cpu_entry(u32 cpu, u32 queue_size)
+{
+	int ret;
+
+	/* Add a CPU entry to map, as this allocate a cpu entry in
+	 * the kernel for the cpu.
+	 */
+	ret = bpf_map_update_elem(map_fd[0], &cpu, &queue_size, 0);
+	if (ret) {
+		fprintf(stderr, "Create CPU entry failed\n");
+		exit(EXIT_FAIL_BPF);
+	}
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	char filename[256];
@@ -190,7 +205,7 @@ int main(int argc, char **argv)
 	int interval = 2;
 	int longindex = 0;
 	int opt, ret;
-	__u32 cpu, qsize;
+	__u32 qsize;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
@@ -246,16 +261,16 @@ int main(int argc, char **argv)
 		return EXIT_FAIL;
 	}
 
-	/* Add a CPU entry 0 to map, as this allocate a cpu entry in
-	 * the kernel for cpu 0.
+	/* Notice: choosing he queue size is very important with the
+	 * ixgbe driver, because it's driver recycling trick is
+	 * dependend on pages being returned quickly.  The number of
+	 * out-standing packets in the system must be less-than 2x
+	 * RX-ring size.
 	 */
-	cpu = 0;
-	qsize = 128;
-	ret = bpf_map_update_elem(map_fd[0], &cpu, &qsize, 0);
-	if (ret) {
-		fprintf(stderr, "Create CPU entry failed\n");
-		return EXIT_FAIL_BPF;
-	}
+	qsize = 128+64;
+	create_cpu_entry(0, qsize);
+	create_cpu_entry(1, qsize);
+	create_cpu_entry(2, qsize);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
