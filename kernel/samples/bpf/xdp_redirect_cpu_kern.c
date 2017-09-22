@@ -197,7 +197,8 @@ int  xdp_prog_cpu_map_prognum2(struct xdp_md *ctx)
 	value = bpf_map_lookup_elem(&rx_cnt, &key);
 	if (value) {
 		*value += 1;
-		cpu_dest = (u32)(*value) % 2;
+		cpu_dest = (u32)(*value) % 4;
+		cpu_dest += 1; // exclude 0, and use 1,2,3,4
 	}
 
 	if (cpu_dest >= MAX_CPUS )

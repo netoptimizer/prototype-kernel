@@ -200,7 +200,7 @@ int create_cpu_entry(u32 cpu, u32 queue_size)
 }
 
 /* How many xdp_progs are defined in _kern.c */
-#define MAX_PROG 2
+#define MAX_PROG 3
 
 int main(int argc, char **argv)
 {
@@ -247,7 +247,7 @@ int main(int argc, char **argv)
 			prog_num = atoi(optarg);
 			if (prog_num < 0 || prog_num >= MAX_PROG) {
 				fprintf(stderr,
-					"prognum too large err(%d):%s\n",
+					"--prognum too large err(%d):%s\n",
 					errno, strerror(errno));
 				goto error;
 			}
@@ -287,6 +287,7 @@ int main(int argc, char **argv)
 	create_cpu_entry(1, qsize);
 	create_cpu_entry(2, qsize);
 	create_cpu_entry(3, qsize);
+	create_cpu_entry(4, qsize);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
