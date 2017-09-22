@@ -104,14 +104,11 @@ int get_proto_ipv6(struct xdp_md *ctx, u64 nh_off)
         return ip6h->nexthdr;
 }
 
-
-
 SEC("xdp_cpu_map0")
-int  xdp_prog_cpu_map_prognum0(struct xdp_md *ctx)
+int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
 	u32 cpu_dest = 0;
 	u32 key = 0;
 	long *value;
@@ -124,8 +121,67 @@ int  xdp_prog_cpu_map_prognum0(struct xdp_md *ctx)
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
 
-SEC("xdp_cpu_map_proto_seperate")
-int  xdp_prog_cpu_map_prognum1(struct xdp_md *ctx)
+SEC("xdp_cpu_map1_touch_data")
+int  xdp_prognum1_touch_data(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	volatile u16 eth_type;
+	u32 cpu_dest = 0;
+	u32 key = 0;
+	long *value;
+
+	/* Validate packet length is minimum Eth header size */
+	if (eth + 1 > data_end) {
+		return XDP_ABORTED;
+	}
+
+	/* Count RX packet in map */
+	value = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (value)
+		*value += 1;
+
+	/* Read packet data, and use it (drop non 802.3 Ethertypes) */
+	eth_type = eth->h_proto;
+	if (ntohs(eth_type) < ETH_P_802_3_MIN)
+		return XDP_DROP;
+
+	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
+}
+
+SEC("xdp_cpu_map2_round_robin")
+int  xdp_prognum2_round_robin(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	u32 cpu_dest = 0;
+	u32 *cpu_lookup;
+	u32 key = 0;
+	long *value;
+
+	/* Count RX packet in map */
+	value = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (value) {
+		*value += 1;
+		cpu_dest = (u32)(*value) % 4;
+		cpu_dest += 1; // exclude 0, and use 1,2,3,4
+	}
+
+	/* Check cpu_dest is valid */
+	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
+	if (!cpu_lookup)
+		return XDP_ABORTED;
+
+	if (cpu_dest >= MAX_CPUS )
+		return XDP_ABORTED;
+
+	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
+}
+
+SEC("xdp_cpu_map_proto_separate")
+int  xdp_prog_cpu_map_prognum3(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
@@ -183,28 +239,5 @@ int  xdp_prog_cpu_map_prognum1(struct xdp_md *ctx)
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
 
-SEC("xdp_cpu_map_round_robin")
-int  xdp_prog_cpu_map_prognum2(struct xdp_md *ctx)
-{
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data     = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
-	u32 cpu_dest = 0;
-	u32 key = 0;
-	long *value;
-
-	/* Count RX packet in map */
-	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value) {
-		*value += 1;
-		cpu_dest = (u32)(*value) % 4;
-		cpu_dest += 1; // exclude 0, and use 1,2,3,4
-	}
-
-	if (cpu_dest >= MAX_CPUS )
-		return XDP_ABORTED;
-
-	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
-}
 
 char _license[] SEC("license") = "GPL";
