@@ -58,6 +58,14 @@ struct bpf_map_def SEC("maps") cpumap_enqueue_cnt = {
 	.max_entries	= MAX_CPUS,
 };
 
+/* Used by trace point */
+struct bpf_map_def SEC("maps") cpumap_kthread_cnt = {
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(struct datarec),
+	.max_entries	= 1,
+};
+
 /* Helper parse functions */
 
 /* Parse Ethernet layer 2, extract network layer 3 offset and protocol
@@ -364,3 +372,35 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 	return 0;
 }
 
+/* Tracepoint: /sys/kernel/debug/tracing/events/xdp/xdp_cpumap_kthread/format
+ * Code in:         kernel/include/trace/events/xdp.h
+ */
+struct cpumap_kthread_ctx {
+	unsigned short common_type;	//	offset:0;  size:2; signed:0;
+	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
+	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
+	int common_pid;			//	offset:4;  size:4; signed:1;
+
+	int map_id;			//	offset:8;  size:4; signed:1;
+	u32 act;			//	offset:12; size:4; signed:0;
+	int cpu;			//	offset:16; size:4; signed:1;
+	unsigned int drops;		//	offset:20; size:4; signed:0;
+	unsigned int processed;		//	offset:24; size:4; signed:0;
+	int time_limit;			//	offset:28; size:4; signed:1;
+};
+
+SEC("tracepoint/xdp/xdp_cpumap_kthread")
+int trace_xdp_cpumap_kthread(struct cpumap_kthread_ctx *ctx)
+{
+	struct datarec *rec;
+	u32 key = 0;
+
+	rec = bpf_map_lookup_elem(&cpumap_kthread_cnt, &key);
+	if (!rec)
+		return 0;
+	rec->processed += ctx->processed;
+	rec->dropped   += ctx->drops;
+
+	// TODO: Use time_limit
+	return 0;
+}

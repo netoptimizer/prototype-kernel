@@ -115,6 +115,7 @@ struct record {
 struct stats_record {
 	struct record rx_cnt;
 	struct record redir_err;
+	struct record kthread;
 	struct record enq[MAX_CPUS];
 };
 
@@ -176,6 +177,7 @@ struct stats_record* alloc_stats_record(void)
 	}
 	rec->rx_cnt.cpu    = alloc_record_per_cpu();
 	rec->redir_err.cpu = alloc_record_per_cpu();
+	rec->kthread.cpu   = alloc_record_per_cpu();
 	for (i = 0; i < MAX_CPUS; i++)
 		rec->enq[i].cpu = alloc_record_per_cpu();
 
@@ -188,6 +190,7 @@ void free_stats_record(struct stats_record* r)
 
 	for (i = 0; i < MAX_CPUS; i++)
 		free(r->enq[i].cpu);
+	free(r->kthread.cpu);
 	free(r->redir_err.cpu);
 	free(r->rx_cnt.cpu);
 	free(r);
@@ -282,6 +285,24 @@ static void stats_print(struct stats_record *stats_rec,
 		}
 	}
 
+	/* cpumap kthread stats */
+	rec  = &stats_rec->kthread;
+	prev = &stats_prev->kthread;
+	t = calc_period(rec, prev);
+	for (i = 0; i < nr_cpus; i++) {
+		struct datarec *r = &rec->cpu[i];
+		struct datarec *p = &prev->cpu[i];
+		pps  = calc_pps(r, p, t);
+		drop = calc_drop_pps(r, p, t);
+		if (pps > 0)
+			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f %f\n",
+			       "cpumap_kthread", i, pps, pps, drop, t);
+	}
+	pps = calc_pps(&rec->total, &prev->total, t);
+	drop = calc_drop_pps(&rec->total, &prev->total, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f %f\n",
+	       "cpumap_kthread", "total", pps, pps, drop, t);
+
 	/* XDP redirect err tracepoints (very unlikely) */
 	rec  = &stats_rec->redir_err;
 	prev = &stats_prev->redir_err;
@@ -296,7 +317,7 @@ static void stats_print(struct stats_record *stats_rec,
 			       "redirect_err", i, pps, pps, drop, t);
 	}
 	pps = calc_pps(&rec->total, &prev->total, t);
-	pps = calc_drop_pps(&rec->total, &prev->total, t);
+	drop = calc_drop_pps(&rec->total, &prev->total, t);
 	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f %f\n",
 	       "redirect_err", "total", pps, pps, drop, t);
 
@@ -318,6 +339,10 @@ static void stats_collect(struct stats_record *rec)
 	for (i = 0; i < MAX_CPUS; i++) {
 		map_collect_percpu(fd, i, &rec->enq[i]);
 	}
+
+	fd = map_fd[4]; /* map: cpumap_kthread_cnt */
+	map_collect_percpu(fd, 0, &rec->kthread);
+
 }
 
 
