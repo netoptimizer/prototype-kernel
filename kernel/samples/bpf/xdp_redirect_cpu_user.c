@@ -112,6 +112,7 @@ struct record {
 };
 struct stats_record {
 	struct record rx_cnt;
+	struct record redir_err;
 };
 
 static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
@@ -167,7 +168,8 @@ struct stats_record* alloc_stats_record(void)
 		fprintf(stderr, "Mem alloc error\n");
 		exit(EXIT_FAIL_MEM);
 	}
-	rec->rx_cnt.cpu = alloc_record_per_cpu();
+	rec->rx_cnt.cpu    = alloc_record_per_cpu();
+	rec->redir_err.cpu = alloc_record_per_cpu();
 
 	return rec;
 }
@@ -196,29 +198,51 @@ static __u64 calc_pps(struct elem *r, struct elem *p, double period_)
 	return pps;
 }
 
-static void stats_print(struct stats_record *rec,
-			struct stats_record *prev)
+static void stats_print(struct stats_record *stats_rec,
+			struct stats_record *stats_prev)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
+	struct record *rec, *prev;
 	double pps = 0;
 	double t;
 	int i;
 
 	/* Header */
-	printf("%-15s %-6s %-10s %-18s %-9s\n",
-	       "XDP-cpumap", "CPU:to", "pps ", "pps-human-readable", "period");
+	printf("%-15s %-6s %-10s %-18s %-12s %-9s\n",
+	       "XDP-cpumap", "CPU:to", "pps ", "pps-human-readable",
+	       "drop-pps", "period");
 
 	/* XDP rx_cnt */
-	t = calc_period(&rec->rx_cnt, &prev->rx_cnt);
+	rec  = &stats_rec->rx_cnt;
+	prev = &stats_prev->rx_cnt;
+	t = calc_period(rec, prev);
 	for (i = 0; i < nr_cpus; i++) {
-		pps = calc_pps(&rec->rx_cnt.cpu[i], &prev->rx_cnt.cpu[i], t);
+		struct elem *r = &rec->cpu[i];
+		struct elem *p = &prev->cpu[i];
+		pps = calc_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-6d %-10.0f %'-18.0f %f\n",
-			       "XDP-RX", i, pps, pps, t);
+			printf("%-15s %-6d %-10.0f %'-18.0f %-12s %f\n",
+			       "XDP-RX", i, pps, pps, "(nan)", t);
 	}
-	pps = calc_pps(&rec->rx_cnt.total, &prev->rx_cnt.total, t);
-	printf("%-15s %-6s %-10.0f %'-18.0f %f\n",
-	       "XDP-RX", "total", pps, pps, t);
+	pps = calc_pps(&rec->total, &prev->total, t);
+	printf("%-15s %-6s %-10.0f %'-18.0f %-12s %f\n",
+	       "XDP-RX", "total", pps, pps, "(nan)", t);
+
+	/* XDP redirect err tracepoints (very unlikely) */
+	rec  = &stats_rec->redir_err;
+	prev = &stats_prev->redir_err;
+	t = calc_period(rec, prev);
+	for (i = 0; i < nr_cpus; i++) {
+		struct elem *r = &rec->cpu[i];
+		struct elem *p = &prev->cpu[i];
+		pps = calc_pps(r, p, t);
+		if (pps > 0)
+			printf("%-15s %-6d %-10.0f %'-18.0f %'-12.0f %f\n",
+			       "redirect_err", i, -0.0, -0.0, pps, t);
+	}
+	pps = calc_pps(&rec->total, &prev->total, t);
+	printf("%-15s %-6s %-10.0f %'-18.0f %'-12.0f %f\n",
+	       "redirect_err", "total", -0.0, -0.0, pps, t);
 
 	printf("\n");
 	fflush(stdout);
@@ -230,7 +254,11 @@ static void stats_collect(struct stats_record *rec)
 
 	fd = map_fd[1]; /* map: rx_cnt */
 	map_collect_percpu(fd, 0, &rec->rx_cnt);
+
+	fd = map_fd[2]; /* map: redirect_err_cnt */
+	map_collect_percpu(fd, 1, &rec->redir_err);
 }
+
 
 /* Pointer swap trick */
 static inline void swap(struct stats_record **a, struct stats_record **b)
