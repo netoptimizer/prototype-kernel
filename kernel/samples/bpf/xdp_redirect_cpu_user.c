@@ -19,6 +19,8 @@ static const char *__doc__=
 #include <arpa/inet.h>
 #include <linux/if_link.h>
 
+#define MAX_CPUS 12 /* WARNING - sync with _kern.c */
+
 /* Wanted to get rid of bpf_load.h and fake-"libbpf.h" (and instead
  * use bpf/libbpf.h), but cannot as (currently) needed for XDP
  * attaching to a device via set_link_xdp_fd()
@@ -101,26 +103,28 @@ __u64 gettime(void)
 	return (__u64) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
-struct elem {
+struct datarec {
 	__u64 processed;
 	__u64 dropped;
 };
 struct record {
 	__u64 timestamp;
-	struct elem total;
-	struct elem *cpu;
+	struct datarec total;
+	struct datarec *cpu;
 };
 struct stats_record {
 	struct record rx_cnt;
 	struct record redir_err;
+	struct record enq[MAX_CPUS];
 };
 
 static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 {
 	/* For percpu maps, userspace gets a value per possible CPU */
 	unsigned int nr_cpus = bpf_num_possible_cpus();
-	__u64 values[nr_cpus];
-	__u64 sum = 0;
+	struct datarec values[nr_cpus];
+	__u64 sum_processed = 0;
+	__u64 sum_dropped = 0;
 	int i;
 
 	if ((bpf_map_lookup_elem(fd, &key, values)) != 0) {
@@ -133,22 +137,23 @@ static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 
 	/* Record and sum values from each CPU */
 	for (i = 0; i < nr_cpus; i++) {
-		__u64 value = values[i];
-
-		rec->cpu[i].processed = value;
-		sum += value;
+		rec->cpu[i].processed = values[i].processed;
+		sum_processed        += values[i].processed;
+		rec->cpu[i].dropped = values[i].dropped;
+		sum_dropped        += values[i].dropped;
 	}
-	rec->total.processed = sum;
+	rec->total.processed = sum_processed;
+	rec->total.dropped   = sum_dropped;
 	return true;
 }
 
-struct elem *alloc_record_per_cpu(void)
+struct datarec *alloc_record_per_cpu(void)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
-	struct elem *array;
+	struct datarec *array;
 	size_t size;
 
-	size = sizeof(struct elem) * nr_cpus;
+	size = sizeof(struct datarec) * nr_cpus;
 	array = malloc(size);
 	memset(array, 0, size);
 	if (!array) {
@@ -161,6 +166,7 @@ struct elem *alloc_record_per_cpu(void)
 struct stats_record* alloc_stats_record(void)
 {
 	struct stats_record* rec;
+	int i;
 
 	rec = malloc(sizeof(*rec));
 	memset(rec, 0, sizeof(*rec));
@@ -170,8 +176,21 @@ struct stats_record* alloc_stats_record(void)
 	}
 	rec->rx_cnt.cpu    = alloc_record_per_cpu();
 	rec->redir_err.cpu = alloc_record_per_cpu();
+	for (i = 0; i < MAX_CPUS; i++)
+		rec->enq[i].cpu = alloc_record_per_cpu();
 
 	return rec;
+}
+
+void free_stats_record(struct stats_record* r)
+{
+	int i;
+
+	for (i = 0; i < MAX_CPUS; i++)
+		free(r->enq[i].cpu);
+	free(r->redir_err.cpu);
+	free(r->rx_cnt.cpu);
+	free(r);
 }
 
 static double calc_period(struct record *r, struct record *p)
@@ -186,7 +205,7 @@ static double calc_period(struct record *r, struct record *p)
 	return period_;
 }
 
-static __u64 calc_pps(struct elem *r, struct elem *p, double period_)
+static __u64 calc_pps(struct datarec *r, struct datarec *p, double period_)
 {
 	__u64 packets = 0;
 	__u64 pps = 0;
@@ -198,17 +217,30 @@ static __u64 calc_pps(struct elem *r, struct elem *p, double period_)
 	return pps;
 }
 
+static __u64 calc_drop_pps(struct datarec *r, struct datarec *p, double period_)
+{
+	__u64 packets = 0;
+	__u64 pps = 0;
+
+	if (period_ > 0) {
+		packets = r->dropped - p->dropped;
+		pps = packets / period_;
+	}
+	return pps;
+}
+
 static void stats_print(struct stats_record *stats_rec,
 			struct stats_record *stats_prev)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
 	struct record *rec, *prev;
-	double pps = 0;
+	double pps = 0, drop = 0;
+	int to_cpu;
 	double t;
 	int i;
 
 	/* Header */
-	printf("%-15s %-6s %-10s %-18s %-12s %-9s\n",
+	printf("%-15s %-7s %-10s %-18s %-12s %-9s\n",
 	       "XDP-cpumap", "CPU:to", "pps ", "pps-human-readable",
 	       "drop-pps", "period");
 
@@ -217,32 +249,56 @@ static void stats_print(struct stats_record *stats_rec,
 	prev = &stats_prev->rx_cnt;
 	t = calc_period(rec, prev);
 	for (i = 0; i < nr_cpus; i++) {
-		struct elem *r = &rec->cpu[i];
-		struct elem *p = &prev->cpu[i];
+		struct datarec *r = &rec->cpu[i];
+		struct datarec *p = &prev->cpu[i];
 		pps = calc_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-6d %-10.0f %'-18.0f %-12s %f\n",
+			printf("%-15s %-7d %-10.0f %'-18.0f %-12s %f\n",
 			       "XDP-RX", i, pps, pps, "(nan)", t);
 	}
 	pps = calc_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-6s %-10.0f %'-18.0f %-12s %f\n",
+	printf("%-15s %-7s %-10.0f %'-18.0f %-12s %f\n",
 	       "XDP-RX", "total", pps, pps, "(nan)", t);
+
+	/* cpumap enqueue stats */
+	for (to_cpu = 0; to_cpu < MAX_CPUS; to_cpu++) {
+		rec  =  &stats_rec->enq[to_cpu];
+		prev = &stats_prev->enq[to_cpu];
+		t = calc_period(rec, prev);
+		for (i = 0; i < nr_cpus; i++) {
+			struct datarec *r = &rec->cpu[i];
+			struct datarec *p = &prev->cpu[i];
+			pps = calc_pps(r, p, t);
+			drop = calc_drop_pps(r, p, t);
+			if (pps > 0)
+			printf("%-15s %3d:%-3d %-10.0f %'-18.0f %'-12.0f %f\n",
+			       "cpumap-enqueue", i, to_cpu, pps, pps, drop, t);
+		}
+		pps = calc_pps(&rec->total, &prev->total, t);
+		if (pps > 0) {
+			drop = calc_drop_pps(&rec->total, &prev->total, t);
+			printf("%-15s %3s:%-3d %-10.0f %'-18.0f %'-12.0f %f\n",
+			       "cpumap-enqueue", "sum", to_cpu,pps,pps,drop, t);
+		}
+	}
 
 	/* XDP redirect err tracepoints (very unlikely) */
 	rec  = &stats_rec->redir_err;
 	prev = &stats_prev->redir_err;
 	t = calc_period(rec, prev);
 	for (i = 0; i < nr_cpus; i++) {
-		struct elem *r = &rec->cpu[i];
-		struct elem *p = &prev->cpu[i];
-		pps = calc_pps(r, p, t);
+		struct datarec *r = &rec->cpu[i];
+		struct datarec *p = &prev->cpu[i];
+		pps  = calc_pps(r, p, t);
+		drop = calc_drop_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-6d %-10.0f %'-18.0f %'-12.0f %f\n",
-			       "redirect_err", i, -0.0, -0.0, pps, t);
+			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f %f\n",
+			       "redirect_err", i, pps, pps, drop, t);
 	}
 	pps = calc_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-6s %-10.0f %'-18.0f %'-12.0f %f\n",
-	       "redirect_err", "total", -0.0, -0.0, pps, t);
+	pps = calc_drop_pps(&rec->total, &prev->total, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f %f\n",
+	       "redirect_err", "total", pps, pps, drop, t);
 
 	printf("\n");
 	fflush(stdout);
@@ -250,13 +306,18 @@ static void stats_print(struct stats_record *stats_rec,
 
 static void stats_collect(struct stats_record *rec)
 {
-	int fd;
+	int fd, i;
 
 	fd = map_fd[1]; /* map: rx_cnt */
 	map_collect_percpu(fd, 0, &rec->rx_cnt);
 
 	fd = map_fd[2]; /* map: redirect_err_cnt */
 	map_collect_percpu(fd, 1, &rec->redir_err);
+
+	fd = map_fd[3]; /* map: cpumap_enqueue_cnt */
+	for (i = 0; i < MAX_CPUS; i++) {
+		map_collect_percpu(fd, i, &rec->enq[i]);
+	}
 }
 
 
@@ -288,10 +349,8 @@ static void stats_poll(int interval)
 		sleep(interval);
 	}
 
-	free(record->rx_cnt.cpu);
-	free(record);
-	free(prev->rx_cnt.cpu);
-	free(prev);
+	free_stats_record(record);
+	free_stats_record(prev);
 }
 
 int create_cpu_entry(__u32 cpu, __u32 queue_size)
@@ -310,7 +369,7 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size)
 }
 
 /* How many xdp_progs are defined in _kern.c */
-#define MAX_PROG 3
+#define MAX_PROG 4
 
 int main(int argc, char **argv)
 {

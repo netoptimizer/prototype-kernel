@@ -15,7 +15,7 @@
 #include <uapi/linux/bpf.h>
 #include "bpf_helpers.h"
 
-#define MAX_CPUS 12
+#define MAX_CPUS 12 /* WARNING - sync with _user.c */
 
 /* Special map type that can XDP_REDIRECT frames to another CPU */
 struct bpf_map_def SEC("maps") cpu_map = {
@@ -25,23 +25,37 @@ struct bpf_map_def SEC("maps") cpu_map = {
 	.max_entries	= MAX_CPUS,
 };
 
+/* Common stats data record to keep userspace more simple */
+struct datarec {
+	__u64 processed;
+	__u64 dropped;
+};
+
 /* Count RX packets, as XDP bpf_prog doesn't get direct TX-success
  * feedback.  Redirect TX errors can be caught via a tracepoint.
  */
 struct bpf_map_def SEC("maps") rx_cnt = {
 	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size	= sizeof(u32),
-	.value_size	= sizeof(long),
+	.value_size	= sizeof(struct datarec),
 	.max_entries	= 1,
 };
 
 /* Used by trace point */
 struct bpf_map_def SEC("maps") redirect_err_cnt = {
-	.type = BPF_MAP_TYPE_PERCPU_ARRAY,
-	.key_size = sizeof(u32),
-	.value_size = sizeof(u64),
-	.max_entries = 2,
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(struct datarec),
+	.max_entries	= 2,
 	/* TODO: have entries for all possible errno's */
+};
+
+/* Used by trace point */
+struct bpf_map_def SEC("maps") cpumap_enqueue_cnt = {
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(struct datarec),
+	.max_entries	= MAX_CPUS,
 };
 
 /* Helper parse functions */
@@ -118,14 +132,14 @@ int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
+	struct datarec* rec;
 	u32 cpu_dest = 0;
 	u32 key = 0;
-	long *value;
 
 	/* Count RX packet in map */
-	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value)
-		*value += 1;
+	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (rec)
+		rec->processed++;
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -137,9 +151,9 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	volatile u16 eth_type;
+	struct datarec* rec;
 	u32 cpu_dest = 0;
 	u32 key = 0;
-	long *value;
 
 	/* Validate packet length is minimum Eth header size */
 	if (eth + 1 > data_end) {
@@ -147,14 +161,17 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	}
 
 	/* Count RX packet in map */
-	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value)
-		*value += 1;
+	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (rec)
+		rec->processed++;
 
 	/* Read packet data, and use it (drop non 802.3 Ethertypes) */
 	eth_type = eth->h_proto;
-	if (ntohs(eth_type) < ETH_P_802_3_MIN)
+	if (ntohs(eth_type) < ETH_P_802_3_MIN) {
+		if (rec)
+			rec->dropped++;
 		return XDP_DROP;
+	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -165,16 +182,16 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
+	struct datarec* rec;
 	u32 cpu_dest = 0;
 	u32 *cpu_lookup;
 	u32 key = 0;
-	long *value;
 
 	/* Count RX packet in map */
-	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value) {
-		*value += 1;
-		cpu_dest = (u32)(*value) % 4;
+	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (rec) {
+		rec->processed++;
+		cpu_dest = (u32)(rec->processed) % 4;
 		cpu_dest += 1; // exclude 0, and use 1,2,3,4
 	}
 
@@ -196,16 +213,16 @@ int  xdp_prog_cpu_map_prognum3(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	u8 ip_proto = IPPROTO_UDP;
+	struct datarec* rec;
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
 	u32 cpu_dest = 0;
 	u32 key = 0;
-	long *value;
 
 	/* Count RX packet in map */
-	value = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (value)
-		*value += 1;
+	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (rec)
+		rec->processed++;
 
 	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
 		return XDP_PASS; /* Just skip */
@@ -279,16 +296,16 @@ static __always_inline
 int xdp_redirect_collect_stat(struct xdp_redirect_ctx *ctx)
 {
 	u32 key = XDP_REDIRECT_ERROR;
+	struct datarec *rec;
 	int err = ctx->err;
-	u64 *cnt;
 
 	if (!err)
 		key = XDP_REDIRECT_SUCCESS;
 
-	cnt  = bpf_map_lookup_elem(&redirect_err_cnt, &key);
-	if (!cnt)
+	rec = bpf_map_lookup_elem(&redirect_err_cnt, &key);
+	if (!rec)
 		return 0;
-	*cnt += 1;
+	rec->dropped += 1;
 
 	return 0; /* Indicate event was filtered (no further processing)*/
 	/*
@@ -310,5 +327,40 @@ SEC("tracepoint/xdp/xdp_redirect_map_err")
 int trace_xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
 {
 	return xdp_redirect_collect_stat(ctx);
+}
+
+/* Tracepoint: /sys/kernel/debug/tracing/events/xdp/xdp_cpumap_enqueue/format
+ * Code in:         kernel/include/trace/events/xdp.h
+ */
+struct cpumap_enqueue_ctx {
+	unsigned short common_type;	//	offset:0;  size:2; signed:0;
+	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
+	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
+	int common_pid;			//	offset:4;  size:4; signed:1;
+
+	int map_id;			//	offset:8;  size:4; signed:1;
+	u32 act;			//	offset:12; size:4; signed:0;
+	int cpu;			//	offset:16; size:4; signed:1;
+	unsigned int drops;		//	offset:20; size:4; signed:0;
+	unsigned int processed;		//	offset:24; size:4; signed:0;
+	int to_cpu;			//	offset:28; size:4; signed:1;
+};
+
+SEC("tracepoint/xdp/xdp_cpumap_enqueue")
+int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
+{
+	u32 to_cpu = ctx->to_cpu;
+	struct datarec *rec;
+
+	if (to_cpu >= MAX_CPUS)
+		return 1;
+
+	rec = bpf_map_lookup_elem(&cpumap_enqueue_cnt, &to_cpu);
+	if (!rec)
+		return 0;
+	rec->processed += ctx->processed;
+	rec->dropped   += ctx->drops;
+
+	return 0;
 }
 
