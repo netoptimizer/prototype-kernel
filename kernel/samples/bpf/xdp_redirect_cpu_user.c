@@ -34,11 +34,12 @@ static char *ifname = NULL;
 static __u32 xdp_flags = 0;
 
 /* Exit return codes */
-#define EXIT_OK                 0
-#define EXIT_FAIL               1
-#define EXIT_FAIL_OPTION        2
-#define EXIT_FAIL_XDP           3
-#define EXIT_FAIL_BPF           4
+#define EXIT_OK			0
+#define EXIT_FAIL		1
+#define EXIT_FAIL_OPTION	2
+#define EXIT_FAIL_XDP		3
+#define EXIT_FAIL_BPF		4
+#define EXIT_FAIL_MEM		5
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
@@ -100,7 +101,20 @@ __u64 gettime(void)
 	return (__u64) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
-static __u64 get_key32_value64_percpu(int fd, __u32 key)
+struct elem {
+	__u64 processed;
+	__u64 dropped;
+};
+struct record {
+	__u64 timestamp;
+	struct elem total;
+	struct elem *cpu;
+};
+struct stats_record {
+	struct record rx_cnt;
+};
+
+static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 {
 	/* For percpu maps, userspace gets a value per possible CPU */
 	unsigned int nr_cpus = bpf_num_possible_cpus();
@@ -111,49 +125,103 @@ static __u64 get_key32_value64_percpu(int fd, __u32 key)
 	if ((bpf_map_lookup_elem(fd, &key, values)) != 0) {
 		fprintf(stderr,
 			"ERR: bpf_map_lookup_elem failed key:0x%X\n", key);
-		return 0;
+		return false;
 	}
+	/* Get time as close as possible to reading map contents */
+	rec->timestamp = gettime();
 
-	/* Sum values from each CPU */
+	/* Record and sum values from each CPU */
 	for (i = 0; i < nr_cpus; i++) {
-		sum += values[i];
+		__u64 value = values[i];
+
+		rec->cpu[i].processed = value;
+		sum += value;
 	}
-	return sum;
+	rec->total.processed = sum;
+	return true;
 }
 
-struct record {
-	__u64 counter;
-	__u64 timestamp;
-};
-struct stats_record {
-	struct record rx_cnt;
-};
-
-static void calc_pps(struct record *r, struct record *p,
-		     double *pps, double *period_)
+struct elem *alloc_record_per_cpu(void)
 {
-	__u64 period  = 0;
-	__u64 packets = 0;
+	unsigned int nr_cpus = bpf_num_possible_cpus();
+	struct elem *array;
+	size_t size;
 
-	if (p->timestamp) {
-		packets = r->counter - p->counter;
-		period  = r->timestamp - p->timestamp;
-		if (period > 0) {
-			*period_ = ((double) period / NANOSEC_PER_SEC);
-			*pps = packets / *period_;
-		}
+	size = sizeof(struct elem) * nr_cpus;
+	array = malloc(size);
+	memset(array, 0, size);
+	if (!array) {
+		fprintf(stderr, "Mem alloc error (nr_cpus:%u)\n", nr_cpus);
+		exit(EXIT_FAIL_MEM);
 	}
+	return array;
+}
+
+struct stats_record* alloc_stats_record(void)
+{
+	struct stats_record* rec;
+
+	rec = malloc(sizeof(*rec));
+	memset(rec, 0, sizeof(*rec));
+	if (!rec) {
+		fprintf(stderr, "Mem alloc error\n");
+		exit(EXIT_FAIL_MEM);
+	}
+	rec->rx_cnt.cpu = alloc_record_per_cpu();
+
+	return rec;
+}
+
+static double calc_period(struct record *r, struct record *p)
+{
+	double period_ = 0;
+	__u64 period  = 0;
+
+	period = r->timestamp - p->timestamp;
+	if (period > 0) {
+		period_ = ((double) period / NANOSEC_PER_SEC);
+	}
+	return period_;
+}
+
+static __u64 calc_pps(struct elem *r, struct elem *p, double period_)
+{
+	__u64 packets = 0;
+	__u64 pps = 0;
+
+	if (period_ > 0) {
+		packets = r->processed - p->processed;
+		pps = packets / period_;
+	}
+	return pps;
 }
 
 static void stats_print(struct stats_record *rec,
 			struct stats_record *prev)
 {
+	unsigned int nr_cpus = bpf_num_possible_cpus();
 	double pps = 0;
-	double period_ = 0;
+	double t;
+	int i;
 
-	calc_pps(&rec->rx_cnt, &prev->rx_cnt, &pps, &period_);
-	printf("%-14s %-10.0f %'-18.0f %f\n",
-	       "RX-counter", pps, pps, period_);
+	/* Header */
+	printf("%-15s %-6s %-10s %-18s %-9s\n",
+	       "XDP-cpumap", "CPU:to", "pps ", "pps-human-readable", "period");
+
+	/* XDP rx_cnt */
+	t = calc_period(&rec->rx_cnt, &prev->rx_cnt);
+	for (i = 0; i < nr_cpus; i++) {
+		pps = calc_pps(&rec->rx_cnt.cpu[i], &prev->rx_cnt.cpu[i], t);
+		if (pps > 0)
+			printf("%-15s %-6d %-10.0f %'-18.0f %f\n",
+			       "XDP-RX", i, pps, pps, t);
+	}
+	pps = calc_pps(&rec->rx_cnt.total, &prev->rx_cnt.total, t);
+	printf("%-15s %-6s %-10.0f %'-18.0f %f\n",
+	       "XDP-RX", "total", pps, pps, t);
+
+	printf("\n");
+	fflush(stdout);
 }
 
 static void stats_collect(struct stats_record *rec)
@@ -161,31 +229,44 @@ static void stats_collect(struct stats_record *rec)
 	int fd;
 
 	fd = map_fd[1]; /* map: rx_cnt */
-	rec->rx_cnt.timestamp = gettime();
-	rec->rx_cnt.counter   = get_key32_value64_percpu(fd, 0);
+	map_collect_percpu(fd, 0, &rec->rx_cnt);
+}
+
+/* Pointer swap trick */
+static inline void swap(struct stats_record **a, struct stats_record **b)
+{
+	struct stats_record *tmp;
+
+	tmp = *a;
+	*a = *b;
+	*b = tmp;
 }
 
 static void stats_poll(int interval)
 {
-	struct stats_record record, prev;
+	struct stats_record *record, *prev;
 
-	memset(&record, 0, sizeof(record));
+	record = alloc_stats_record();
+	prev   = alloc_stats_record();
+	stats_collect(record);
 
 	/* Trick to pretty printf with thousands separators use %' */
 	setlocale(LC_NUMERIC, "en_US");
 
-	/* Header */
-	printf("%-14s %-10s %-18s %-9s\n",
-	       "xdp", "pps ", "pps-human-readable", "period");
 	while (1) {
-		memcpy(&prev, &record, sizeof(record));
-		stats_collect(&record);
-		stats_print(&record, &prev);
+		swap(&prev, &record);
+		stats_collect(record);
+		stats_print(record, prev);
 		sleep(interval);
 	}
+
+	free(record->rx_cnt.cpu);
+	free(record);
+	free(prev->rx_cnt.cpu);
+	free(prev);
 }
 
-int create_cpu_entry(u32 cpu, u32 queue_size)
+int create_cpu_entry(__u32 cpu, __u32 queue_size)
 {
 	int ret;
 

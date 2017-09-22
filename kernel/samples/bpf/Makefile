@@ -61,7 +61,7 @@ USER_OBJECTS = ${USER_SOURCES:.c=.o}
 kbuilddir ?= /lib/modules/$(shell uname -r)/build/
 KERNEL=$(kbuilddir)
 
-CFLAGS := -O2 -Wall
+CFLAGS := -g -O2 -Wall
 
 # Local copy of kernel/tools/lib/
 CFLAGS += -I./tools/lib
