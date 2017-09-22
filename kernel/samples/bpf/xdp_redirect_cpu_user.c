@@ -47,6 +47,7 @@ static const struct option long_options[] = {
 	{"debug",	no_argument,		NULL, 'D' },
 	{"sec", 	required_argument,	NULL, 's' },
 	{"prognum", 	required_argument,	NULL, 'p' },
+	{"qsize", 	required_argument,	NULL, 'q' },
 	{0, 0, NULL,  0 }
 };
 
@@ -212,6 +213,14 @@ int main(int argc, char **argv)
 	__u32 qsize;
 	int opt;
 
+	/* Notice: choosing he queue size is very important with the
+	 * ixgbe driver, because it's driver recycling trick is
+	 * dependend on pages being returned quickly.  The number of
+	 * out-standing packets in the system must be less-than 2x
+	 * RX-ring size.
+	 */
+	qsize = 128+64;
+
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
 
 	/* Parse commands line args */
@@ -252,6 +261,9 @@ int main(int argc, char **argv)
 				goto error;
 			}
 			break;
+		case 'q':
+			qsize = atoi(optarg);
+			break;
 		case 'h':
 		error:
 		default:
@@ -276,13 +288,6 @@ int main(int argc, char **argv)
 		return EXIT_FAIL;
 	}
 
-	/* Notice: choosing he queue size is very important with the
-	 * ixgbe driver, because it's driver recycling trick is
-	 * dependend on pages being returned quickly.  The number of
-	 * out-standing packets in the system must be less-than 2x
-	 * RX-ring size.
-	 */
-	qsize = 128+64;
 	create_cpu_entry(0, qsize);
 	create_cpu_entry(1, qsize);
 	create_cpu_entry(2, qsize);
