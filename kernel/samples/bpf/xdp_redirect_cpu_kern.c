@@ -11,6 +11,7 @@
 #include <uapi/linux/ipv6.h>
 #include <uapi/linux/in.h>
 #include <uapi/linux/tcp.h>
+#include <uapi/linux/udp.h>
 
 #include <uapi/linux/bpf.h>
 #include "bpf_helpers.h"
@@ -109,6 +110,28 @@ bool parse_eth(struct ethhdr *eth, void *data_end,
 	*eth_proto = ntohs(eth_type);
 	*l3_offset = offset;
 	return true;
+}
+
+static __always_inline
+u16 get_dest_port_ipv4_udp(struct xdp_md *ctx, u64 nh_off)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+        struct iphdr *iph = data + nh_off;
+	struct udphdr *udph;
+	u16 dport;
+
+        if (iph + 1 > data_end)
+                return 0;
+	if (!(iph->protocol == IPPROTO_UDP))
+		return 0;
+
+	udph = (void *)(iph + 1);
+	if (udph + 1 > data_end)
+		return 0;
+
+	dport = ntohs(udph->dest);
+	return dport;
 }
 
 static __always_inline
@@ -214,8 +237,8 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
 
-SEC("xdp_cpu_map_proto_separate")
-int  xdp_prog_cpu_map_prognum3(struct xdp_md *ctx)
+SEC("xdp_cpu_map3_proto_separate")
+int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
@@ -272,6 +295,74 @@ int  xdp_prog_cpu_map_prognum3(struct xdp_md *ctx)
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
+
+SEC("xdp_cpu_map4_ddos_filter_pktgen")
+int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	u8 ip_proto = IPPROTO_UDP;
+	struct datarec* rec;
+	u16 eth_proto = 0;
+	u64 l3_offset = 0;
+	u32 cpu_dest = 0;
+	u16 dest_port;
+	u32 key = 0;
+
+	/* Count RX packet in map */
+	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	if (rec)
+		rec->processed++;
+
+	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
+		return XDP_PASS; /* Just skip */
+	}
+
+	/* Extract L4 protocol */
+	switch (eth_proto) {
+	case ETH_P_IP:
+		ip_proto = get_proto_ipv4(ctx, l3_offset);
+		break;
+	case ETH_P_IPV6:
+		ip_proto = get_proto_ipv6(ctx, l3_offset);
+		break;
+	case ETH_P_ARP:
+		cpu_dest = 1; /* ARP packet handled on separate CPU */
+		break;
+	default:
+		cpu_dest = 0;
+	}
+
+	/* Choose CPU based on L4 protocol */
+	switch (ip_proto) {
+	case IPPROTO_ICMP:
+	case IPPROTO_ICMPV6:
+		cpu_dest = 1;
+		break;
+	case IPPROTO_TCP:
+		cpu_dest = 2;
+		break;
+	case IPPROTO_UDP:
+		cpu_dest = 3;
+		/* DDoS filter UDP port 9 (pktgen) */
+		dest_port = get_dest_port_ipv4_udp(ctx, l3_offset);
+		if (dest_port == 9) {
+			if (rec)
+				rec->dropped++;
+			return XDP_DROP;
+		}
+		break;
+	default:
+		cpu_dest = 0;
+	}
+
+	if (cpu_dest >= MAX_CPUS )
+		return XDP_ABORTED;
+
+	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
+}
+
 
 char _license[] SEC("license") = "GPL";
 

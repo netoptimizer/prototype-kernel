@@ -21,6 +21,9 @@ static const char *__doc__=
 
 #define MAX_CPUS 12 /* WARNING - sync with _kern.c */
 
+/* How many xdp_progs are defined in _kern.c */
+#define MAX_PROG 5
+
 /* Wanted to get rid of bpf_load.h and fake-"libbpf.h" (and instead
  * use bpf/libbpf.h), but cannot as (currently) needed for XDP
  * attaching to a device via set_link_xdp_fd()
@@ -255,13 +258,15 @@ static void stats_print(struct stats_record *stats_rec,
 		struct datarec *r = &rec->cpu[i];
 		struct datarec *p = &prev->cpu[i];
 		pps = calc_pps(r, p, t);
+		drop = calc_drop_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-7d %-10.0f %'-18.0f %-12s %f\n",
-			       "XDP-RX", i, pps, pps, "(nan)", t);
+			printf("%-15s %-7d %-10.0f %'-18.0f %-12.0f %f\n",
+			       "XDP-RX", i, pps, pps, drop, t);
 	}
-	pps = calc_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-7s %-10.0f %'-18.0f %-12s %f\n",
-	       "XDP-RX", "total", pps, pps, "(nan)", t);
+	pps  = calc_pps(&rec->total, &prev->total, t);
+	drop = calc_drop_pps(&rec->total, &prev->total, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %-12.0f %f\n",
+	       "XDP-RX", "total", pps, pps, drop, t);
 
 	/* cpumap enqueue stats */
 	for (to_cpu = 0; to_cpu < MAX_CPUS; to_cpu++) {
@@ -392,9 +397,6 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size)
 	}
 	return 0;
 }
-
-/* How many xdp_progs are defined in _kern.c */
-#define MAX_PROG 4
 
 int main(int argc, char **argv)
 {
