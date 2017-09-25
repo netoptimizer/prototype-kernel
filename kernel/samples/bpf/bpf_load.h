@@ -61,11 +61,31 @@ struct ksym {
 int load_kallsyms(void);
 struct ksym *ksym_search(long key);
 
-#ifndef XDP_FLAGS_SKB_MODE
-#define XDP_FLAGS_SKB_MODE	(2U << 0)
-/* Avail in include/uapi/linux/if_link.h
- *  at kernel commit b5cdae3291f7 ("net: Generic XDP")
+/* UAPI XDP_FLAGS avail in include/linux/if_link.h, but distro are
+ * lacking behind.
  */
+#ifndef XDP_FLAGS_UPDATE_IF_NOEXIST
+#define XDP_FLAGS_UPDATE_IF_NOEXIST     (1U << 0)
 #endif
+/* Since v4.12-rc1 : b5cdae3291f7 ("net: Generic XDP") */
+#ifndef XDP_FLAGS_SKB_MODE
+#define XDP_FLAGS_SKB_MODE	(1U << 1)
+#endif
+/* Since: v4.12-rc2 : 0489df9a430e ("xdp: add flag to enforce driver mode") */
+#ifndef XDP_FLAGS_DRV_MODE
+#define XDP_FLAGS_DRV_MODE              (1U << 2)
+#endif
+/* Since: v4.13-rc1 / ee5d032f7d03 ("xdp: add HW offload mode flag for installing programs")*/
+#ifndef XDP_FLAGS_HW_MODE
+#define XDP_FLAGS_HW_MODE               (1U << 3)
+#undef  XDP_FLAGS_MODES
+#define XDP_FLAGS_MODES                 (XDP_FLAGS_SKB_MODE | \
+                                         XDP_FLAGS_DRV_MODE | \
+                                         XDP_FLAGS_HW_MODE)
+#undef  XDP_FLAGS_MASK
+#define XDP_FLAGS_MASK                  (XDP_FLAGS_UPDATE_IF_NOEXIST |	\
+                                         XDP_FLAGS_MODES)
+#endif
+
 int set_link_xdp_fd(int ifindex, int fd, __u32 flags);
 #endif
