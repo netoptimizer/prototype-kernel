@@ -106,9 +106,11 @@ __u64 gettime(void)
 	return (__u64) t.tv_sec * NANOSEC_PER_SEC + t.tv_nsec;
 }
 
+/* Common stats data record shared with _kern.c */
 struct datarec {
 	__u64 processed;
 	__u64 dropped;
+	__u64 issue;
 };
 struct record {
 	__u64 timestamp;
@@ -129,6 +131,7 @@ static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 	struct datarec values[nr_cpus];
 	__u64 sum_processed = 0;
 	__u64 sum_dropped = 0;
+	__u64 sum_issue = 0;
 	int i;
 
 	if ((bpf_map_lookup_elem(fd, &key, values)) != 0) {
@@ -145,9 +148,12 @@ static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 		sum_processed        += values[i].processed;
 		rec->cpu[i].dropped = values[i].dropped;
 		sum_dropped        += values[i].dropped;
+		rec->cpu[i].issue = values[i].issue;
+		sum_issue        += values[i].issue;
 	}
 	rec->total.processed = sum_processed;
 	rec->total.dropped   = sum_dropped;
+	rec->total.issue     = sum_issue;
 	return true;
 }
 
@@ -235,12 +241,25 @@ static __u64 calc_drop_pps(struct datarec *r, struct datarec *p, double period_)
 	return pps;
 }
 
+static __u64 calc_errs_pps(struct datarec *r,
+			    struct datarec *p, double period_)
+{
+	__u64 packets = 0;
+	__u64 pps = 0;
+
+	if (period_ > 0) {
+		packets = r->issue - p->issue;
+		pps = packets / period_;
+	}
+	return pps;
+}
+
 static void stats_print(struct stats_record *stats_rec,
 			struct stats_record *stats_prev)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
+	double pps = 0, drop = 0, err = 0;
 	struct record *rec, *prev;
-	double pps = 0, drop = 0;
 	int to_cpu;
 	double t;
 	int i;
@@ -248,7 +267,7 @@ static void stats_print(struct stats_record *stats_rec,
 	/* Header */
 	printf("%-15s %-7s %-10s %-18s %-12s %-9s\n",
 	       "XDP-cpumap", "CPU:to", "pps ", "pps-human-readable",
-	       "drop-pps", "period");
+	       "drop-pps", "issues-pps");
 
 	/* XDP rx_cnt */
 	rec  = &stats_rec->rx_cnt;
@@ -260,33 +279,38 @@ static void stats_print(struct stats_record *stats_rec,
 		pps = calc_pps(r, p, t);
 		drop = calc_drop_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-7d %-10.0f %'-18.0f %-12.0f %f\n",
-			       "XDP-RX", i, pps, pps, drop, t);
+			printf("%-15s %-7d %-10.0f %'-18.0f %-12.0f\n",
+			       "XDP-RX", i, pps, pps, drop);
 	}
 	pps  = calc_pps(&rec->total, &prev->total, t);
 	drop = calc_drop_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-7s %-10.0f %'-18.0f %-12.0f %f\n",
-	       "XDP-RX", "total", pps, pps, drop, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %-12.0f\n",
+	       "XDP-RX", "total", pps, pps, drop);
 
 	/* cpumap enqueue stats */
 	for (to_cpu = 0; to_cpu < MAX_CPUS; to_cpu++) {
+		char *fmt="%-15s %3d:%-3d %-10.0f %'-18.0f %'-12.0f %'-12.0f\n";
+		char *fm2="%-15s %3s:%-3d %-10.0f %'-18.0f %'-12.0f %'-12.0f\n";
+
 		rec  =  &stats_rec->enq[to_cpu];
 		prev = &stats_prev->enq[to_cpu];
 		t = calc_period(rec, prev);
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
-			pps = calc_pps(r, p, t);
+			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
+			err  = calc_errs_pps(r, p, t);
 			if (pps > 0)
-			printf("%-15s %3d:%-3d %-10.0f %'-18.0f %'-12.0f %f\n",
-			       "cpumap-enqueue", i, to_cpu, pps, pps, drop, t);
+			printf(fmt, "cpumap-enqueue",
+			       i, to_cpu, pps, pps, drop, err);
 		}
 		pps = calc_pps(&rec->total, &prev->total, t);
 		if (pps > 0) {
 			drop = calc_drop_pps(&rec->total, &prev->total, t);
-			printf("%-15s %3s:%-3d %-10.0f %'-18.0f %'-12.0f %f\n",
-			       "cpumap-enqueue", "sum", to_cpu,pps,pps,drop, t);
+			err  = calc_errs_pps(&rec->total, &prev->total, t);
+			printf(fm2, "cpumap-enqueue",
+			       "sum", to_cpu,pps,pps,drop, err);
 		}
 	}
 
@@ -300,13 +324,13 @@ static void stats_print(struct stats_record *stats_rec,
 		pps  = calc_pps(r, p, t);
 		drop = calc_drop_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f %f\n",
-			       "cpumap_kthread", i, pps, pps, drop, t);
+			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f\n",
+			       "cpumap_kthread", i, pps, pps, drop);
 	}
 	pps = calc_pps(&rec->total, &prev->total, t);
 	drop = calc_drop_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f %f\n",
-	       "cpumap_kthread", "total", pps, pps, drop, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f\n",
+	       "cpumap_kthread", "total", pps, pps, drop);
 
 	/* XDP redirect err tracepoints (very unlikely) */
 	rec  = &stats_rec->redir_err;
@@ -318,13 +342,13 @@ static void stats_print(struct stats_record *stats_rec,
 		pps  = calc_pps(r, p, t);
 		drop = calc_drop_pps(r, p, t);
 		if (pps > 0)
-			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f %f\n",
-			       "redirect_err", i, pps, pps, drop, t);
+			printf("%-15s %-7d %-10.0f %'-18.0f %'-12.0f\n",
+			       "redirect_err", i, pps, pps, drop);
 	}
 	pps = calc_pps(&rec->total, &prev->total, t);
 	drop = calc_drop_pps(&rec->total, &prev->total, t);
-	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f %f\n",
-	       "redirect_err", "total", pps, pps, drop, t);
+	printf("%-15s %-7s %-10.0f %'-18.0f %'-12.0f\n",
+	       "redirect_err", "total", pps, pps, drop);
 
 	printf("\n");
 	fflush(stdout);

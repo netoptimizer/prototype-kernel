@@ -30,6 +30,7 @@ struct bpf_map_def SEC("maps") cpu_map = {
 struct datarec {
 	__u64 processed;
 	__u64 dropped;
+	__u64 issue;
 };
 
 /* Count RX packets, as XDP bpf_prog doesn't get direct TX-success
@@ -459,6 +460,18 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 		return 0;
 	rec->processed += ctx->processed;
 	rec->dropped   += ctx->drops;
+
+	/* Detect misconfig. Redirect to "same" CPU, makes no sense
+	 * and indicate user of cpumap have not done proper IRQ RXq
+	 * setup.
+	 */
+	if (ctx->cpu == ctx->to_cpu)
+		rec->issue += ctx->processed;
+
+	/* Keep seperate map for feedback loop */
+	// have map that boolean mark drops, and RX side can clean
+	// this, indicating it have got the notification. TODO, should
+	// this also contain a (k)timestamp.
 
 	return 0;
 }
