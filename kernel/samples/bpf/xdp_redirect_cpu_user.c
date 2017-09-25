@@ -54,6 +54,7 @@ static const struct option long_options[] = {
 	{"sec", 	required_argument,	NULL, 's' },
 	{"prognum", 	required_argument,	NULL, 'p' },
 	{"qsize", 	required_argument,	NULL, 'q' },
+	{"no-separators",no_argument,		NULL, 'z' },
 	{0, 0, NULL,  0 }
 };
 
@@ -393,7 +394,7 @@ static inline void swap(struct stats_record **a, struct stats_record **b)
 	*b = tmp;
 }
 
-static void stats_poll(int interval)
+static void stats_poll(int interval, bool use_separators)
 {
 	struct stats_record *record, *prev;
 
@@ -402,7 +403,8 @@ static void stats_poll(int interval)
 	stats_collect(record);
 
 	/* Trick to pretty printf with thousands separators use %' */
-	setlocale(LC_NUMERIC, "en_US");
+	if (use_separators)
+		setlocale(LC_NUMERIC, "en_US");
 
 	while (1) {
 		swap(&prev, &record);
@@ -432,6 +434,7 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size)
 
 int main(int argc, char **argv)
 {
+	bool use_separators = true;
 	char filename[256];
 	bool debug = false;
 	int longindex = 0;
@@ -441,7 +444,7 @@ int main(int argc, char **argv)
 	int opt;
 
 	/* Notice: choosing he queue size is very important with the
-	 * ixgbe driver, because it's driver recycling trick is
+	 * ixgbe driver, because it's driver page recycling trick is
 	 * dependend on pages being returned quickly.  The number of
 	 * out-standing packets in the system must be less-than 2x
 	 * RX-ring size.
@@ -477,6 +480,9 @@ int main(int argc, char **argv)
 			break;
 		case 'D':
 			debug = true;
+			break;
+		case 'z':
+			use_separators = false;
 			break;
 		case 'p':
 			/* Selecting eBPF prog to load */
@@ -534,6 +540,6 @@ int main(int argc, char **argv)
 		read_trace_pipe();
 	}
 
-	stats_poll(interval);
+	stats_poll(interval, use_separators);
 	return EXIT_OK;
 }
