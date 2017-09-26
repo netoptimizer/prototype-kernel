@@ -505,6 +505,9 @@ int trace_xdp_cpumap_kthread(struct cpumap_kthread_ctx *ctx)
 	rec->processed += ctx->processed;
 	rec->dropped   += ctx->drops;
 
-	// TODO: Use time_limit
+	/* Detect when time limit was exceeded, but queue was not-empty */
+	if (ctx->processed > 0 && ctx->time_limit)
+		rec->issue++;
+
 	return 0;
 }
