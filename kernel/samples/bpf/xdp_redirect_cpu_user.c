@@ -471,6 +471,7 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size, __u32 avail_idx, bool new)
 
 int main(int argc, char **argv)
 {
+	struct rlimit r = {10 * 1024*1024, RLIM_INFINITY};
 	bool use_separators = true;
 	char filename[256];
 	bool debug = false;
@@ -547,6 +548,11 @@ int main(int argc, char **argv)
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
+
+        if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+                perror("setrlimit(RLIMIT_MEMLOCK)");
+                return 1;
+        }
 
 	if (load_bpf_file(filename)) {
 		fprintf(stderr, "ERR in load_bpf_file(): %s", bpf_log_buf);
