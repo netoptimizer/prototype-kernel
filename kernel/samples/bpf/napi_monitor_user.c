@@ -18,6 +18,7 @@ static const char *__doc__=
 #include <locale.h>
 #include <stdint.h>
 
+#include <sys/resource.h>
 #include <getopt.h>
 #include <net/if.h>
 #include <time.h>
@@ -262,6 +263,7 @@ static void stats_poll(int interval)
 
 int main(int argc, char **argv)
 {
+	struct rlimit r = {1024*1024, RLIM_INFINITY};
 	int longindex = 0, opt;
 	int ret = EXIT_SUCCESS;
 	char bpf_obj_file[256];
@@ -290,6 +292,11 @@ int main(int argc, char **argv)
 			usage(argv);
 			return EXIT_FAILURE;
 		}
+	}
+
+	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+		perror("setrlimit(RLIMIT_MEMLOCK)");
+		return 1;
 	}
 
 	if (load_bpf_file(bpf_obj_file)) {
