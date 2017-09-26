@@ -107,7 +107,8 @@ static int load_and_attach(const char *event, struct bpf_insn *prog, int size)
 	fd = bpf_load_program(prog_type, prog, insns_cnt, license, kern_version,
 			      bpf_log_buf, BPF_LOG_BUF_SIZE);
 	if (fd < 0) {
-		printf("bpf_load_program() err=%d\n%s", errno, bpf_log_buf);
+		printf("bpf_load_program(prog_cnt=%d) err=%d\n%s",
+		       prog_cnt, errno, bpf_log_buf);
 		return -1;
 	}
 
