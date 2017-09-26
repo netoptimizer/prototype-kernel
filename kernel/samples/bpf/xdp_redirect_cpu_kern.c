@@ -230,14 +230,14 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (rec)
-		rec->processed++;
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
 
 	/* Read packet data, and use it (drop non 802.3 Ethertypes) */
 	eth_type = eth->h_proto;
 	if (ntohs(eth_type) < ETH_P_802_3_MIN) {
-		if (rec)
-			rec->dropped++;
+		rec->dropped++;
 		return XDP_DROP;
 	}
 
@@ -280,16 +280,16 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key0);
-	if (rec) {
-		rec->processed++;
-//		cpu_dest = (u32)(rec->processed) % 4;
-//		cpu_dest += 1; // exclude 0, and use 1,2,3,4
-	}
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
 
 	/* Check cpu_dest is valid */
 	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
-	if (!cpu_lookup)
-		return XDP_ABORTED;
+	if (!cpu_lookup) {
+		rec->issue++;
+		return XDP_DROP;
+	}
 
 	if (cpu_dest >= MAX_CPUS )
 		return XDP_ABORTED;
@@ -308,12 +308,15 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
 	u32 cpu_dest = 0;
+	u32 cpu_idx = 0;
+	u32 *cpu_lookup;
 	u32 key = 0;
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (rec)
-		rec->processed++;
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
 
 	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
 		return XDP_PASS; /* Just skip */
@@ -328,30 +331,42 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 		ip_proto = get_proto_ipv6(ctx, l3_offset);
 		break;
 	case ETH_P_ARP:
-		cpu_dest = 1; /* ARP packet handled on separate CPU */
+		cpu_idx = 0; /* ARP packet handled on separate CPU */
 		break;
 	default:
-		cpu_dest = 0;
+		cpu_idx = 0;
 	}
 
 	/* Choose CPU based on L4 protocol */
 	switch (ip_proto) {
 	case IPPROTO_ICMP:
 	case IPPROTO_ICMPV6:
-		cpu_dest = 1;
+		cpu_idx = 2;
 		break;
 	case IPPROTO_TCP:
-		cpu_dest = 2;
+		cpu_idx = 0;
 		break;
 	case IPPROTO_UDP:
-		cpu_dest = 3;
+		cpu_idx = 1;
 		break;
 	default:
-		cpu_dest = 0;
+		cpu_idx = 0;
 	}
+
+	cpu_lookup = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
+	if (!cpu_lookup)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_lookup;
 
 	if (cpu_dest >= MAX_CPUS )
 		return XDP_ABORTED;
+
+	/* Check cpu_dest is valid */
+	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
+	if (!cpu_lookup) {
+		rec->issue++;
+		return XDP_DROP;
+	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -367,13 +382,16 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
 	u32 cpu_dest = 0;
+	u32 cpu_idx = 0;
 	u16 dest_port;
+	u32 *cpu_lookup;
 	u32 key = 0;
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (rec)
-		rec->processed++;
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
 
 	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
 		return XDP_PASS; /* Just skip */
@@ -388,23 +406,23 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		ip_proto = get_proto_ipv6(ctx, l3_offset);
 		break;
 	case ETH_P_ARP:
-		cpu_dest = 1; /* ARP packet handled on separate CPU */
+		cpu_idx = 0; /* ARP packet handled on separate CPU */
 		break;
 	default:
-		cpu_dest = 0;
+		cpu_idx = 0;
 	}
 
 	/* Choose CPU based on L4 protocol */
 	switch (ip_proto) {
 	case IPPROTO_ICMP:
 	case IPPROTO_ICMPV6:
-		cpu_dest = 1;
+		cpu_idx = 2;
 		break;
 	case IPPROTO_TCP:
-		cpu_dest = 2;
+		cpu_idx = 0;
 		break;
 	case IPPROTO_UDP:
-		cpu_dest = 3;
+		cpu_idx = 1;
 		/* DDoS filter UDP port 9 (pktgen) */
 		dest_port = get_dest_port_ipv4_udp(ctx, l3_offset);
 		if (dest_port == 9) {
@@ -414,7 +432,22 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		}
 		break;
 	default:
-		cpu_dest = 0;
+		cpu_idx = 0;
+	}
+
+	cpu_lookup = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
+	if (!cpu_lookup)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_lookup;
+
+	if (cpu_dest >= MAX_CPUS )
+		return XDP_ABORTED;
+
+	/* Check cpu_dest is valid */
+	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
+	if (!cpu_lookup) {
+		rec->issue++;
+		return XDP_DROP;
 	}
 
 	if (cpu_dest >= MAX_CPUS )

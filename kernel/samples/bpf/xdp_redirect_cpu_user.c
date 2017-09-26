@@ -268,13 +268,14 @@ static void stats_print(struct stats_record *stats_rec,
 
 	/* Header */
 	printf("%-15s %-7s %-14s %-11s %-9s\n",
-	       "XDP-cpumap", "CPU:to", "pps",
-	       "drop-pps", "extra-info");
+	       "XDP-cpumap", "CPU:to", "pps", "drop-pps", "extra-info");
 
 	/* XDP rx_cnt */
 	{
-		char * fmt_rx = "%-15s %-7d %'-14.0f %'-11.0f\n";
+		char * fmt_rx = "%-15s %-7d %'-14.0f %'-11.0f %'-10.0f %s\n";
 		char * fm2_rx = "%-15s %-7s %'-14.0f %'-11.0f\n";
+		char *errstr = "";
+
 		rec  = &stats_rec->rx_cnt;
 		prev = &stats_prev->rx_cnt;
 		t = calc_period(rec, prev);
@@ -283,11 +284,16 @@ static void stats_print(struct stats_record *stats_rec,
 			struct datarec *p = &prev->cpu[i];
 			pps = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
+			err  = calc_errs_pps(r, p, t);
+			if (err > 0)
+				errstr = "cpu-dest/err";
 			if (pps > 0)
-				printf(fmt_rx, "XDP-RX", i, pps, drop);
+				printf(fmt_rx, "XDP-RX",
+				       i, pps, drop, err, errstr);
 		}
 		pps  = calc_pps(&rec->total, &prev->total, t);
 		drop = calc_drop_pps(&rec->total, &prev->total, t);
+		err  = calc_errs_pps(&rec->total, &prev->total, t);
 		printf(fm2_rx, "XDP-RX", "total", pps, drop);
 	}
 
