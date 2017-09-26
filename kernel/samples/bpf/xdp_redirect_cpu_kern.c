@@ -68,6 +68,28 @@ struct bpf_map_def SEC("maps") cpumap_kthread_cnt = {
 	.max_entries	= 1,
 };
 
+/* Set of maps controlling available CPU, and for iterating through
+ * selectable redirect CPUs.
+ */
+struct bpf_map_def SEC("maps") cpus_available = {
+	.type		= BPF_MAP_TYPE_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(u32),
+	.max_entries	= MAX_CPUS,
+};
+struct bpf_map_def SEC("maps") cpus_count = {
+	.type		= BPF_MAP_TYPE_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(u32),
+	.max_entries	= 1,
+};
+struct bpf_map_def SEC("maps") cpus_iterator = {
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(u32),
+	.max_entries	= 1,
+};
+
 /* Helper parse functions */
 
 /* Parse Ethernet layer 2, extract network layer 3 offset and protocol
@@ -165,8 +187,15 @@ int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
 	struct datarec* rec;
-	u32 cpu_dest = 0;
+	u32 cpu_dest;
 	u32 key = 0;
+
+	/* Only use first entry in cpus_available */
+	u32 *cpu_selected;
+	cpu_selected = bpf_map_lookup_elem(&cpus_available, &key);
+	if (!cpu_selected)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_selected;
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
@@ -184,8 +213,15 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	struct ethhdr *eth = data;
 	volatile u16 eth_type;
 	struct datarec* rec;
-	u32 cpu_dest = 0;
+	u32 cpu_dest;
 	u32 key = 0;
+
+	/* Only use first entry in cpus_available */
+	u32 *cpu_selected;
+	cpu_selected = bpf_map_lookup_elem(&cpus_available, &key);
+	if (!cpu_selected)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_selected;
 
 	/* Validate packet length is minimum Eth header size */
 	if (eth + 1 > data_end) {
@@ -215,16 +251,39 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	struct datarec* rec;
-	u32 cpu_dest = 0;
+	u32 cpu_dest;
 	u32 *cpu_lookup;
-	u32 key = 0;
+	u32 key0 = 0;
+
+	u32 *cpu_selected;
+	u32 *cpu_iterator;
+	u32 *cpu_max;
+	u32 cpu_idx;
+
+	cpu_max = bpf_map_lookup_elem(&cpus_count, &key0);
+	if (!cpu_max)
+		return XDP_ABORTED;
+
+	cpu_iterator = bpf_map_lookup_elem(&cpus_iterator, &key0);
+	if (!cpu_iterator)
+		return XDP_ABORTED;
+	cpu_idx = *cpu_iterator;
+
+	*cpu_iterator += 1;
+	if (*cpu_iterator == *cpu_max)
+		*cpu_iterator = 0;
+
+	cpu_selected = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
+	if (!cpu_selected)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_selected;
 
 	/* Count RX packet in map */
-	rec = bpf_map_lookup_elem(&rx_cnt, &key);
+	rec = bpf_map_lookup_elem(&rx_cnt, &key0);
 	if (rec) {
 		rec->processed++;
-		cpu_dest = (u32)(rec->processed) % 4;
-		cpu_dest += 1; // exclude 0, and use 1,2,3,4
+//		cpu_dest = (u32)(rec->processed) % 4;
+//		cpu_dest += 1; // exclude 0, and use 1,2,3,4
 	}
 
 	/* Check cpu_dest is valid */

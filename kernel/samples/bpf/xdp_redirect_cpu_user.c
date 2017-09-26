@@ -422,11 +422,13 @@ static void stats_poll(int interval, bool use_separators)
 	free_stats_record(prev);
 }
 
-int create_cpu_entry(__u32 cpu, __u32 queue_size)
+int create_cpu_entry(__u32 cpu, __u32 queue_size, __u32 avail_idx, bool new)
 {
+	__u32 curr_cpus_count;
+	__u32 key = 0;
 	int ret;
 
-	/* Add a CPU entry to map, as this allocate a cpu entry in
+	/* Add a CPU entry to cpumap, as this allocate a cpu entry in
 	 * the kernel for the cpu.
 	 */
 	ret = bpf_map_update_elem(map_fd[0], &cpu, &queue_size, 0);
@@ -434,6 +436,36 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size)
 		fprintf(stderr, "Create CPU entry failed\n");
 		exit(EXIT_FAIL_BPF);
 	}
+
+	/* Inform bpf_prog's that a new CPU is available to select
+	 * from via some control maps.
+	 */
+	/* map_fd[5] = cpus_available */
+	ret = bpf_map_update_elem(map_fd[5], &avail_idx, &cpu, 0);
+	if (ret) {
+		fprintf(stderr, "Add to avail CPUs failed\n");
+		exit(EXIT_FAIL_BPF);
+	}
+
+	/* When not replacing/updating existing entry, bump the count */
+	/* map_fd[6] = cpus_count */
+	if (new) {
+		ret = bpf_map_lookup_elem(map_fd[6], &key, &curr_cpus_count);
+		if (ret) {
+			fprintf(stderr, "Failed reading curr cpus_count \n");
+			exit(EXIT_FAIL_BPF);
+		}
+		curr_cpus_count++;
+		ret = bpf_map_update_elem(map_fd[6], &key, &curr_cpus_count, 0);
+		if (ret) {
+			fprintf(stderr, "Failed write curr cpus_count \n");
+			exit(EXIT_FAIL_BPF);
+		}
+	}
+	/* map_fd[7] = cpus_iterator */
+	printf("%s CPU:%u as idx:%u cpus_count:%u\n",
+	       new ? "Add-new":"Replace", cpu, avail_idx, curr_cpus_count);
+
 	return 0;
 }
 
@@ -526,11 +558,11 @@ int main(int argc, char **argv)
 		return EXIT_FAIL;
 	}
 
-	create_cpu_entry(0, qsize);
-	create_cpu_entry(1, qsize);
-	create_cpu_entry(2, qsize);
-	create_cpu_entry(3, qsize);
-	create_cpu_entry(4, qsize);
+	create_cpu_entry(0, qsize, 0, true);
+	create_cpu_entry(1, qsize, 1, true);
+//	create_cpu_entry(2, qsize);
+//	create_cpu_entry(3, qsize);
+//	create_cpu_entry(4, qsize);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
