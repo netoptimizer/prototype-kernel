@@ -54,6 +54,7 @@ static const struct option long_options[] = {
 	{"sec", 	required_argument,	NULL, 's' },
 	{"prognum", 	required_argument,	NULL, 'p' },
 	{"qsize", 	required_argument,	NULL, 'q' },
+	{"cpu", 	required_argument,	NULL, 'c' },
 	{"no-separators",no_argument,		NULL, 'z' },
 	{0, 0, NULL,  0 }
 };
@@ -475,9 +476,11 @@ int main(int argc, char **argv)
 	bool use_separators = true;
 	char filename[256];
 	bool debug = false;
+	int added_cpus = 0;
 	int longindex = 0;
 	int interval = 2;
 	int prog_num = 0;
+	int add_cpu = -1;
 	__u32 qsize;
 	int opt;
 
@@ -490,6 +493,21 @@ int main(int argc, char **argv)
 	qsize = 128+64;
 
 	snprintf(filename, sizeof(filename), "%s_kern.o", argv[0]);
+
+	if (setrlimit(RLIMIT_MEMLOCK, &r)) {
+		perror("setrlimit(RLIMIT_MEMLOCK)");
+		return 1;
+	}
+
+	if (load_bpf_file(filename)) {
+		fprintf(stderr, "ERR in load_bpf_file(): %s", bpf_log_buf);
+		return EXIT_FAIL;
+	}
+
+	if (!prog_fd[0]) {
+		fprintf(stderr, "ERR: load_bpf_file: %s\n", strerror(errno));
+		return EXIT_FAIL;
+	}
 
 	/* Parse commands line args */
 	while ((opt = getopt_long(argc, argv, "hSd:",
@@ -532,6 +550,18 @@ int main(int argc, char **argv)
 				goto error;
 			}
 			break;
+		case 'c':
+			/* Add multiple CPUs */
+			add_cpu = strtoul(optarg, NULL, 0);
+			if (add_cpu > MAX_CPUS) {
+				fprintf(stderr,
+				"--cpu nr too large for cpumap err(%d):%s\n",
+					errno, strerror(errno));
+				goto error;
+			}
+			create_cpu_entry(add_cpu, qsize, added_cpus, true);
+			added_cpus++;
+			break;
 		case 'q':
 			qsize = atoi(optarg);
 			break;
@@ -542,33 +572,19 @@ int main(int argc, char **argv)
 			return EXIT_FAIL_OPTION;
 		}
 	}
-	/* Required options */
+	/* Required option */
 	if (ifindex == -1) {
-		fprintf(stderr, "ERR: required option --dev missing");
+		fprintf(stderr, "ERR: required option --dev missing\n");
 		usage(argv);
 		return EXIT_FAIL_OPTION;
 	}
-
-        if (setrlimit(RLIMIT_MEMLOCK, &r)) {
-                perror("setrlimit(RLIMIT_MEMLOCK)");
-                return 1;
-        }
-
-	if (load_bpf_file(filename)) {
-		fprintf(stderr, "ERR in load_bpf_file(): %s", bpf_log_buf);
-		return EXIT_FAIL;
+	/* Required option */
+	if (add_cpu == -1) {
+		fprintf(stderr, "ERR: required option --cpu missing\n");
+		fprintf(stderr, " Specify multiple --cpu option to add more\n");
+		usage(argv);
+		return EXIT_FAIL_OPTION;
 	}
-
-	if (!prog_fd[0]) {
-		fprintf(stderr, "ERR: load_bpf_file: %s\n", strerror(errno));
-		return EXIT_FAIL;
-	}
-
-	create_cpu_entry(0, qsize, 0, true);
-	create_cpu_entry(1, qsize, 1, true);
-//	create_cpu_entry(2, qsize);
-//	create_cpu_entry(3, qsize);
-//	create_cpu_entry(4, qsize);
 
 	/* Remove XDP program when program is interrupted */
 	signal(SIGINT, int_exit);
