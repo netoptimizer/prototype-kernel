@@ -257,7 +257,8 @@ static __u64 calc_errs_pps(struct datarec *r,
 }
 
 static void stats_print(struct stats_record *stats_rec,
-			struct stats_record *stats_prev)
+			struct stats_record *stats_prev,
+			int prog_num)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
 	double pps = 0, drop = 0, err = 0;
@@ -267,6 +268,7 @@ static void stats_print(struct stats_record *stats_rec,
 	int i;
 
 	/* Header */
+	printf("Running XDP/eBPF prog_num:%d\n", prog_num);
 	printf("%-15s %-7s %-14s %-11s %-9s\n",
 	       "XDP-cpumap", "CPU:to", "pps", "drop-pps", "extra-info");
 
@@ -406,7 +408,7 @@ static inline void swap(struct stats_record **a, struct stats_record **b)
 	*b = tmp;
 }
 
-static void stats_poll(int interval, bool use_separators)
+static void stats_poll(int interval, bool use_separators, int prog_num)
 {
 	struct stats_record *record, *prev;
 
@@ -421,7 +423,7 @@ static void stats_poll(int interval, bool use_separators)
 	while (1) {
 		swap(&prev, &record);
 		stats_collect(record);
-		stats_print(record, prev);
+		stats_print(record, prev, prog_num);
 		sleep(interval);
 	}
 
@@ -605,6 +607,6 @@ int main(int argc, char **argv)
 		read_trace_pipe();
 	}
 
-	stats_poll(interval, use_separators);
+	stats_poll(interval, use_separators, prog_num);
 	return EXIT_OK;
 }
