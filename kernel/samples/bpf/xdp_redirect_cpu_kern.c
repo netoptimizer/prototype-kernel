@@ -1,4 +1,4 @@
-/*  XDP redirect to CPUs via cpu_map
+/*  XDP redirect to CPUs via cpumap (BPF_MAP_TYPE_CPUMAP)
  *
  * -=- WARNING -=- EXPERIMENTAL: featured under development!
  *
@@ -87,6 +87,14 @@ struct bpf_map_def SEC("maps") cpus_iterator = {
 	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
 	.key_size	= sizeof(u32),
 	.value_size	= sizeof(u32),
+	.max_entries	= 1,
+};
+
+/* Used by trace point */
+struct bpf_map_def SEC("maps") exception_cnt = {
+	.type		= BPF_MAP_TYPE_PERCPU_ARRAY,
+	.key_size	= sizeof(u32),
+	.value_size	= sizeof(struct datarec),
 	.max_entries	= 1,
 };
 
@@ -521,6 +529,34 @@ int trace_xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
 	return xdp_redirect_collect_stat(ctx);
 }
 
+/* Tracepoint format: /sys/kernel/debug/tracing/events/xdp/xdp_exception/format
+ * Code in:                kernel/include/trace/events/xdp.h
+ */
+struct xdp_exception_ctx {
+	unsigned short common_type;	//	offset:0;  size:2; signed:0;
+	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
+	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
+	int common_pid;			//	offset:4;  size:4; signed:1;
+
+	int prog_id;			//	offset:8;  size:4; signed:1;
+	u32 act;			//	offset:12; size:4; signed:0;
+	int ifindex;			//	offset:16; size:4; signed:1;
+};
+
+SEC("tracepoint/xdp/xdp_exception")
+int trace_xdp_exception(struct xdp_exception_ctx *ctx)
+{
+	struct datarec *rec;
+	u32 key = 0;
+
+	rec = bpf_map_lookup_elem(&exception_cnt, &key);
+	if (!rec)
+		return 1;
+	rec->dropped += 1;
+
+	return 0;
+}
+
 /* Tracepoint: /sys/kernel/debug/tracing/events/xdp/xdp_cpumap_enqueue/format
  * Code in:         kernel/include/trace/events/xdp.h
  */
@@ -603,3 +639,4 @@ int trace_xdp_cpumap_kthread(struct cpumap_kthread_ctx *ctx)
 
 	return 0;
 }
+

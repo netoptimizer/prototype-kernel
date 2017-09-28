@@ -123,6 +123,7 @@ struct stats_record {
 	struct record rx_cnt;
 	struct record redir_err;
 	struct record kthread;
+	struct record exception;
 	struct record enq[MAX_CPUS];
 };
 
@@ -189,6 +190,7 @@ struct stats_record* alloc_stats_record(void)
 	rec->rx_cnt.cpu    = alloc_record_per_cpu();
 	rec->redir_err.cpu = alloc_record_per_cpu();
 	rec->kthread.cpu   = alloc_record_per_cpu();
+	rec->exception.cpu = alloc_record_per_cpu();
 	for (i = 0; i < MAX_CPUS; i++)
 		rec->enq[i].cpu = alloc_record_per_cpu();
 
@@ -201,6 +203,7 @@ void free_stats_record(struct stats_record* r)
 
 	for (i = 0; i < MAX_CPUS; i++)
 		free(r->enq[i].cpu);
+	free(r->exception.cpu);
 	free(r->kthread.cpu);
 	free(r->redir_err.cpu);
 	free(r->rx_cnt.cpu);
@@ -373,6 +376,27 @@ static void stats_print(struct stats_record *stats_rec,
 		drop = calc_drop_pps(&rec->total, &prev->total, t);
 		printf(fm2_err, "redirect_err", "total", pps, drop);
 	}
+
+	/* XDP general exception tracepoints */
+	{
+		char *fmt_err = "%-15s %-7d %'-14.0f %'-11.0f\n";
+		char *fm2_err = "%-15s %-7s %'-14.0f %'-11.0f\n";
+		rec  = &stats_rec->exception;
+		prev = &stats_prev->exception;
+		t = calc_period(rec, prev);
+		for (i = 0; i < nr_cpus; i++) {
+			struct datarec *r = &rec->cpu[i];
+			struct datarec *p = &prev->cpu[i];
+			pps  = calc_pps(r, p, t);
+			drop = calc_drop_pps(r, p, t);
+			if (pps > 0)
+				printf(fmt_err, "xdp_exception", i, pps, drop);
+		}
+		pps = calc_pps(&rec->total, &prev->total, t);
+		drop = calc_drop_pps(&rec->total, &prev->total, t);
+		printf(fm2_err, "xdp_exception", "total", pps, drop);
+	}
+
 	printf("\n");
 	fflush(stdout);
 }
@@ -395,6 +419,8 @@ static void stats_collect(struct stats_record *rec)
 	fd = map_fd[4]; /* map: cpumap_kthread_cnt */
 	map_collect_percpu(fd, 0, &rec->kthread);
 
+	fd = map_fd[8]; /* map: exception_cnt */
+	map_collect_percpu(fd, 0, &rec->exception);
 }
 
 
