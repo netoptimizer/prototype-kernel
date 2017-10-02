@@ -1,7 +1,5 @@
 /*  XDP redirect to CPUs via cpumap (BPF_MAP_TYPE_CPUMAP)
  *
- * -=- WARNING -=- EXPERIMENTAL: featured under development!
- *
  *  GPLv2, Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 #include <uapi/linux/if_ether.h>
@@ -148,12 +146,12 @@ u16 get_dest_port_ipv4_udp(struct xdp_md *ctx, u64 nh_off)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
-        struct iphdr *iph = data + nh_off;
+	struct iphdr *iph = data + nh_off;
 	struct udphdr *udph;
 	u16 dport;
 
-        if (iph + 1 > data_end)
-                return 0;
+	if (iph + 1 > data_end)
+		return 0;
 	if (!(iph->protocol == IPPROTO_UDP))
 		return 0;
 
@@ -170,11 +168,11 @@ int get_proto_ipv4(struct xdp_md *ctx, u64 nh_off)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
-        struct iphdr *iph = data + nh_off;
+	struct iphdr *iph = data + nh_off;
 
-        if (iph + 1 > data_end)
-                return 0;
-        return iph->protocol;
+	if (iph + 1 > data_end)
+		return 0;
+	return iph->protocol;
 }
 
 static __always_inline
@@ -182,11 +180,11 @@ int get_proto_ipv6(struct xdp_md *ctx, u64 nh_off)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
-        struct ipv6hdr *ip6h = data + nh_off;
+	struct ipv6hdr *ip6h = data + nh_off;
 
-        if (ip6h + 1 > data_end)
-                return 0;
-        return ip6h->nexthdr;
+	if (ip6h + 1 > data_end)
+		return 0;
+	return ip6h->nexthdr;
 }
 
 SEC("xdp_cpu_map0")
@@ -639,4 +637,3 @@ int trace_xdp_cpumap_kthread(struct cpumap_kthread_ctx *ctx)
 
 	return 0;
 }
-
