@@ -217,10 +217,10 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
-	volatile u16 eth_type;
 	struct datarec *rec;
 	u32 *cpu_selected;
 	u32 cpu_dest;
+	u16 eth_type;
 	u32 key = 0;
 
 	/* Only use first entry in cpus_available */
