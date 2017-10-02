@@ -192,12 +192,12 @@ int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
-	struct datarec* rec;
+	struct datarec *rec;
+	u32 *cpu_selected;
 	u32 cpu_dest;
 	u32 key = 0;
 
 	/* Only use first entry in cpus_available */
-	u32 *cpu_selected;
 	cpu_selected = bpf_map_lookup_elem(&cpus_available, &key);
 	if (!cpu_selected)
 		return XDP_ABORTED;
@@ -218,21 +218,20 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	volatile u16 eth_type;
-	struct datarec* rec;
+	struct datarec *rec;
+	u32 *cpu_selected;
 	u32 cpu_dest;
 	u32 key = 0;
 
 	/* Only use first entry in cpus_available */
-	u32 *cpu_selected;
 	cpu_selected = bpf_map_lookup_elem(&cpus_available, &key);
 	if (!cpu_selected)
 		return XDP_ABORTED;
 	cpu_dest = *cpu_selected;
 
 	/* Validate packet length is minimum Eth header size */
-	if (eth + 1 > data_end) {
+	if (eth + 1 > data_end)
 		return XDP_ABORTED;
-	}
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
@@ -256,7 +255,7 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
-	struct datarec* rec;
+	struct datarec *rec;
 	u32 cpu_dest;
 	u32 *cpu_lookup;
 	u32 key0 = 0;
@@ -297,7 +296,7 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 		return XDP_DROP;
 	}
 
-	if (cpu_dest >= MAX_CPUS )
+	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
@@ -310,7 +309,7 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	u8 ip_proto = IPPROTO_UDP;
-	struct datarec* rec;
+	struct datarec *rec;
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
 	u32 cpu_dest = 0;
@@ -324,9 +323,8 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	rec->processed++;
 
-	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
+	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset)))
 		return XDP_PASS; /* Just skip */
-	}
 
 	/* Extract L4 protocol */
 	switch (eth_proto) {
@@ -364,7 +362,7 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	cpu_dest = *cpu_lookup;
 
-	if (cpu_dest >= MAX_CPUS )
+	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
 
 	/* Check cpu_dest is valid */
@@ -384,7 +382,7 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 	void *data     = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	u8 ip_proto = IPPROTO_UDP;
-	struct datarec* rec;
+	struct datarec *rec;
 	u16 eth_proto = 0;
 	u64 l3_offset = 0;
 	u32 cpu_dest = 0;
@@ -399,9 +397,8 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	rec->processed++;
 
-	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset))) {
+	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset)))
 		return XDP_PASS; /* Just skip */
-	}
 
 	/* Extract L4 protocol */
 	switch (eth_proto) {
@@ -446,7 +443,7 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	cpu_dest = *cpu_lookup;
 
-	if (cpu_dest >= MAX_CPUS )
+	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
 
 	/* Check cpu_dest is valid */
@@ -456,7 +453,7 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		return XDP_DROP;
 	}
 
-	if (cpu_dest >= MAX_CPUS )
+	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
@@ -581,7 +578,7 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 	if (ctx->cpu == ctx->to_cpu)
 		rec->issue += ctx->processed;
 
-	/* Keep seperate map for feedback loop */
+	/* Keep separate map for feedback loop */
 	// have map that boolean mark drops, and RX side can clean
 	// this, indicating it have got the notification. TODO, should
 	// this also contain a (k)timestamp.
