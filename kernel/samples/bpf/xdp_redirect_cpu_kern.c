@@ -471,19 +471,15 @@ char _license[] SEC("license") = "GPL";
  * Code in:                kernel/include/trace/events/xdp.h
  */
 struct xdp_redirect_ctx {
-	unsigned short common_type;	//	offset:0;  size:2; signed:0;
-	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
-	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
-	int common_pid;			//	offset:4;  size:4; signed:1;
-
-	int prog_id;			//	offset:8;  size:4; signed:1;
-	u32 act;			//	offset:12  size:4; signed:0;
-	int ifindex;			//	offset:16  size:4; signed:1;
-	int err;			//	offset:20  size:4; signed:1;
-	int to_ifindex;			//	offset:24  size:4; signed:1;
-	u32 map_id;			//	offset:28  size:4; signed:0;
-	int map_index;			//	offset:32  size:4; signed:1;
-};					//	offset:36
+	u64 __pad;	// First 8 bytes are not accessible by bpf code
+	int prog_id;	//	offset:8;  size:4; signed:1;
+	u32 act;	//	offset:12  size:4; signed:0;
+	int ifindex;	//	offset:16  size:4; signed:1;
+	int err;	//	offset:20  size:4; signed:1;
+	int to_ifindex;	//	offset:24  size:4; signed:1;
+	u32 map_id;	//	offset:28  size:4; signed:0;
+	int map_index;	//	offset:32  size:4; signed:1;
+};			//	offset:36
 
 enum {
 	XDP_REDIRECT_SUCCESS = 0,
@@ -520,7 +516,6 @@ int trace_xdp_redirect_err(struct xdp_redirect_ctx *ctx)
 	return xdp_redirect_collect_stat(ctx);
 }
 
-
 SEC("tracepoint/xdp/xdp_redirect_map_err")
 int trace_xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
 {
@@ -531,14 +526,10 @@ int trace_xdp_redirect_map_err(struct xdp_redirect_ctx *ctx)
  * Code in:                kernel/include/trace/events/xdp.h
  */
 struct xdp_exception_ctx {
-	unsigned short common_type;	//	offset:0;  size:2; signed:0;
-	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
-	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
-	int common_pid;			//	offset:4;  size:4; signed:1;
-
-	int prog_id;			//	offset:8;  size:4; signed:1;
-	u32 act;			//	offset:12; size:4; signed:0;
-	int ifindex;			//	offset:16; size:4; signed:1;
+	u64 __pad;	// First 8 bytes are not accessible by bpf code
+	int prog_id;	//	offset:8;  size:4; signed:1;
+	u32 act;	//	offset:12; size:4; signed:0;
+	int ifindex;	//	offset:16; size:4; signed:1;
 };
 
 SEC("tracepoint/xdp/xdp_exception")
@@ -559,17 +550,13 @@ int trace_xdp_exception(struct xdp_exception_ctx *ctx)
  * Code in:         kernel/include/trace/events/xdp.h
  */
 struct cpumap_enqueue_ctx {
-	unsigned short common_type;	//	offset:0;  size:2; signed:0;
-	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
-	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
-	int common_pid;			//	offset:4;  size:4; signed:1;
-
-	int map_id;			//	offset:8;  size:4; signed:1;
-	u32 act;			//	offset:12; size:4; signed:0;
-	int cpu;			//	offset:16; size:4; signed:1;
-	unsigned int drops;		//	offset:20; size:4; signed:0;
-	unsigned int processed;		//	offset:24; size:4; signed:0;
-	int to_cpu;			//	offset:28; size:4; signed:1;
+	u64 __pad;		// First 8 bytes are not accessible by bpf code
+	int map_id;		//	offset:8;  size:4; signed:1;
+	u32 act;		//	offset:12; size:4; signed:0;
+	int cpu;		//	offset:16; size:4; signed:1;
+	unsigned int drops;	//	offset:20; size:4; signed:0;
+	unsigned int processed;	//	offset:24; size:4; signed:0;
+	int to_cpu;		//	offset:28; size:4; signed:1;
 };
 
 SEC("tracepoint/xdp/xdp_cpumap_enqueue")
@@ -606,17 +593,13 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
  * Code in:         kernel/include/trace/events/xdp.h
  */
 struct cpumap_kthread_ctx {
-	unsigned short common_type;	//	offset:0;  size:2; signed:0;
-	unsigned char common_flags;	//	offset:2;  size:1; signed:0;
-	unsigned char common_preempt_count;//	offset:3;  size:1; signed:0;
-	int common_pid;			//	offset:4;  size:4; signed:1;
-
-	int map_id;			//	offset:8;  size:4; signed:1;
-	u32 act;			//	offset:12; size:4; signed:0;
-	int cpu;			//	offset:16; size:4; signed:1;
-	unsigned int drops;		//	offset:20; size:4; signed:0;
-	unsigned int processed;		//	offset:24; size:4; signed:0;
-	int time_limit;			//	offset:28; size:4; signed:1;
+	u64 __pad;		// First 8 bytes are not accessible by bpf code
+	int map_id;		//	offset:8;  size:4; signed:1;
+	u32 act;		//	offset:12; size:4; signed:0;
+	int cpu;		//	offset:16; size:4; signed:1;
+	unsigned int drops;	//	offset:20; size:4; signed:0;
+	unsigned int processed;	//	offset:24; size:4; signed:0;
+	int time_limit;		//	offset:28; size:4; signed:1;
 };
 
 SEC("tracepoint/xdp/xdp_cpumap_kthread")
