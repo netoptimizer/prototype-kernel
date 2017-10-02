@@ -578,11 +578,11 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 	if (ctx->cpu == ctx->to_cpu)
 		rec->issue += ctx->processed;
 
-	/* Keep separate map for feedback loop */
-	// have map that boolean mark drops, and RX side can clean
-	// this, indicating it have got the notification. TODO, should
-	// this also contain a (k)timestamp.
-
+	/* Inception: It's possible to detect overload situations, via
+	 * this tracepoint.  This can be used for creating a feedback
+	 * loop to XDP, which can take appropiate actions to mitigate
+	 * this overload situation.
+	 */
 	return 0;
 }
 
