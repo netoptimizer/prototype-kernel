@@ -1,7 +1,7 @@
 /* GPLv2 Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
-static const char *__doc__=
- " XDP redirect with a CPU-map type \"BPF_MAP_TYPE_CPUMAP\" (EXPERIMENTAL)";
+static const char *__doc__ =
+	" XDP redirect with a CPU-map type \"BPF_MAP_TYPE_CPUMAP\"";
 
 #include <errno.h>
 #include <signal.h>
@@ -35,11 +35,12 @@ static const char *__doc__=
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
-static char *ifname = NULL;
-static __u32 xdp_flags = 0;
+static char *ifname;
+
+static __u32 xdp_flags;
 
 /* Exit return codes */
-#define EXIT_OK			0
+#define EXIT_OK		0
 #define EXIT_FAIL		1
 #define EXIT_FAIL_OPTION	2
 #define EXIT_FAIL_XDP		3
@@ -48,14 +49,14 @@ static __u32 xdp_flags = 0;
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
-	{"dev",		required_argument,	NULL, 'd' },
-	{"skb-mode", 	no_argument,		NULL, 'S' },
+	{"dev",	required_argument,	NULL, 'd' },
+	{"skb-mode",	no_argument,		NULL, 'S' },
 	{"debug",	no_argument,		NULL, 'D' },
-	{"sec", 	required_argument,	NULL, 's' },
-	{"prognum", 	required_argument,	NULL, 'p' },
-	{"qsize", 	required_argument,	NULL, 'q' },
-	{"cpu", 	required_argument,	NULL, 'c' },
-	{"no-separators",no_argument,		NULL, 'z' },
+	{"sec",	required_argument,	NULL, 's' },
+	{"prognum",	required_argument,	NULL, 'p' },
+	{"qsize",	required_argument,	NULL, 'q' },
+	{"cpu",	required_argument,	NULL, 'c' },
+	{"no-separators", no_argument,		NULL, 'z' },
 	{0, 0, NULL,  0 }
 };
 
@@ -72,19 +73,19 @@ static void int_exit(int sig)
 static void usage(char *argv[])
 {
 	int i;
+
 	printf("\nDOCUMENTATION:\n%s\n", __doc__);
 	printf("\n");
-	printf(" Usage: %s (options-see-below)\n",
-	       argv[0]);
+	printf(" Usage: %s (options-see-below)\n", argv[0]);
 	printf(" Listing options:\n");
 	for (i = 0; long_options[i].name != 0; i++) {
 		printf(" --%-12s", long_options[i].name);
 		if (long_options[i].flag != NULL)
 			printf(" flag (internal value:%d)",
-			       *long_options[i].flag);
+				*long_options[i].flag);
 		else
 			printf(" short-option: -%c",
-			       long_options[i].val);
+				long_options[i].val);
 		printf("\n");
 	}
 	printf("\n");
@@ -95,7 +96,7 @@ static void usage(char *argv[])
  *       clock_gettime (ns) =>  9ns (CLOCK_MONOTONIC_COARSE)
  */
 #define NANOSEC_PER_SEC 1000000000 /* 10^9 */
-__u64 gettime(void)
+static __u64 gettime(void)
 {
 	struct timespec t;
 	int res;
@@ -127,7 +128,7 @@ struct stats_record {
 	struct record enq[MAX_CPUS];
 };
 
-static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
+static bool map_collect_percpu(int fd, __u32 key, struct record *rec)
 {
 	/* For percpu maps, userspace gets a value per possible CPU */
 	unsigned int nr_cpus = bpf_num_possible_cpus();
@@ -160,7 +161,7 @@ static bool map_collect_percpu(int fd, __u32 key, struct record* rec)
 	return true;
 }
 
-struct datarec *alloc_record_per_cpu(void)
+static struct datarec *alloc_record_per_cpu(void)
 {
 	unsigned int nr_cpus = bpf_num_possible_cpus();
 	struct datarec *array;
@@ -176,9 +177,9 @@ struct datarec *alloc_record_per_cpu(void)
 	return array;
 }
 
-struct stats_record* alloc_stats_record(void)
+static struct stats_record *alloc_stats_record(void)
 {
-	struct stats_record* rec;
+	struct stats_record *rec;
 	int i;
 
 	rec = malloc(sizeof(*rec));
@@ -197,7 +198,7 @@ struct stats_record* alloc_stats_record(void)
 	return rec;
 }
 
-void free_stats_record(struct stats_record* r)
+static void free_stats_record(struct stats_record *r)
 {
 	int i;
 
@@ -213,12 +214,12 @@ void free_stats_record(struct stats_record* r)
 static double calc_period(struct record *r, struct record *p)
 {
 	double period_ = 0;
-	__u64 period  = 0;
+	__u64 period = 0;
 
 	period = r->timestamp - p->timestamp;
-	if (period > 0) {
+	if (period > 0)
 		period_ = ((double) period / NANOSEC_PER_SEC);
-	}
+
 	return period_;
 }
 
@@ -277,8 +278,8 @@ static void stats_print(struct stats_record *stats_rec,
 
 	/* XDP rx_cnt */
 	{
-		char * fmt_rx = "%-15s %-7d %'-14.0f %'-11.0f %'-10.0f %s\n";
-		char * fm2_rx = "%-15s %-7s %'-14.0f %'-11.0f\n";
+		char *fmt_rx = "%-15s %-7d %'-14.0f %'-11.0f %'-10.0f %s\n";
+		char *fm2_rx = "%-15s %-7s %'-14.0f %'-11.0f\n";
 		char *errstr = "";
 
 		rec  = &stats_rec->rx_cnt;
@@ -287,6 +288,7 @@ static void stats_print(struct stats_record *stats_rec,
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
+
 			pps = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			err  = calc_errs_pps(r, p, t);
@@ -294,7 +296,7 @@ static void stats_print(struct stats_record *stats_rec,
 				errstr = "cpu-dest/err";
 			if (pps > 0)
 				printf(fmt_rx, "XDP-RX",
-				       i, pps, drop, err, errstr);
+					i, pps, drop, err, errstr);
 		}
 		pps  = calc_pps(&rec->total, &prev->total, t);
 		drop = calc_drop_pps(&rec->total, &prev->total, t);
@@ -304,8 +306,8 @@ static void stats_print(struct stats_record *stats_rec,
 
 	/* cpumap enqueue stats */
 	for (to_cpu = 0; to_cpu < MAX_CPUS; to_cpu++) {
-		char *fmt="%-15s %3d:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
-		char *fm2="%-15s %3s:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
+		char *fmt = "%-15s %3d:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
+		char *fm2 = "%-15s %3s:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
 		char *errstr = "";
 
 		rec  =  &stats_rec->enq[to_cpu];
@@ -314,6 +316,7 @@ static void stats_print(struct stats_record *stats_rec,
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
+
 			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			err  = calc_errs_pps(r, p, t);
@@ -337,12 +340,14 @@ static void stats_print(struct stats_record *stats_rec,
 		char *fmt_k = "%-15s %-7d %'-14.0f %'-11.0f %-10.0f %s\n";
 		char *fm2_k = "%-15s %-7s %'-14.0f %'-11.0f %-10.0f %s\n";
 		char *errstr = "";
+
 		rec  = &stats_rec->kthread;
 		prev = &stats_prev->kthread;
 		t = calc_period(rec, prev);
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
+
 			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			err  = calc_errs_pps(r, p, t);
@@ -361,12 +366,14 @@ static void stats_print(struct stats_record *stats_rec,
 	{
 		char *fmt_err = "%-15s %-7d %'-14.0f %'-11.0f\n";
 		char *fm2_err = "%-15s %-7s %'-14.0f %'-11.0f\n";
+
 		rec  = &stats_rec->redir_err;
 		prev = &stats_prev->redir_err;
 		t = calc_period(rec, prev);
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
+
 			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			if (pps > 0)
@@ -381,12 +388,14 @@ static void stats_print(struct stats_record *stats_rec,
 	{
 		char *fmt_err = "%-15s %-7d %'-14.0f %'-11.0f\n";
 		char *fm2_err = "%-15s %-7s %'-14.0f %'-11.0f\n";
+
 		rec  = &stats_rec->exception;
 		prev = &stats_prev->exception;
 		t = calc_period(rec, prev);
 		for (i = 0; i < nr_cpus; i++) {
 			struct datarec *r = &rec->cpu[i];
 			struct datarec *p = &prev->cpu[i];
+
 			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			if (pps > 0)
@@ -412,9 +421,8 @@ static void stats_collect(struct stats_record *rec)
 	map_collect_percpu(fd, 1, &rec->redir_err);
 
 	fd = map_fd[3]; /* map: cpumap_enqueue_cnt */
-	for (i = 0; i < MAX_CPUS; i++) {
+	for (i = 0; i < MAX_CPUS; i++)
 		map_collect_percpu(fd, i, &rec->enq[i]);
-	}
 
 	fd = map_fd[4]; /* map: cpumap_kthread_cnt */
 	map_collect_percpu(fd, 0, &rec->kthread);
@@ -457,7 +465,8 @@ static void stats_poll(int interval, bool use_separators, int prog_num)
 	free_stats_record(prev);
 }
 
-int create_cpu_entry(__u32 cpu, __u32 queue_size, __u32 avail_idx, bool new)
+static int create_cpu_entry(__u32 cpu, __u32 queue_size,
+			    __u32 avail_idx, bool new)
 {
 	__u32 curr_cpus_count;
 	__u32 key = 0;
@@ -487,13 +496,13 @@ int create_cpu_entry(__u32 cpu, __u32 queue_size, __u32 avail_idx, bool new)
 	if (new) {
 		ret = bpf_map_lookup_elem(map_fd[6], &key, &curr_cpus_count);
 		if (ret) {
-			fprintf(stderr, "Failed reading curr cpus_count \n");
+			fprintf(stderr, "Failed reading curr cpus_count\n");
 			exit(EXIT_FAIL_BPF);
 		}
 		curr_cpus_count++;
 		ret = bpf_map_update_elem(map_fd[6], &key, &curr_cpus_count, 0);
 		if (ret) {
-			fprintf(stderr, "Failed write curr cpus_count \n");
+			fprintf(stderr, "Failed write curr cpus_count\n");
 			exit(EXIT_FAIL_BPF);
 		}
 	}
