@@ -306,8 +306,8 @@ static void stats_print(struct stats_record *stats_rec,
 
 	/* cpumap enqueue stats */
 	for (to_cpu = 0; to_cpu < MAX_CPUS; to_cpu++) {
-		char *fmt = "%-15s %3d:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
-		char *fm2 = "%-15s %3s:%-3d %'-14.0f %'-11.0f %'-10.0f %s\n";
+		char *fmt = "%-15s %3d:%-3d %'-14.0f %'-11.0f %'-10.2f %s\n";
+		char *fm2 = "%-15s %3s:%-3d %'-14.0f %'-11.0f %'-10.2f %s\n";
 		char *errstr = "";
 
 		rec  =  &stats_rec->enq[to_cpu];
@@ -320,8 +320,10 @@ static void stats_print(struct stats_record *stats_rec,
 			pps  = calc_pps(r, p, t);
 			drop = calc_drop_pps(r, p, t);
 			err  = calc_errs_pps(r, p, t);
-			if (err > 0)
-				errstr = "same-cpu/pps";
+			if (err > 0) {
+				errstr = "bulk-average";
+				err = pps / err; /* calc average bulk size */
+			}
 			if (pps > 0)
 				printf(fmt, "cpumap-enqueue",
 				       i, to_cpu, pps, drop, err, errstr);
@@ -330,6 +332,10 @@ static void stats_print(struct stats_record *stats_rec,
 		if (pps > 0) {
 			drop = calc_drop_pps(&rec->total, &prev->total, t);
 			err  = calc_errs_pps(&rec->total, &prev->total, t);
+			if (err > 0) {
+				errstr = "bulk-average";
+				err = pps / err; /* calc average bulk size */
+			}
 			printf(fm2, "cpumap-enqueue",
 			       "sum", to_cpu, pps, drop, err, errstr);
 		}

@@ -571,12 +571,9 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 	rec->processed += ctx->processed;
 	rec->dropped   += ctx->drops;
 
-	/* Detect misconfig. Redirect to "same" CPU, makes no sense
-	 * and indicate user of cpumap have not done proper IRQ RXq
-	 * setup.
-	 */
-	if (ctx->cpu == ctx->to_cpu)
-		rec->issue += ctx->processed;
+	/* Record bulk events, then userspace can calc average bulk size */
+	if (ctx->processed > 0)
+		rec->issue += 1;
 
 	/* Inception: It's possible to detect overload situations, via
 	 * this tracepoint.  This can be used for creating a feedback
