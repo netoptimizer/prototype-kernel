@@ -337,8 +337,8 @@ static void stats_print(struct stats_record *stats_rec,
 
 	/* cpumap kthread stats */
 	{
-		char *fmt_k = "%-15s %-7d %'-14.0f %'-11.0f %-10.0f %s\n";
-		char *fm2_k = "%-15s %-7s %'-14.0f %'-11.0f %-10.0f %s\n";
+		char *fmt_k = "%-15s %-7d %'-14.0f %'-11.0f %'-10.0f %s\n";
+		char *fm2_k = "%-15s %-7s %'-14.0f %'-11.0f %'-10.0f %s\n";
 		char *errstr = "";
 
 		rec  = &stats_rec->kthread;
@@ -352,7 +352,7 @@ static void stats_print(struct stats_record *stats_rec,
 			drop = calc_drop_pps(r, p, t);
 			err  = calc_errs_pps(r, p, t);
 			if (err > 0)
-				errstr = "time_exceed";
+				errstr = "sched";
 			if (pps > 0)
 				printf(fmt_k, "cpumap_kthread",
 				       i, pps, drop, err, errstr);

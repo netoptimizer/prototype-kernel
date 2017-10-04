@@ -596,7 +596,7 @@ struct cpumap_kthread_ctx {
 	int cpu;		//	offset:16; size:4; signed:1;
 	unsigned int drops;	//	offset:20; size:4; signed:0;
 	unsigned int processed;	//	offset:24; size:4; signed:0;
-	int time_limit;		//	offset:28; size:4; signed:1;
+	int sched;		//	offset:28; size:4; signed:1;
 };
 
 SEC("tracepoint/xdp/xdp_cpumap_kthread")
@@ -611,8 +611,8 @@ int trace_xdp_cpumap_kthread(struct cpumap_kthread_ctx *ctx)
 	rec->processed += ctx->processed;
 	rec->dropped   += ctx->drops;
 
-	/* Detect when time limit was exceeded, but queue was not-empty */
-	if (ctx->processed > 0 && ctx->time_limit)
+	/* Count times kthread yielded CPU via schedule call */
+	if (ctx->sched)
 		rec->issue++;
 
 	return 0;
