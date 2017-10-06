@@ -519,9 +519,27 @@ static int create_cpu_entry(__u32 cpu, __u32 queue_size,
 	return 0;
 }
 
+/* CPUs are zero-indexed. Thus, add a special sentinel default value
+ * in map cpus_available to mark CPU index'es not configured
+ */
+static void mark_cpus_unavailable(void)
+{
+	__u32 invalid_cpu = MAX_CPUS;
+	int ret, i;
+
+	for (i = 0; i < MAX_CPUS; i++) {
+		/* map_fd[5] = cpus_available */
+		ret = bpf_map_update_elem(map_fd[5], &i, &invalid_cpu, 0);
+		if (ret) {
+			fprintf(stderr, "Failed marking CPU unavailable\n");
+			exit(EXIT_FAIL_BPF);
+		}
+	}
+}
+
 int main(int argc, char **argv)
 {
-	struct rlimit r = {10 * 1024*1024, RLIM_INFINITY};
+	struct rlimit r = {10 * 1024 * 1024, RLIM_INFINITY};
 	bool use_separators = true;
 	char filename[256];
 	bool debug = false;
@@ -557,6 +575,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "ERR: load_bpf_file: %s\n", strerror(errno));
 		return EXIT_FAIL;
 	}
+
+	mark_cpus_unavailable();
 
 	/* Parse commands line args */
 	while ((opt = getopt_long(argc, argv, "hSd:",

@@ -205,8 +205,14 @@ int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 
 	/* Count RX packet in map */
 	rec = bpf_map_lookup_elem(&rx_cnt, &key);
-	if (rec)
-		rec->processed++;
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
+
+	if (cpu_dest >= MAX_CPUS) {
+		rec->issue++;
+		return XDP_ABORTED;
+	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -244,6 +250,11 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 	if (ntohs(eth_type) < ETH_P_802_3_MIN) {
 		rec->dropped++;
 		return XDP_DROP;
+	}
+
+	if (cpu_dest >= MAX_CPUS) {
+		rec->issue++;
+		return XDP_ABORTED;
 	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
@@ -289,15 +300,10 @@ int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	rec->processed++;
 
-	/* Check cpu_dest is valid */
-	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
-	if (!cpu_lookup) {
+	if (cpu_dest >= MAX_CPUS) {
 		rec->issue++;
-		return XDP_DROP;
-	}
-
-	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
+	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -362,14 +368,9 @@ int  xdp_prognum3_proto_separate(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	cpu_dest = *cpu_lookup;
 
-	if (cpu_dest >= MAX_CPUS)
-		return XDP_ABORTED;
-
-	/* Check cpu_dest is valid */
-	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
-	if (!cpu_lookup) {
+	if (cpu_dest >= MAX_CPUS) {
 		rec->issue++;
-		return XDP_DROP;
+		return XDP_ABORTED;
 	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
@@ -443,18 +444,10 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 		return XDP_ABORTED;
 	cpu_dest = *cpu_lookup;
 
-	if (cpu_dest >= MAX_CPUS)
-		return XDP_ABORTED;
-
-	/* Check cpu_dest is valid */
-	cpu_lookup = bpf_map_lookup_elem(&cpu_map, &cpu_dest);
-	if (!cpu_lookup) {
+	if (cpu_dest >= MAX_CPUS) {
 		rec->issue++;
-		return XDP_DROP;
-	}
-
-	if (cpu_dest >= MAX_CPUS)
 		return XDP_ABORTED;
+	}
 
 	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
 }
@@ -577,7 +570,7 @@ int trace_xdp_cpumap_enqueue(struct cpumap_enqueue_ctx *ctx)
 
 	/* Inception: It's possible to detect overload situations, via
 	 * this tracepoint.  This can be used for creating a feedback
-	 * loop to XDP, which can take appropiate actions to mitigate
+	 * loop to XDP, which can take appropriate actions to mitigate
 	 * this overload situation.
 	 */
 	return 0;
