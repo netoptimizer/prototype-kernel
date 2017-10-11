@@ -49,13 +49,14 @@ static __u32 xdp_flags;
 
 static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
-	{"dev",	required_argument,	NULL, 'd' },
+	{"dev",		required_argument,	NULL, 'd' },
 	{"skb-mode",	no_argument,		NULL, 'S' },
 	{"debug",	no_argument,		NULL, 'D' },
-	{"sec",	required_argument,	NULL, 's' },
+	{"sec",		required_argument,	NULL, 's' },
 	{"prognum",	required_argument,	NULL, 'p' },
 	{"qsize",	required_argument,	NULL, 'q' },
-	{"cpu",	required_argument,	NULL, 'c' },
+	{"cpu",		required_argument,	NULL, 'c' },
+	{"stress-mode", no_argument,		NULL, 'x' },
 	{"no-separators", no_argument,		NULL, 'z' },
 	{0, 0, NULL,  0 }
 };
@@ -451,33 +452,10 @@ static inline void swap(struct stats_record **a, struct stats_record **b)
 	*b = tmp;
 }
 
-static void stats_poll(int interval, bool use_separators, int prog_num)
-{
-	struct stats_record *record, *prev;
-
-	record = alloc_stats_record();
-	prev   = alloc_stats_record();
-	stats_collect(record);
-
-	/* Trick to pretty printf with thousands separators use %' */
-	if (use_separators)
-		setlocale(LC_NUMERIC, "en_US");
-
-	while (1) {
-		swap(&prev, &record);
-		stats_collect(record);
-		stats_print(record, prev, prog_num);
-		sleep(interval);
-	}
-
-	free_stats_record(record);
-	free_stats_record(prev);
-}
-
 static int create_cpu_entry(__u32 cpu, __u32 queue_size,
 			    __u32 avail_idx, bool new)
 {
-	__u32 curr_cpus_count;
+	__u32 curr_cpus_count = 0;
 	__u32 key = 0;
 	int ret;
 
@@ -486,7 +464,7 @@ static int create_cpu_entry(__u32 cpu, __u32 queue_size,
 	 */
 	ret = bpf_map_update_elem(map_fd[0], &cpu, &queue_size, 0);
 	if (ret) {
-		fprintf(stderr, "Create CPU entry failed\n");
+		fprintf(stderr, "Create CPU entry failed (err:%d)\n", ret);
 		exit(EXIT_FAIL_BPF);
 	}
 
@@ -502,12 +480,12 @@ static int create_cpu_entry(__u32 cpu, __u32 queue_size,
 
 	/* When not replacing/updating existing entry, bump the count */
 	/* map_fd[6] = cpus_count */
+	ret = bpf_map_lookup_elem(map_fd[6], &key, &curr_cpus_count);
+	if (ret) {
+		fprintf(stderr, "Failed reading curr cpus_count\n");
+		exit(EXIT_FAIL_BPF);
+	}
 	if (new) {
-		ret = bpf_map_lookup_elem(map_fd[6], &key, &curr_cpus_count);
-		if (ret) {
-			fprintf(stderr, "Failed reading curr cpus_count\n");
-			exit(EXIT_FAIL_BPF);
-		}
 		curr_cpus_count++;
 		ret = bpf_map_update_elem(map_fd[6], &key, &curr_cpus_count, 0);
 		if (ret) {
@@ -516,8 +494,9 @@ static int create_cpu_entry(__u32 cpu, __u32 queue_size,
 		}
 	}
 	/* map_fd[7] = cpus_iterator */
-	printf("%s CPU:%u as idx:%u cpus_count:%u\n",
-	       new ? "Add-new":"Replace", cpu, avail_idx, curr_cpus_count);
+	printf("%s CPU:%u as idx:%u queue_size:%d (total cpus_count:%u)\n",
+	       new ? "Add-new":"Replace", cpu, avail_idx,
+	       queue_size, curr_cpus_count);
 
 	return 0;
 }
@@ -540,10 +519,49 @@ static void mark_cpus_unavailable(void)
 	}
 }
 
+/* Stress cpumap management code by concurrently changing underlying cpumap */
+static void stress_cpumap(void)
+{
+	/* Changing qsize will cause kernel to free and alloc a new
+	 * bpf_cpu_map_entry, with an associated/complicated tear-down
+	 * procedure.
+	 */
+	create_cpu_entry(1,  1024, 0, false);
+	create_cpu_entry(1,   128, 0, false);
+	create_cpu_entry(1, 16000, 0, false);
+}
+
+static void stats_poll(int interval, bool use_separators, int prog_num,
+		       bool stress_mode)
+{
+	struct stats_record *record, *prev;
+
+	record = alloc_stats_record();
+	prev   = alloc_stats_record();
+	stats_collect(record);
+
+	/* Trick to pretty printf with thousands separators use %' */
+	if (use_separators)
+		setlocale(LC_NUMERIC, "en_US");
+
+	while (1) {
+		swap(&prev, &record);
+		stats_collect(record);
+		stats_print(record, prev, prog_num);
+		sleep(interval);
+		if (stress_mode)
+			stress_cpumap();
+	}
+
+	free_stats_record(record);
+	free_stats_record(prev);
+}
+
 int main(int argc, char **argv)
 {
 	struct rlimit r = {10 * 1024 * 1024, RLIM_INFINITY};
 	bool use_separators = true;
+	bool stress_mode = false;
 	char filename[256];
 	bool debug = false;
 	int added_cpus = 0;
@@ -609,6 +627,9 @@ int main(int argc, char **argv)
 		case 'D':
 			debug = true;
 			break;
+		case 'x':
+			stress_mode = true;
+			break;
 		case 'z':
 			use_separators = false;
 			break;
@@ -625,7 +646,7 @@ int main(int argc, char **argv)
 		case 'c':
 			/* Add multiple CPUs */
 			add_cpu = strtoul(optarg, NULL, 0);
-			if (add_cpu > MAX_CPUS) {
+			if (add_cpu >= MAX_CPUS) {
 				fprintf(stderr,
 				"--cpu nr too large for cpumap err(%d):%s\n",
 					errno, strerror(errno));
@@ -671,6 +692,6 @@ int main(int argc, char **argv)
 		read_trace_pipe();
 	}
 
-	stats_poll(interval, use_separators, prog_num);
+	stats_poll(interval, use_separators, prog_num, stress_mode);
 	return EXIT_OK;
 }
