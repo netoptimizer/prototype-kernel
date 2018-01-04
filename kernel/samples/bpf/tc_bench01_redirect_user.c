@@ -37,6 +37,7 @@ static const struct option long_options[] = {
 	/* HINT assign: optional_arguments with '=' */
 	{"list",	optional_argument,	NULL, 'l' },
 	{"remove",	optional_argument,	NULL, 'r' },
+	{"quite",	no_argument,		NULL, 'q' },
 	{0, 0, NULL,  0 }
 };
 
@@ -213,7 +214,7 @@ int main(int argc, char **argv)
 	memset(ingress_ifname, 0, IF_NAMESIZE); /* Can be used uninitialized */
 
 	/* Parse commands line args */
-	while ((opt = getopt_long(argc, argv, "h",
+	while ((opt = getopt_long(argc, argv, "hq",
 				  long_options, &longindex)) != -1) {
 		switch (opt) {
 		case 'x':
@@ -280,6 +281,9 @@ int main(int argc, char **argv)
 				return EXIT_FAILURE;
 			}
 			strncpy(tc_cmd, optarg, len);
+			break;
+		case 'q':
+			verbose = 0;
 			break;
 		case 'h':
 		default:
