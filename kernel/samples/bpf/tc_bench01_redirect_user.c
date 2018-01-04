@@ -71,16 +71,30 @@ static void usage(char *argv[])
  *  $TC filter show dev $DEV ingress
  *  $TC filter  del dev $DEV ingress
  *
- * (Trick: tc takes a "replace" command)
+ * (The tc "replace" command does not seem to work as expected)
  */
 static int tc_ingress_attach_bpf(const char* dev, const char* bpf_obj)
 {
 	char cmd[CMD_MAX];
 	int ret = 0;
 
+	/* Step-1: Delete clsact, which also remove filters */
 	memset(&cmd, 0, CMD_MAX);
 	snprintf(cmd, CMD_MAX,
-		 "%s qdisc replace dev %s clsact",
+		 "%s qdisc del dev %s clsact",
+		 tc_cmd, dev);
+	if (verbose) printf(" - Run: %s\n", cmd);
+	ret = system(cmd);
+	if (ret) {
+		if (verbose)
+			fprintf(stderr, "First time loading clsact"
+				" exitcode(%d)\n", ret);
+	}
+
+	/* Step-2: Attach a new clsact qdisc */
+	memset(&cmd, 0, CMD_MAX);
+	snprintf(cmd, CMD_MAX,
+		 "%s qdisc add dev %s clsact",
 		 tc_cmd, dev);
 	if (verbose) printf(" - Run: %s\n", cmd);
 	ret = system(cmd);
@@ -91,10 +105,10 @@ static int tc_ingress_attach_bpf(const char* dev, const char* bpf_obj)
 		exit(EXIT_FAILURE);
 	}
 
+	/* Step-3: Attach BPF program/object as ingress filter */
 	memset(&cmd, 0, CMD_MAX);
-	/* Notice: tc 'replace' need handle+prio to match previous filter */
 	snprintf(cmd, CMD_MAX,
-		 "%s filter replace dev %s "
+		 "%s filter add dev %s "
 		 "ingress prio 1 handle 1 bpf da obj %s sec ingress_redirect",
 		 tc_cmd, dev, bpf_obj);
 	if (verbose) printf(" - Run: %s\n", cmd);
