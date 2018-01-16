@@ -191,12 +191,16 @@ libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
 #   which is the non-binary LLVM assembly language format
 #   (normally LLVM bitcode format .bc is generated)
 #
+# Use -Wno-address-of-packed-member as eBPF verifier enforces
+# unaligned access checks where necessary
+#
 $(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H -Wno-unused-value -Wno-pointer-sign \
 	    -Wno-compare-distinct-pointer-types \
 	    -Wno-gnu-variable-sized-type-not-at-end \
 	    -Wno-tautological-compare \
+	    -Wno-address-of-packed-member \
 	    -O2 -emit-llvm -c $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
