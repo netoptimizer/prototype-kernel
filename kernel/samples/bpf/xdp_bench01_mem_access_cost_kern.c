@@ -97,3 +97,7 @@ int xdp_prog(struct xdp_md *ctx)
 }
 
 char _license[] SEC("license") = "GPL";
+
+/* Hack as libbpf require a "version" section */
+#define LINUX_VERSION_CODE 1
+uint32_t __version SEC("version") = LINUX_VERSION_CODE;
