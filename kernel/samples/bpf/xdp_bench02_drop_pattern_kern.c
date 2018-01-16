@@ -214,7 +214,6 @@ int xdp_prog(struct xdp_md *ctx)
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
-	volatile u16 eth_type;
 	long *value;
 	u64 offset;
 	u32 action = XDP_DROP;

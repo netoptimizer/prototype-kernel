@@ -65,10 +65,10 @@ int xdp_redirect_map_prog(struct xdp_md *ctx)
 	void *data = (void *)(long)ctx->data;
 	struct ethhdr *eth = data;
 	int rc = XDP_DROP;
-	int vport, port = 0, m = 0;
 	long *value;
 	u32 key = 0;
 	u64 nh_off;
+	int vport;
 
 	nh_off = sizeof(*eth);
 	if (data + nh_off > data_end)
@@ -100,9 +100,6 @@ int xdp_redirect_dummy_prog(struct xdp_md *ctx)
 SEC("xdp_redirect_map_rr")
 int xdp_prog_redirect_map_rr(struct xdp_md *ctx)
 {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data     = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
 	int vport = 0;
 	u32 key = 0;
 	long *value;

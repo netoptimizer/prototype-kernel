@@ -55,7 +55,7 @@ static const char *softirq_names[SOFTIRQ_MAX] = {
 	[SOFTIRQ_HRTIMER]	= "SOFTIRQ_HRTIMER",
 	[SOFTIRQ_RCU]		= "SOFTIRQ_RCU",
 };
-static const char *softirq2str(enum vec_nr_t softirq)
+static inline const char *softirq2str(enum vec_nr_t softirq)
 {
 	if (softirq < SOFTIRQ_MAX)
 		return softirq_names[softirq];

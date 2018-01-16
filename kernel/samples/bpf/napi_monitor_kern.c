@@ -65,11 +65,11 @@ int napi_poll(struct napi_poll_ctx *ctx)
 	unsigned int work = ctx->work;
 	struct napi_struct *napi = ctx->napi;
 	u64 pid_tgid = 0;
-	int ifindex = 0;
+	//int ifindex = 0;
 	u32 key = 0;
-	u64 *cnt;
+	//u64 *cnt;
 
-	unsigned long	state = 0;
+	//unsigned long	state = 0;
 	unsigned int	napi_id = 0;
 
 	struct napi_bulk_histogram *napi_work;

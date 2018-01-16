@@ -77,9 +77,9 @@ int  xdp_prog(struct xdp_md *ctx)
 SEC("xdp_1")
 int  xdp_tail_call_1(struct xdp_md *ctx)
 {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
+	//void *data_end = (void *)(long)ctx->data_end;
+	//void *data = (void *)(long)ctx->data;
+	// struct ethhdr *eth = data;
 
 	bpf_debug("XDP: tail call (xdp_1) id=1\n");
 
@@ -92,9 +92,9 @@ int  xdp_tail_call_1(struct xdp_md *ctx)
 SEC("xdp_5")
 int  xdp_tail_call_2(struct xdp_md *ctx)
 {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
+	//void *data_end = (void *)(long)ctx->data_end;
+	//void *data = (void *)(long)ctx->data;
+	//struct ethhdr *eth = data;
 	volatile u32 hash = 0;
 
 	// using experimental rx_hash feature
@@ -108,9 +108,9 @@ int  xdp_tail_call_2(struct xdp_md *ctx)
 SEC("xdp_unrelated")
 int  xdp_some_tail_call_3(struct xdp_md *ctx)
 {
-	void *data_end = (void *)(long)ctx->data_end;
-	void *data = (void *)(long)ctx->data;
-	struct ethhdr *eth = data;
+	//void *data_end = (void *)(long)ctx->data_end;
+	//void *data = (void *)(long)ctx->data;
+	//struct ethhdr *eth = data;
 	volatile u32 hash = 0;
 
 	// using experimental rx_hash feature

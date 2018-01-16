@@ -128,7 +128,6 @@ int  xdp_rxhash_prog(struct xdp_md *ctx)
 	long *value;
 	u32 action = XDP_PASS;
 	u32 *a2;
-	struct pattern *pattern;
 	u32 key = 0;
 	u64 *touch_mem, h = 0;
 	u32 hash, hash_type;
@@ -190,7 +189,7 @@ int  xdp_rxhash_prog(struct xdp_md *ctx)
 	if (a2 && (*a2 > 0) && (*a2 < XDP_ACTION_MAX)) {
 		action = *a2;
 	}
-out:
+//out:
 	stats_action_verdict(action);
 	return action;
 }
