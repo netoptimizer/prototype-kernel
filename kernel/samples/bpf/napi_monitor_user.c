@@ -263,7 +263,7 @@ static void stats_poll(int interval)
 
 int main(int argc, char **argv)
 {
-	struct rlimit r = {1024*1024, RLIM_INFINITY};
+	struct rlimit r = {RLIM_INFINITY, RLIM_INFINITY};
 	int longindex = 0, opt;
 	int ret = EXIT_SUCCESS;
 	char bpf_obj_file[256];
