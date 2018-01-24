@@ -19,7 +19,7 @@ TARGETS += xdp_redirect_err
 TARGETS += tc_bench01_redirect
 
 # Experimental targets
-TARGETS += xdp_rxhash
+###TARGETS += xdp_rxhash
 TARGETS += xdp_redirect_cpu
 
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline

@@ -1,3 +1,6 @@
+// *** DO NOT USE THIS PROGRAM ***
+// Obsoleted: only kept for historical reasons
+
 /* xdp_rxhash feature test example */
 #include <uapi/linux/bpf.h>
 #include <uapi/linux/if_ether.h>
@@ -13,7 +16,16 @@
 //#include <endian.h>
 // Only __LITTLE_ENDIAN_BITFIELD and __BIG_ENDIAN_BITFIELD do seem to work
 
+// HACK to make it compile
+#define BPF_FUNC_xdp_rxhash 666
+static unsigned long long (*bpf_xdp_rxhash)(void *ctx, __u32 new_hash,
+					    __u32 type, unsigned int flags) =
+	(void *) BPF_FUNC_xdp_rxhash;
+
+
 #include "bpf_helpers.h"
+
+#include "xdp_rxhash.h"
 
 //#define DEBUG 1
 #ifdef  DEBUG
@@ -118,9 +130,23 @@ void stats_hash_type(u32 hash_type)
 		*value += 1;
 }
 
+/* Fake structure to allow compile */
+struct xdp_md2 {
+        __u32 data;
+        __u32 data_end;
+	__u32 data_meta;
+	/* Below access go through struct xdp_rxq_info */
+	__u32 ingress_ifindex; /* rxq->dev->ifindex */
+	__u32 rx_queue_index;  /* rxq->queue_index  */
+	/* NOT ACCEPTED UPSTREAM */
+	__u32 rxhash;
+	// Do we need rxhash_type here???
+	__u32 rxhash_type;
+	// Can be done as a translation, reading part of xdp_buff->flags
+};
 
 SEC("xdp_rxhash")
-int  xdp_rxhash_prog(struct xdp_md *ctx)
+int  xdp_rxhash_prog(struct xdp_md2 *ctx)
 {
 	void *data_end = (void *)(long)ctx->data_end;
 	void *data = (void *)(long)ctx->data;

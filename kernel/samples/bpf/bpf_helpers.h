@@ -76,10 +76,6 @@ static int (*bpf_sk_redirect_map)(void *map, int key, int flags) =
 static int (*bpf_sock_map_update)(void *map, void *key, void *value,
 				  unsigned long long flags) =
 	(void *) BPF_FUNC_sock_map_update;
-static unsigned long long (*bpf_xdp_rxhash)(void *ctx, __u32 new_hash,
-					    __u32 type, unsigned int flags) =
-	(void *) BPF_FUNC_xdp_rxhash;
-
 
 /* llvm builtin functions that eBPF C program may use to
  * emit BPF_LD_ABS and BPF_LD_IND instructions

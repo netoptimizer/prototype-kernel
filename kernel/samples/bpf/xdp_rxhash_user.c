@@ -1,3 +1,6 @@
+// *** DO NOT USE THIS PROGRAM ***
+// Obsoleted: only kept for historical reasons
+
 /* Copyright(c) 2017 Jesper Dangaard Brouer, Red Hat, Inc.
  */
 static const char *__doc__=
@@ -25,6 +28,8 @@ static const char *__doc__=
 #include "libbpf.h"
 #include "bpf_load.h"
 #include "bpf_util.h"
+
+#include "xdp_rxhash.h"
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];

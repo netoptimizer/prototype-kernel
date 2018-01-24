@@ -114,7 +114,7 @@ int  xdp_some_tail_call_3(struct xdp_md *ctx)
 	volatile u32 hash = 0;
 
 	// using experimental rx_hash feature
-	hash = ctx->rxhash;
+	//hash = ctx->rxhash;
 	bpf_debug("XDP: tail call 'xdp_unrelated' hash=%u\n", hash);
 
 	//bpf_tail_call(ctx, &jmp_table1, 1); // Can give loop (capped runtime)
