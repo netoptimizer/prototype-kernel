@@ -199,6 +199,7 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	    -D__KERNEL__ -D__ASM_SYSREG_H \
 	    -Wall \
 	    -Wno-unused-value -Wno-pointer-sign \
+	    -D__TARGET_ARCH_$(ARCH) \
 	    -Wno-compare-distinct-pointer-types \
 	    -Wno-gnu-variable-sized-type-not-at-end \
 	    -Wno-tautological-compare \
