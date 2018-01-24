@@ -22,7 +22,7 @@ static const char *__doc__ =
 #define MAX_CPUS 12 /* WARNING - sync with _kern.c */
 
 /* How many xdp_progs are defined in _kern.c */
-#define MAX_PROG 5
+#define MAX_PROG 6
 
 /* Wanted to get rid of bpf_load.h and fake-"libbpf.h" (and instead
  * use bpf/libbpf.h), but cannot as (currently) needed for XDP

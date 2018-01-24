@@ -14,6 +14,8 @@
 #include <uapi/linux/bpf.h>
 #include "bpf_helpers.h"
 
+#include "hash_func01.h"
+
 #define MAX_CPUS 12 /* WARNING - sync with _user.c */
 
 /* Special map type that can XDP_REDIRECT frames to another CPU */
@@ -432,6 +434,114 @@ int  xdp_prognum4_ddos_filter_pktgen(struct xdp_md *ctx)
 	default:
 		cpu_idx = 0;
 	}
+
+	cpu_lookup = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
+	if (!cpu_lookup)
+		return XDP_ABORTED;
+	cpu_dest = *cpu_lookup;
+
+	if (cpu_dest >= MAX_CPUS) {
+		rec->issue++;
+		return XDP_ABORTED;
+	}
+
+	return bpf_redirect_map(&cpu_map, cpu_dest, 0);
+}
+
+struct L3_flow_keys {
+	/* Room for both IPv4 and IPv6 addresses */
+	u32 src[4];
+	u32 dst[4];
+};
+
+static __always_inline
+u32 get_l3_hash(struct L3_flow_keys *flow, u16 protocol)
+{
+	u32 key[4];
+	u32 hash;
+
+	/* Symmetric L3 hash: same when IP src and dst are swapped */
+
+	switch (protocol) {
+	case ETH_P_IP:
+		key[0] = flow->src[0] ^ flow->dst[0];
+		hash = SuperFastHash((char *)&key[0], 4);
+		break;
+	case ETH_P_IPV6:
+		key[0] = flow->src[0] ^ flow->dst[0];
+		key[1] = flow->src[1] ^ flow->dst[1];
+		key[2] = flow->src[2] ^ flow->dst[2];
+		key[3] = flow->src[3] ^ flow->dst[3];
+		hash = SuperFastHash((char *)&key, 16);
+		break;
+	default:
+		hash = 0;
+	}
+
+	return hash;
+}
+
+SEC("xdp_cpu_map5_ip_l3_flow_hash")
+int  xdp_prognum5_ip_l3_flow_hash(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
+	struct datarec *rec;
+	u16 eth_proto = 0;
+	u64 l3_offset = 0;
+	u32 cpu_dest = 0;
+	u32 cpu_idx = 0;
+	u32 *cpu_lookup;
+	u32 *cpu_max;
+	u32 key0 = 0;
+
+	/* For flow hashing */
+	struct L3_flow_keys f;
+	struct iphdr   *ip4h;
+	struct ipv6hdr *ip6h;
+	u32 hash;
+
+	/* Count RX packet in map */
+	rec = bpf_map_lookup_elem(&rx_cnt, &key0);
+	if (!rec)
+		return XDP_ABORTED;
+	rec->processed++;
+
+	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset)))
+		return XDP_PASS; /* Just skip */
+
+	/* Extract L3 IP (src and dst) for flow hash */
+	switch (eth_proto) {
+	case ETH_P_IP:
+		ip4h = data + l3_offset;
+		if (ip4h + 1 > data_end)
+			return XDP_ABORTED;
+		f.src[0] = ip4h->saddr;
+		f.dst[0] = ip4h->daddr;
+		hash = get_l3_hash(&f, eth_proto);
+		break;
+	case ETH_P_IPV6:
+		ip6h = data + l3_offset;
+		if (ip6h + 1 > data_end)
+			return XDP_ABORTED;
+		__builtin_memcpy(f.src, ip6h->saddr.s6_addr32, sizeof(f.src));
+		__builtin_memcpy(f.dst, ip6h->daddr.s6_addr32, sizeof(f.dst));
+		hash = get_l3_hash(&f, eth_proto);
+		break;
+	case ETH_P_ARP:
+		return XDP_PASS; /* ARP packet handled on incoming CPU */
+		break;
+	default:
+		hash = 0; /* Will hit CPU index zero */
+	}
+
+	cpu_max = bpf_map_lookup_elem(&cpus_count, &key0);
+	if (!cpu_max)
+		return XDP_ABORTED;
+
+	/* Distribute over avail CPUs based on L3 IP-address hash */
+	cpu_idx = hash % *cpu_max;
 
 	cpu_lookup = bpf_map_lookup_elem(&cpus_available, &cpu_idx);
 	if (!cpu_lookup)
