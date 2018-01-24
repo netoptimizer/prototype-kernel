@@ -190,6 +190,8 @@ int get_proto_ipv6(struct xdp_md *ctx, u64 nh_off)
 SEC("xdp_cpu_map0")
 int  xdp_prognum0_no_touch(struct xdp_md *ctx)
 {
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
 	struct datarec *rec;
 	u32 *cpu_selected;
 	u32 cpu_dest;
@@ -261,8 +263,12 @@ int  xdp_prognum1_touch_data(struct xdp_md *ctx)
 SEC("xdp_cpu_map2_round_robin")
 int  xdp_prognum2_round_robin(struct xdp_md *ctx)
 {
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *eth = data;
 	struct datarec *rec;
 	u32 cpu_dest;
+	u32 *cpu_lookup;
 	u32 key0 = 0;
 
 	u32 *cpu_selected;
