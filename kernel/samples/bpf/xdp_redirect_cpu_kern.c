@@ -465,14 +465,14 @@ u32 get_l3_hash(struct L3_flow_keys *flow, u16 protocol)
 	switch (protocol) {
 	case ETH_P_IP:
 		key[0] = flow->src[0] ^ flow->dst[0];
-		hash = SuperFastHash((char *)&key[0], 4);
+		hash = SuperFastHash((char *)&key[0], 4, protocol);
 		break;
 	case ETH_P_IPV6:
 		key[0] = flow->src[0] ^ flow->dst[0];
 		key[1] = flow->src[1] ^ flow->dst[1];
 		key[2] = flow->src[2] ^ flow->dst[2];
 		key[3] = flow->src[3] ^ flow->dst[3];
-		hash = SuperFastHash((char *)&key, 16);
+		hash = SuperFastHash((char *)&key, 16, protocol);
 		break;
 	default:
 		hash = 0;

@@ -7,8 +7,9 @@
 #define get16bits(d) (*((const uint16_t *) (d)))
 
 static __always_inline
-uint32_t SuperFastHash (const char * data, int len) {
-	uint32_t hash = len, tmp;
+uint32_t SuperFastHash (const char *data, int len, uint32_t initval) {
+	uint32_t hash = initval;
+	uint32_t tmp;
 	int rem;
 
 	if (len <= 0 || data == NULL) return 0;
