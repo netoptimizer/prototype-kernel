@@ -454,25 +454,34 @@ struct L3_flow_keys {
 	u32 dst[4];
 };
 
+/* Get hash based on L3 header information */
 static __always_inline
-u32 get_l3_hash(struct L3_flow_keys *flow, u16 protocol)
+u32 get_l3_hash(struct L3_flow_keys *flow, u16 protocol, u8 l4_proto)
 {
 	u32 key[4];
 	u32 hash;
+	u32 initval;
+
+#define INIT_SEED 15485863 /* Arbitrary choosen number, the 10^6th prime */
+
+	/* initval choosen to separate UDP and TCP (and ICMP) traffic
+	 *  from same IP-pair into different hash buckets. Hint: Worry
+	 *  about spoofed packets, then add TTL to the mix.
+	 */
+	initval = INIT_SEED + protocol + l4_proto;
 
 	/* Symmetric L3 hash: same when IP src and dst are swapped */
-
 	switch (protocol) {
 	case ETH_P_IP:
 		key[0] = flow->src[0] ^ flow->dst[0];
-		hash = SuperFastHash((char *)&key[0], 4, protocol);
+		hash = SuperFastHash((char *)&key[0], 4, initval);
 		break;
 	case ETH_P_IPV6:
 		key[0] = flow->src[0] ^ flow->dst[0];
 		key[1] = flow->src[1] ^ flow->dst[1];
 		key[2] = flow->src[2] ^ flow->dst[2];
 		key[3] = flow->src[3] ^ flow->dst[3];
-		hash = SuperFastHash((char *)&key, 16, protocol);
+		hash = SuperFastHash((char *)&key, 16, initval);
 		break;
 	default:
 		hash = 0;
@@ -511,15 +520,15 @@ int  xdp_prognum5_ip_l3_flow_hash(struct xdp_md *ctx)
 	if (!(parse_eth(eth, data_end, &eth_proto, &l3_offset)))
 		return XDP_PASS; /* Just skip */
 
-	/* Extract L3 IP (src and dst) for flow hash */
+	/* Extract L3 IP (src and dst) + next L4-protocol for flow hash */
 	switch (eth_proto) {
 	case ETH_P_IP:
 		ip4h = data + l3_offset;
 		if (ip4h + 1 > data_end)
 			return XDP_ABORTED;
-		f.src[0] = ip4h->saddr;
+		f.src[0] = ip4h->saddr;/* network byte-order, does it matter?*/
 		f.dst[0] = ip4h->daddr;
-		hash = get_l3_hash(&f, eth_proto);
+		hash = get_l3_hash(&f, eth_proto, ip4h->protocol);
 		break;
 	case ETH_P_IPV6:
 		ip6h = data + l3_offset;
@@ -527,7 +536,7 @@ int  xdp_prognum5_ip_l3_flow_hash(struct xdp_md *ctx)
 			return XDP_ABORTED;
 		__builtin_memcpy(f.src, ip6h->saddr.s6_addr32, sizeof(f.src));
 		__builtin_memcpy(f.dst, ip6h->daddr.s6_addr32, sizeof(f.dst));
-		hash = get_l3_hash(&f, eth_proto);
+		hash = get_l3_hash(&f, eth_proto, ip6h->nexthdr);
 		break;
 	case ETH_P_ARP:
 		return XDP_PASS; /* ARP packet handled on incoming CPU */
