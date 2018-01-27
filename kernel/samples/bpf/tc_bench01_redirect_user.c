@@ -37,7 +37,7 @@ static const struct option long_options[] = {
 	/* HINT assign: optional_arguments with '=' */
 	{"list",	optional_argument,	NULL, 'l' },
 	{"remove",	optional_argument,	NULL, 'r' },
-	{"quite",	no_argument,		NULL, 'q' },
+	{"quiet",	no_argument,		NULL, 'q' },
 	{0, 0, NULL,  0 }
 };
 

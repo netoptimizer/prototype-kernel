@@ -98,7 +98,7 @@ static const struct option long_options[] = {
 	{"help",	no_argument,		NULL, 'h' },
 	{"remove",	no_argument,		NULL, 'r' },
 	{"dev",		required_argument,	NULL, 'd' },
-	{"quite",	no_argument,		NULL, 'q' },
+	{"quiet",	no_argument,		NULL, 'q' },
 	{"owner",	required_argument,	NULL, 'o' },
 	{"skb-mode",	no_argument,		NULL, 'S' },
 	{0, 0, NULL,  0 }
