@@ -1,0 +1,58 @@
+#!/bin/bash -e
+#
+# Script to kexec reboot into a selected kernel.
+# It will load it using kexec and reboot, skipping machine POST and all.
+# Similar to what a crash would trigger.
+# Useful if kernel may not boot (as the next power cycle will boot the
+# default kernel) or you want it to reboot faster.
+#
+# Tested only on RHEL7.2 and Fedora 23, but should work whenever you
+# have grubby and kexec-tools installed.
+#
+# Depends on: grubby kexec-tools
+#
+# Authors: Marcelo Ricardo Leitner <mleitner@redhat.com>
+#
+
+index="$1"
+if [ -z "$index" ]; then
+	echo "Please select which entry:"
+	index=$(grubby --default-index)
+	grep linux16 /boot/grub2/grub.cfg | {
+		IFS=
+		i=0
+		while read l; do
+			if [ $i -eq $index ]; then
+				echo -n '*'
+			fi
+			echo "${i}.$l"
+			i=$((i+1))
+		done
+		unset IFS
+	}
+	read index
+fi
+
+grubby --info="$index" | {
+	IFS==
+	while read field value
+	do
+		case $value in
+		\"*\")
+			eval "$field=$value" ;;
+		*)
+			eval "$field=\$value" ;;
+		esac
+	done
+	unset IFS
+
+	set -x
+	kexec -l --initrd="$initrd" --append="root=$root $args" -- "$kernel"
+}
+
+echo "Kernel loaded, you may actually reboot now."
+
+read -p "Do you want to reboot now (y/[n])?"
+if [[ "$REPLY" == "y" ]]; then
+    reboot
+fi
