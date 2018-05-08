@@ -208,8 +208,8 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	    -O2 -emit-llvm -c $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
-$(TARGETS): %: %_user.c $(OBJECTS) Makefile
+$(TARGETS): %: %_user.c $(OBJECTS) Makefile bpf_util.h
 	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
 
-$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile $(COMMON_H)
+$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile $(COMMON_H) bpf_util.h
 	$(CC) -g $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
