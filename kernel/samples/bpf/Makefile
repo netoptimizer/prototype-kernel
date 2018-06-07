@@ -197,6 +197,7 @@ libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
 $(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H \
+	    -D__BPF_TRACING__ \
 	    -Wall \
 	    -Wno-unused-value -Wno-pointer-sign \
 	    -D__TARGET_ARCH_$(ARCH) \
