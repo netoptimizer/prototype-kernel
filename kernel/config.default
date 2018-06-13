@@ -27,7 +27,8 @@ CONFIG_SLAB_TESTS=m
 CONFIG_SLAB_BULK_API=n
 
 # Testing some of MST's skb_array code
-CONFIG_SKB_ARRAY_TESTS=m
+# (Compile issues on newer kernels)
+# CONFIG_SKB_ARRAY_TESTS=m
 
 # Testing experimental page allocator bulking my Mel Gorman
 CONFIG_PAGE_BULK_API=n
