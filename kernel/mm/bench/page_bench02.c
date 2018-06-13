@@ -78,7 +78,7 @@ static int time_alloc_pages(
 {
 	/* Important to set: __GFP_COMP for compound pages
 	 */
-	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD | __GFP_COMP);
+	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COMP);
 	struct page *my_page;
 	int order = rec->step;
 	int i;
@@ -126,7 +126,7 @@ static int time_alloc_pages_outstanding(
 {
 	/* Important to set: __GFP_COMP for compound pages
 	 */
-//	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD | __GFP_COMP);
+//	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COMP);
 	gfp_t gfp_mask = (__GFP_COMP);
 	struct page *page;
 	int allocs_before_free = rec->step;

@@ -49,7 +49,7 @@ static int time_alloc_pages(
 {
 	/* Important to set: __GFP_COMP for compound pages
 	 */
-	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COLD | __GFP_COMP);
+	gfp_t gfp_mask = (GFP_ATOMIC | __GFP_COMP);
 	struct page *page;
 	int order = rec->step;
 	int i;
