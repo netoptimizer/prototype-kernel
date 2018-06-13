@@ -239,8 +239,8 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		/* Reset n to the initial burst count */
 		n = max;
 
-		prod_head = ACCESS_ONCE(r->prod.head);
-		cons_tail = ACCESS_ONCE(r->cons.tail);
+		prod_head = READ_ONCE(r->prod.head);
+		cons_tail = READ_ONCE(r->cons.tail);
 		/* The subtraction is done between two unsigned 32bits value
 		 * (the result is always modulo 32 bits even if we have
 		 * prod_head > cons_tail). So 'free_entries' is always between 0
@@ -281,10 +281,10 @@ __ring_queue_mp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	/* If there are other enqueues in progress that preceeded us,
 	 * we need to wait for them to complete
 	 */
-	while (unlikely(ACCESS_ONCE(r->prod.tail) != prod_head))
+	while (unlikely(READ_ONCE(r->prod.tail) != prod_head))
 		cpu_relax();
 
-	ACCESS_ONCE(r->prod.tail) = prod_next;
+	WRITE_ONCE(r->prod.tail, prod_next);
 	return ret;
 }
 
@@ -301,9 +301,9 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	u32 mask = r->prod.mask;
 	int ret;
 
-	prod_head = ACCESS_ONCE(r->prod.head);
+	prod_head = READ_ONCE(r->prod.head);
 	smp_rmb(); /* for cons.tail write, making sure deq loads are done */
-	cons_tail = ACCESS_ONCE(r->cons.tail);
+	cons_tail = READ_ONCE(r->cons.tail);
 	/* The subtraction is done between two unsigned 32bits value
 	 * (the result is always modulo 32 bits even if we have
 	 * prod_head > cons_tail). So 'free_entries' is always between 0
@@ -325,7 +325,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 	}
 
 	prod_next = prod_head + n;
-	ACCESS_ONCE(r->prod.head) = prod_next;
+	WRITE_ONCE(r->prod.head, prod_next);
 
 	ENQUEUE_PTRS(); /* write entries in ring */
 	smp_wmb(); /* matching dequeue LOADs */
@@ -338,7 +338,7 @@ __ring_queue_sp_do_enqueue(struct ring_queue *r, void * const *obj_table,
 		ret = (behavior == RING_QUEUE_FIXED) ? 0 : n;
 	}
 
-	ACCESS_ONCE(r->prod.tail) = prod_next;
+	WRITE_ONCE(r->prod.tail, prod_next);
 	return ret;
 }
 
@@ -361,8 +361,8 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 		/* Restore n as it may change every loop */
 		n = max;
 
-		cons_head = ACCESS_ONCE(r->cons.head);
-		prod_tail = ACCESS_ONCE(r->prod.tail);
+		cons_head = READ_ONCE(r->cons.head);
+		prod_tail = READ_ONCE(r->prod.tail);
 		/* The subtraction is done between two unsigned 32bits value
 		 * (the result is always modulo 32 bits even if we have
 		 * cons_head > prod_tail). So 'entries' is always between 0
@@ -393,12 +393,12 @@ __ring_queue_mc_do_dequeue(struct ring_queue *r, void **obj_table,
 	/* If there are other dequeues in progress that preceded us,
 	 * we need to wait for them to complete
 	 */
-	while (unlikely(ACCESS_ONCE(r->cons.tail) != cons_head))
+	while (unlikely(READ_ONCE(r->cons.tail) != cons_head))
 		cpu_relax();
 
 	/* cons.tail must not be visible before dequeue LOADs are finished */
 	smp_wmb();
-	ACCESS_ONCE(r->cons.tail) = cons_next;
+	WRITE_ONCE(r->cons.tail, cons_next);
 
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
@@ -415,8 +415,8 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	unsigned i;
 	u32 mask = r->prod.mask;
 
-	cons_head = ACCESS_ONCE(r->cons.head);
-	prod_tail = ACCESS_ONCE(r->prod.tail);
+	cons_head = READ_ONCE(r->cons.head);
+	prod_tail = READ_ONCE(r->prod.tail);
 	/* The subtraction is done between two unsigned 32bits value
 	 * (the result is always modulo 32 bits even if we have
 	 * cons_head > prod_tail). So 'entries' is always between 0
@@ -436,14 +436,14 @@ __ring_queue_sc_do_dequeue(struct ring_queue *r, void **obj_table,
 	}
 
 	cons_next = cons_head + n;
-	ACCESS_ONCE(r->cons.head) = cons_next;
+	WRITE_ONCE(r->cons.head, cons_next);
 
 	smp_rmb(); /* matching enqueue STOREs */
 	DEQUEUE_PTRS(); /* copy in table */
 
 	/* cons.tail must not be visible before dequeue LOADs are finished */
 	smp_wmb();
-	ACCESS_ONCE(r->cons.tail) = cons_next;
+	WRITE_ONCE(r->cons.tail, cons_next);
 	return behavior == RING_QUEUE_FIXED ? 0 : n;
 }
 
@@ -686,32 +686,32 @@ ring_queue_dequeue(struct ring_queue *r, void **obj_p)
 /* Test if a ring is full */
 static inline int ring_queue_full(const struct ring_queue *r)
 {
-	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
-	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = READ_ONCE(r->prod.tail);
+	u32 cons_tail = READ_ONCE(r->cons.tail);
 	return (((cons_tail - prod_tail - 1) & r->prod.mask) == 0);
 }
 
 /* Test if a ring is empty */
 static inline int ring_queue_empty(const struct ring_queue *r)
 {
-	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
-	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = READ_ONCE(r->prod.tail);
+	u32 cons_tail = READ_ONCE(r->cons.tail);
 	return !!(cons_tail == prod_tail);
 }
 
 /* Return the number of entries in a ring */
 static inline unsigned ring_queue_count(const struct ring_queue *r)
 {
-	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
-	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = READ_ONCE(r->prod.tail);
+	u32 cons_tail = READ_ONCE(r->cons.tail);
 	return ((prod_tail - cons_tail) & r->prod.mask);
 }
 
 /* Return the number of free entries in a ring */
 static inline unsigned ring_queue_free_count(const struct ring_queue *r)
 {
-	u32 prod_tail = ACCESS_ONCE(r->prod.tail);
-	u32 cons_tail = ACCESS_ONCE(r->cons.tail);
+	u32 prod_tail = READ_ONCE(r->prod.tail);
+	u32 cons_tail = READ_ONCE(r->cons.tail);
 	return ((cons_tail - prod_tail - 1) & r->prod.mask);
 }
 
