@@ -67,8 +67,8 @@ alf_mp_enqueue(const u32 n;
 
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	do {
-		p_head = ACCESS_ONCE(q->producer.head);
-		c_tail = ACCESS_ONCE(q->consumer.tail);/* as smp_load_aquire */
+		p_head = READ_ONCE(q->producer.head);
+		c_tail = READ_ONCE(q->consumer.tail);/* as smp_load_aquire */
 
 		space = q->size + c_tail - p_head;
 		if (n > space)
@@ -89,10 +89,10 @@ alf_mp_enqueue(const u32 n;
 	 * this part make us none-wait-free and could be problematic
 	 * in case of congestion with many CPUs
 	 */
-	while (unlikely(ACCESS_ONCE(q->producer.tail) != p_head))
+	while (unlikely(READ_ONCE(q->producer.tail) != p_head))
 		cpu_relax();
 	/* Mark this enq done and avail for consumption */
-	ACCESS_ONCE(q->producer.tail) = p_next;
+	WRITE_ONCE(q->producer.tail, p_next);
 
 	return n;
 }
@@ -106,8 +106,8 @@ alf_mc_dequeue(const u32 n;
 
 	/* Reserve part of the array for dequeue LOAD/READ */
 	do {
-		c_head = ACCESS_ONCE(q->consumer.head);
-		p_tail = ACCESS_ONCE(q->producer.tail);
+		c_head = READ_ONCE(q->consumer.head);
+		p_tail = READ_ONCE(q->producer.tail);
 
 		elems = p_tail - c_head;
 
@@ -127,7 +127,7 @@ alf_mc_dequeue(const u32 n;
 	__helper_alf_dequeue_load(c_head, q, ptr, elems);
 
 	/* Wait for other concurrent preceding dequeues not yet done */
-	while (unlikely(ACCESS_ONCE(q->consumer.tail) != c_head))
+	while (unlikely(READ_ONCE(q->consumer.tail) != c_head))
 		cpu_relax();
 	/* Mark this deq done and avail for producers */
 	smp_store_release(&q->consumer.tail, c_next);
@@ -166,14 +166,14 @@ alf_sp_enqueue(const u32 n;
 	/* Reserve part of the array for enqueue STORE/WRITE */
 	p_head = q->producer.head;
 	smp_rmb(); /* for consumer.tail write, making sure deq loads are done */
-	c_tail = ACCESS_ONCE(q->consumer.tail);
+	c_tail = READ_ONCE(q->consumer.tail);
 
 	space = q->size + c_tail - p_head;
 	if (n > space)
 		return 0;
 
 	p_next = p_head + n;
-	ASSERT(ACCESS_ONCE(q->producer.head) == p_head);
+	ASSERT(READ_ONCE(q->producer.head) == p_head);
 	q->producer.head = p_next;
 
 	/* STORE the elems into the queue array */
@@ -181,10 +181,10 @@ alf_sp_enqueue(const u32 n;
 	smp_wmb(); /* Write-Memory-Barrier matching dequeue LOADs */
 
 	/* Assert no other CPU (or same CPU via preemption) changed queue */
-	ASSERT(ACCESS_ONCE(q->producer.tail) == p_head);
+	ASSERT(READ_ONCE(q->producer.tail) == p_head);
 
 	/* Mark this enq done and avail for consumption */
-	ACCESS_ONCE(q->producer.tail) = p_next;
+	WRITE_ONCE(q->producer.tail, p_next);
 
 	return n;
 }
@@ -200,7 +200,7 @@ alf_sc_dequeue(const u32 n;
 
 	/* Reserve part of the array for dequeue LOAD/READ */
 	c_head = q->consumer.head;
-	p_tail = ACCESS_ONCE(q->producer.tail);
+	p_tail = READ_ONCE(q->producer.tail);
 
 	elems = p_tail - c_head;
 
@@ -210,7 +210,7 @@ alf_sc_dequeue(const u32 n;
 		elems = min(elems, n);
 
 	c_next = c_head + elems;
-	ASSERT(ACCESS_ONCE(q->consumer.head) == c_head);
+	ASSERT(READ_ONCE(q->consumer.head) == c_head);
 	q->consumer.head = c_next;
 
 	smp_rmb(); /* Read-Memory-Barrier matching enq STOREs */
@@ -224,10 +224,10 @@ alf_sc_dequeue(const u32 n;
 	smp_wmb();
 
 	/* Assert no other CPU (or same CPU via preemption) changed queue */
-	ASSERT(ACCESS_ONCE(q->consumer.tail) == c_head);
+	ASSERT(READ_ONCE(q->consumer.tail) == c_head);
 
 	/* Mark this deq done and avail for producers */
-	ACCESS_ONCE(q->consumer.tail) = c_next;
+	WRITE_ONCE(q->consumer.tail, c_next);
 
 	return elems;
 }
@@ -235,8 +235,8 @@ alf_sc_dequeue(const u32 n;
 static inline bool
 alf_queue_empty(struct alf_queue *q)
 {
-	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
-	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+	u32 c_tail = READ_ONCE(q->consumer.tail);
+	u32 p_tail = READ_ONCE(q->producer.tail);
 
 	/* The empty (and initial state) is when consumer have reached
 	 * up with producer.
@@ -250,8 +250,8 @@ alf_queue_empty(struct alf_queue *q)
 static inline int
 alf_queue_count(struct alf_queue *q)
 {
-	u32 c_head = ACCESS_ONCE(q->consumer.head);
-	u32 p_tail = ACCESS_ONCE(q->producer.tail);
+	u32 c_head = READ_ONCE(q->consumer.head);
+	u32 p_tail = READ_ONCE(q->producer.tail);
 	u32 elems;
 
 	/* Due to u32 arithmetic the values are implicitly
@@ -267,8 +267,8 @@ alf_queue_count(struct alf_queue *q)
 static inline int
 alf_queue_avail_space(struct alf_queue *q)
 {
-	u32 p_head = ACCESS_ONCE(q->producer.head);
-	u32 c_tail = ACCESS_ONCE(q->consumer.tail);
+	u32 p_head = READ_ONCE(q->producer.head);
+	u32 c_tail = READ_ONCE(q->consumer.tail);
 	u32 space;
 
 	/* The max avail space is q->size and
