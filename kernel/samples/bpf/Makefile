@@ -18,6 +18,8 @@ TARGETS += xdp_redirect_err
 # somone cares, makefile should have separate target for TC.
 TARGETS += tc_bench01_redirect
 
+TARGETS += xdp_vlan01
+
 # Experimental targets
 ###TARGETS += xdp_rxhash
 TARGETS += xdp_redirect_cpu
