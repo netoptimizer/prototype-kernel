@@ -125,3 +125,13 @@ Load prog with ip tool:
  ip link set $ROOTDEV xdp object xdp_vlan01_kern.o section xdp_drop_vlan_4011
 
 */
+
+/*
+ TODO list
+ ---------
+
+Show XDP+TC can cooperate, on creating a VLAN rewriter.
+1. Create a XDP prog that can "pop"/remove a VLAN header.
+2. Create a TC-bpf prog that egress can add a VLAN header.
+
+*/
