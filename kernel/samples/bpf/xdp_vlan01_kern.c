@@ -88,6 +88,10 @@ bool parse_eth_frame(struct ethhdr *eth, void *data_end, struct parse_pkt *pkt)
 	return true;
 }
 
+/* Hint, VLANs are choosen to hit network-byte-order issues */
+#define TESTVLAN 4011 /* 0xFAB */
+#define TO_VLAN  4000 /* 0xFA0 (hint 0xOA0 = 160) */
+
 SEC("xdp_drop_vlan_4011")
 int  xdp_prognum0(struct xdp_md *ctx)
 {
@@ -103,7 +107,7 @@ int  xdp_prognum0(struct xdp_md *ctx)
 		return XDP_PASS;
 
 	/* Drop specific VLAN ID example */
-	if (pkt.vlan_outer == 4011) /* == 0xFAB */
+	if (pkt.vlan_outer == TESTVLAN)
 		return XDP_ABORTED;
 
 	return XDP_PASS;
@@ -125,6 +129,32 @@ Load prog with ip tool:
  ip link set $ROOTDEV xdp object xdp_vlan01_kern.o section xdp_drop_vlan_4011
 
 */
+
+SEC("xdp_vlan_change")
+int  xdp_prognum1(struct xdp_md *ctx)
+{
+        void *data_end = (void *)(long)ctx->data_end;
+        void *data     = (void *)(long)ctx->data;
+	struct parse_pkt pkt = { 0 };
+
+	if (!parse_eth_frame(data, data_end, &pkt))
+		return XDP_ABORTED;
+
+	/* Allow ARP-packet through, e.g test with arping */
+	if (pkt.l3_proto == ETH_P_ARP)
+		return XDP_PASS;
+
+	/* Change specific VLAN ID */
+	if (pkt.vlan_outer == TESTVLAN) {
+		struct _vlan_hdr *vlan_hdr = data + pkt.vlan_outer_offset;
+
+		/* Modifying VLAN, preserve top 4 bits */
+		vlan_hdr->h_vlan_TCI =
+			htons((ntohs(vlan_hdr->h_vlan_TCI) & 0xf000) | TO_VLAN);
+	}
+
+	return XDP_PASS;
+}
 
 /*
  TODO list
