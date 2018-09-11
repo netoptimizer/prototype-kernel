@@ -170,3 +170,39 @@ Show XDP+TC can cooperate, on creating a VLAN rewriter.
 2. Create a TC-bpf prog that egress can add a VLAN header.
 
 */
+
+#ifndef ETH_ALEN /* Ethernet MAC address length */
+#define ETH_ALEN	6	/* bytes */
+#endif
+#define VLAN_HDR_SZ	4	/* bytes */
+
+SEC("xdp_vlan_remove_outer")
+int  xdp_prognum2(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct parse_pkt pkt = { 0 };
+	char *dest;
+
+	if (!parse_eth_frame(data, data_end, &pkt))
+		return XDP_ABORTED;
+
+	/* Skip packet if no outer VLAN was detected */
+	if (pkt.vlan_outer_offset == 0)
+		return XDP_PASS;
+
+	/* Moving Ethernet header, dest overlap with src, memmove handle this */
+	dest = data;
+	dest+= VLAN_HDR_SZ;
+	/*
+	 * Notice: Taking over vlan_hdr->h_vlan_encapsulated_proto, by
+	 * only moving two MAC addrs (12 bytes), not overwriting last 2 bytes
+	 */
+	__builtin_memmove(dest, data, ETH_ALEN * 2);
+	/* Note: LLVM built-in memmove inlining require size to be constant */
+
+	/* Move start of packet header seen by Linux kernel stack */
+	bpf_xdp_adjust_head(ctx, VLAN_HDR_SZ);
+
+	return XDP_PASS;
+}
