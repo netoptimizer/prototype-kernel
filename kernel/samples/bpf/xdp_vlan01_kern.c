@@ -17,6 +17,8 @@
 #include <uapi/linux/if_ether.h>
 #include <uapi/linux/if_vlan.h>
 #include <uapi/linux/in.h>
+#include <uapi/linux/pkt_cls.h>
+
 #include "bpf_helpers.h"
 
 /* linux/if_vlan.h have not exposed this as UAPI, thus mirror some here
@@ -258,3 +260,33 @@ int  xdp_prognum3(struct xdp_md *ctx)
 
 	return XDP_PASS;
 }
+
+/*=====================================
+ *  BELOW: TC-hook based ebpf programs
+ * ====================================
+ * The TC-clsact eBPF programs (currently) need to be attach via TC commands
+ */
+
+SEC("tc_vlan_push")
+int _tc_progA(struct __sk_buff *ctx)
+{
+	bpf_skb_vlan_push(ctx, htons(ETH_P_8021Q), TESTVLAN);
+
+	return TC_ACT_OK;
+}
+/*
+Commands to setup TC to use above bpf prog:
+
+export ROOTDEV=ixgbe2
+export FILE=xdp_vlan01_kern.o
+
+# Re-attach clsact to clear/flush existing role
+tc qdisc del dev $ROOTDEV clsact 2> /dev/null ;\
+tc qdisc add dev $ROOTDEV clsact
+
+# Attach BPF prog EGRESS
+tc filter add dev $ROOTDEV egress \
+  prio 1 handle 1 bpf da obj $FILE sec tc_vlan_push
+
+tc filter show dev $ROOTDEV egress
+*/
