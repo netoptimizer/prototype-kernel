@@ -206,3 +206,55 @@ int  xdp_prognum2(struct xdp_md *ctx)
 
 	return XDP_PASS;
 }
+
+static __always_inline
+void shift_mac_4bytes_16bit(void *data)
+{
+	__u16 *p = data;
+
+	p[7] = p[5]; /* delete p[7] was vlan_hdr->h_vlan_TCI */
+	p[6] = p[4]; /* delete p[6] was ethhdr->h_proto */
+	p[5] = p[3];
+	p[4] = p[2];
+	p[3] = p[1];
+	p[2] = p[0];
+}
+
+static __always_inline
+void shift_mac_4bytes_32bit(void *data)
+{
+	__u32 *p = data;
+
+	/* Assuming VLAN hdr present. The 4 bytes in p[3] that gets
+	 * overwritten, is ethhdr->h_proto and vlan_hdr->h_vlan_TCI.
+	 * The vlan_hdr->h_vlan_encapsulated_proto take over role as
+	 * ethhdr->h_proto.
+	 */
+	p[3] = p[2];
+	p[2] = p[1];
+	p[1] = p[0];
+}
+
+SEC("xdp_vlan_remove_outer2")
+int  xdp_prognum3(struct xdp_md *ctx)
+{
+	void *data_end = (void *)(long)ctx->data_end;
+	void *data     = (void *)(long)ctx->data;
+	struct ethhdr *orig_eth = data;
+	struct parse_pkt pkt = { 0 };
+
+	if (!parse_eth_frame(orig_eth, data_end, &pkt))
+		return XDP_ABORTED;
+
+	/* Skip packet if no outer VLAN was detected */
+	if (pkt.vlan_outer_offset == 0)
+		return XDP_PASS;
+
+	/* Simply shift down MAC addrs 4 bytes, overwrite h_proto + TCI */
+	shift_mac_4bytes_32bit(data);
+
+	/* Move start of packet header seen by Linux kernel stack */
+	bpf_xdp_adjust_head(ctx, VLAN_HDR_SZ);
+
+	return XDP_PASS;
+}
