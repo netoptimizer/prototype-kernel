@@ -8,6 +8,10 @@
  */
 #define SEC(NAME) __attribute__((section(NAME), used))
 
+/* helper functions missing upstream in this file */
+static int (*bpf_skb_vlan_push)(void *ctx, __be16 vlan_proto, u16 vlan_tci) =
+	(void *) BPF_FUNC_skb_vlan_push;
+
 /* helper functions called from eBPF programs written in C */
 static void *(*bpf_map_lookup_elem)(void *map, void *key) =
 	(void *) BPF_FUNC_map_lookup_elem;
