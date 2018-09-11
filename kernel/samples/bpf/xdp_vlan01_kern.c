@@ -109,7 +109,12 @@ int  xdp_prognum0(struct xdp_md *ctx)
 	/* Drop specific VLAN ID example */
 	if (pkt.vlan_outer == TESTVLAN)
 		return XDP_ABORTED;
-
+	/*
+	 * Using XDP_ABORTED makes it possible to record this event,
+	 * via tracepoint xdp:xdp_exception like:
+	 *  # perf record -a -e xdp:xdp_exception
+	 *  # perf script
+	 */
 	return XDP_PASS;
 }
 /*
