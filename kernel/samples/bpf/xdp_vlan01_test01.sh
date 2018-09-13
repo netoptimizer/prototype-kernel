@@ -1,11 +1,32 @@
 #!/bin/bash
 
+TESTNAME=xdp_vlan01
+
+usage() {
+  echo "Testing XDP + TC eBPF VLAN manipulations: $TESTNAME"
+  echo ""
+  echo "Usage: $0 [-vfh]"
+  echo "  -v | --verbose : Verbose"
+  echo "  --flush        : Flush before starting (e.g. after --interactive)"
+  echo "  --interactive  : Keep netns setup running after test-run"
+  echo ""
+}
+
 cleanup()
 {
-	if [ "$?" = "0" ]; then
-		echo "selftests: test_xdp_meta [PASS]";
+	local status=$?
+
+	if [ "$status" = "0" ]; then
+		echo "selftests: $TESTNAME [PASS]";
 	else
-		echo "selftests: test_xdp_meta [FAILED]";
+		echo "selftests: $TESTNAME [FAILED]";
+	fi
+
+	if [ -n "$INTERACTIVE" ]; then
+		echo "Namespace setup still active explore with:"
+		echo " ip netns exec ns1 bash"
+		echo " ip netns exec ns2 bash"
+		exit $status
 	fi
 
 	set +e
@@ -14,17 +35,78 @@ cleanup()
 	ip netns del ns2 2> /dev/null
 }
 
+# Using external program "getopt" to get --long-options
+OPTIONS=$(getopt -o hvfi: \
+    --long verbose,flush,help,interactive,debug -- "$@")
+if (( $? != 0 )); then
+    usage
+    echo "selftests: $TESTNAME [FAILED] Error calling getopt, unknown option?"
+    exit 2
+fi
+eval set -- "$OPTIONS"
+
+##  --- Parse command line arguments / parameters ---
+while true; do
+	case "$1" in
+	    -v | --verbose)
+		export VERBOSE=yes
+		shift
+		;;
+	    -i | --interactive | --debug )
+		INTERACTIVE=yes
+		shift
+		;;
+	    -f | --flush )
+		cleanup
+		shift
+		;;
+	    -- )
+		shift
+		break
+		;;
+	    -h | --help )
+		usage;
+		echo "selftests: $TESTNAME [SKIP] usage help info requested"
+		exit 0
+		;;
+	    * )
+		shift
+		break
+		;;
+	esac
+done
+
+if [ "$EUID" -ne 0 ]; then
+	echo "selftests: $TESTNAME [FAILED] need root privileges"
+	exit 1
+fi
+
 ip link set dev lo xdp off 2>/dev/null > /dev/null
 if [ $? -ne 0 ];then
-	echo "selftests: [SKIP] Could not run test without the ip xdp support"
+	echo "selftests: $TESTNAME [SKIP] need ip xdp support"
 	exit 0
+fi
+
+# Interactive mode likely require us to cleanup netns
+if [ -n "$INTERACTIVE" ]; then
+	ip link del veth1 2> /dev/null
+	ip netns del ns1 2> /dev/null
+	ip netns del ns2 2> /dev/null
 fi
 
 # Exit on failure
 set -e
 
+# Some shell-tools dependencies
+which ip > /dev/null
+which tc > /dev/null
+which ethtool > /dev/null
+
 # Make rest of shell verbose, showing comments as doc/info
-set -v
+if [ -n "$VERBOSE" ]; then
+    set -v
+fi
+
 # Create two namespaces
 ip netns add ns1
 ip netns add ns2
