@@ -20,8 +20,6 @@ if [ $? -ne 0 ];then
 	exit 0
 fi
 
-cleanup
-
 # Exit on failure
 set -e
 
@@ -32,7 +30,7 @@ ip netns add ns1
 ip netns add ns2
 
 # Run cleanup if failing or on kill
-###trap cleanup 0 2 3 6 9
+trap cleanup 0 2 3 6 9
 
 # Create veth pair
 ip link add veth1 type veth peer name veth2
@@ -41,9 +39,17 @@ ip link add veth1 type veth peer name veth2
 ip link set veth1 netns ns1
 ip link set veth2 netns ns2
 
+# NOTICE: XDP require VLAN header inside packet payload
+#  - Thus, disable VLAN offloading driver features
+#  - For veth REMEMBER TX side VLAN-offload
+#
 # Disable rx-vlan-offload (mostly needed on ns1)
 ip netns exec ns1 ethtool -K veth1 rxvlan off
 ip netns exec ns2 ethtool -K veth2 rxvlan off
+#
+# Disable tx-vlan-offload (mostly needed on ns2)
+ip netns exec ns2 ethtool -K veth2 txvlan off
+ip netns exec ns1 ethtool -K veth2 txvlan off
 
 export IPADDR1=100.64.41.1
 export IPADDR2=100.64.41.2
@@ -63,7 +69,7 @@ ip netns exec ns2 ip link set $DEVNS2.$VLAN up
 # At this point, the hosts cannot reach each-other,
 # because ns2 are using VLAN tags on the packets.
 
-ip netns exec ns2 sh -c 'ping -W 3 -c 1 100.64.41.1 || echo "Okay ping fails"'
+ip netns exec ns2 sh -c 'ping -W 1 -c 1 100.64.41.1 || echo "Okay ping fails"'
 
 
 # Now we can use the xdp_vlan01 program to pop/push these VLAN tags
