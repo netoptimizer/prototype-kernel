@@ -49,7 +49,7 @@ ip netns exec ns2 ethtool -K veth2 rxvlan off
 #
 # Disable tx-vlan-offload (mostly needed on ns2)
 ip netns exec ns2 ethtool -K veth2 txvlan off
-ip netns exec ns1 ethtool -K veth2 txvlan off
+ip netns exec ns1 ethtool -K veth1 txvlan off
 
 export IPADDR1=100.64.41.1
 export IPADDR2=100.64.41.2
