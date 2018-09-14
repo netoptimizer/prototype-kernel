@@ -13,6 +13,9 @@ TARGETS += napi_monitor
 TARGETS += xdp_monitor
 TARGETS += xdp_redirect_err
 
+# Linking with libbpf ?
+TARGETS += xdp_tcpdump
+
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
 # it is unnecessary to link "user" binary with bpf_load.c.  TODO, if
 # somone cares, makefile should have separate target for TC.
