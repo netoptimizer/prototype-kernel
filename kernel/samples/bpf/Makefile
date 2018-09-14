@@ -101,9 +101,13 @@ CC = gcc
 
 NOSTDINC_FLAGS := -nostdinc -isystem $(shell $(CC) -print-file-name=include)
 
-# Copy of uapi/linux/bpf.h stored here:
-LINUXINCLUDE := -I./tools/include/
-
+# TODO: can we remove(?) copy of uapi/linux/bpf.h stored here: ./tools/include/
+# LINUXINCLUDE := -I./tools/include/
+#
+# bpf_helper.h need newer version of uapi/linux/bpf.h
+# (as this git-repo use new devel kernel features)
+LINUXINCLUDE := -I./kernel/include
+#
 LINUXINCLUDE += -I$(KERNEL)/arch/x86/include
 LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/generated/uapi
 LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/generated
