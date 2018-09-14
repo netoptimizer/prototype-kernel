@@ -85,7 +85,7 @@ CFLAGS += -I$(KERNEL)/usr/include
 LDFLAGS= -lelf
 
 # Objects that xxx_user program is linked with:
-OBJECT_BPF_SYSCALLS  = tools/lib/bpf/bpf.o
+OBJECT_BPF_SYSCALLS  = tools/lib/bpf/bpf.o tools/lib/bpf/nlattr.o
 OBJECT_LOADBPF = bpf_load.o
 OBJECTS = $(OBJECT_BPF_SYSCALLS) $(OBJECT_LOADBPF)
 #
