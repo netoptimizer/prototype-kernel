@@ -33,6 +33,8 @@ COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 # Targets that use the library bpf/libbpf
 ### TARGETS_USING_LIBBPF += xdp_monitor_user
 
+TOOLS_PATH = tools
+
 # Files under kernel/samples/bpf/ have a name-scheme:
 # ---------------------------------------------------
 # The eBPF program is called xxx_kern.c. This is the restricted-C
@@ -46,15 +48,11 @@ COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 # 1) When loading the ELF eBPF binary is uses the API load_bpf_file()
 #    via "bpf_load.h" (compiles against a modified local copy of
 #    kernels samples/bpf/bpf_load.c).
+#    (TODO: This can soon be changed, and use loader from tools instead)
 #
 # 2) The API for interacting with eBPF comes from tools/lib/bpf/bpf.h.
-#    For now, tools/lib/bpf/bpf.c is compiled directly, and executable
-#    is statically linked with object file.
+#    A library file under tools is compiled and static linked.
 #
-#    This is likely improper use of tools/lib/bpf/, that can generate
-#    shared library code.  Hopefully someone will cleanup this
-#    Makefile and correct this usage.
-
 
 # Generate file name-scheme based on TARGETS
 KERN_SOURCES = ${TARGETS:=_kern.c}
@@ -72,25 +70,20 @@ CFLAGS := -g -O2 -Wall
 CFLAGS += -I./tools/lib
 #CFLAGS += -I$(KERNEL)/tools/lib
 #
-# Local copy of uapi/linux/bpf.h kept under ./tools/include
-# needed due to enum dependency in bpf_helpers.h
-CFLAGS += -I./tools/include
-# For building libbpf there is a lot of kernel includes in tools/include/
-CFLAGS += -I$(KERNEL)/tools/include
-#CFLAGS += -I$(KERNEL)/tools/perf
-CFLAGS += -I$(KERNEL)/usr/include
-# Strange dependency to "selftests" due to "bpf_util.h"
-#CFLAGS += -I$(KERNEL)/tools/testing/selftests/bpf/
+
+# Local copy of include/linux/bpf.h kept under ./kernel-usr-include
+#
+CFLAGS += -I./kernel-usr-include/
+##CFLAGS += -I$(KERNEL)/usr/include
 
 LDFLAGS= -lelf
 
 # Objects that xxx_user program is linked with:
-OBJECT_BPF_SYSCALLS  = tools/lib/bpf/bpf.o tools/lib/bpf/nlattr.o
 OBJECT_LOADBPF = bpf_load.o
-OBJECTS = $(OBJECT_BPF_SYSCALLS) $(OBJECT_LOADBPF)
+OBJECTS = $(OBJECT_LOADBPF)
 #
-# The tools/lib/bpf/libbpf is avail via a library
-OBJECT_BPF_LIBBPF  = tools/lib/bpf/libbpf.o
+# The static libbpf library
+LIBBPF = $(TOOLS_PATH)/lib/bpf/libbpf.a
 
 # Allows pointing LLC/CLANG to another LLVM backend, redefine on cmdline:
 #  make LLC=~/git/llvm/build/bin/llc CLANG=~/git/llvm/build/bin/clang
@@ -138,7 +131,7 @@ clean:
 	rm -f $(TARGETS)
 	rm -f $(KERN_OBJECTS)
 	rm -f $(USER_OBJECTS)
-	rm -f $(OBJECT_BPF_LIBBPF) libbpf.a
+	make -C $(TOOLS_PATH)/lib/bpf clean
 
 dependencies: verify_llvm_target_bpf linux-src-devel-headers
 
@@ -151,9 +144,8 @@ linux-src:
 
 linux-src-libbpf: linux-src
 	@if ! test -d $(KERNEL)/tools/lib/bpf/; then \
-		echo "ERROR: Need kernel source code to compile against" ;\
+		echo "WARNING: Compile against local kernel source code copy" ;\
 		echo "       and specifically tools/lib/bpf/ "; \
-		exit 1; \
 	else true; fi
 
 linux-src-devel-headers: linux-src-libbpf
@@ -181,19 +173,25 @@ verify_llvm_target_bpf: verify_cmds
 	else true; fi
 
 # Helpers for bpf syscalls (from tools/lib/bpf/bpf.c)
-$(OBJECT_BPF_SYSCALLS): %.o: %.c
-	$(CC) $(CFLAGS) -o $@ -c $<
+#$(OBJECT_BPF_SYSCALLS): %.o: %.c
+#	$(CC) $(CFLAGS) -o $@ -c $<
 
 $(OBJECT_LOADBPF): bpf_load.c bpf_load.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
 # ISSUE: The libbpf.a library creates a kernel source dependency, for
 # include files from tools/include/
-$(OBJECT_BPF_LIBBPF): %.o: %.c
-	$(CC) $(CFLAGS) -o $@ -c $<
+#$(OBJECT_BPF_LIBBPF): %.o: %.c
+#	$(CC) $(CFLAGS) -o $@ -c $<
 #
-libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
-	$(RM) $@; $(AR) rcs $@ $^
+# TODO: Instead call make -C tools/lib/bpf
+#libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
+#	$(RM) $@; $(AR) rcs $@ $^
+
+LIBBPF_SOURCES  = $(TOOLS_PATH)/lib/bpf/*.c
+
+$(LIBBPF): $(LIBBPF_SOURCES)
+	make -C $(TOOLS_PATH)/lib/bpf/ all
 
 # Compiling of eBPF restricted-C code with LLVM
 #  clang option -S generated output file with suffix .ll
@@ -218,8 +216,8 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h
 	    -O2 -emit-llvm -c $<
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
-$(TARGETS): %: %_user.c $(OBJECTS) Makefile bpf_util.h
-	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
+$(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
+	$(CC) $(CFLAGS) $(OBJECTS) $(LIBBPF) $(LDFLAGS) -o $@ $<
 
-$(CMDLINE_TOOLS): %: %.c $(OBJECTS) Makefile $(COMMON_H) bpf_util.h
-	$(CC) -g $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<
+$(CMDLINE_TOOLS): %: %.c $(OBJECTS) $(LIBBPF) Makefile $(COMMON_H) bpf_util.h
+	$(CC) -g $(CFLAGS) $(OBJECTS) $(LIBBPF) $(LDFLAGS) -o $@ $<
