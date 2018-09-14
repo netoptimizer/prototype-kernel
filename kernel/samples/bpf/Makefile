@@ -66,11 +66,6 @@ KERNEL=$(kbuilddir)
 
 CFLAGS := -g -O2 -Wall
 
-# Local copy of kernel/tools/lib/
-CFLAGS += -I./tools/lib
-#CFLAGS += -I$(KERNEL)/tools/lib
-#
-
 # Local copy of include/linux/bpf.h kept under ./kernel-usr-include
 #
 CFLAGS += -I./kernel-usr-include/
@@ -109,7 +104,7 @@ LINUXINCLUDE += -I$(KERNEL)/arch/x86/include/uapi
 LINUXINCLUDE += -I$(KERNEL)/include/uapi
 LINUXINCLUDE += -I$(KERNEL)/include/generated/uapi
 LINUXINCLUDE += -include $(KERNEL)/include/linux/kconfig.h
-LINUXINCLUDE += -I$(KERNEL)/tools/lib
+#LINUXINCLUDE += -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
 all: dependencies $(TARGETS) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
@@ -172,24 +167,13 @@ verify_llvm_target_bpf: verify_cmds
 		exit 2; \
 	else true; fi
 
-# Helpers for bpf syscalls (from tools/lib/bpf/bpf.c)
-#$(OBJECT_BPF_SYSCALLS): %.o: %.c
-#	$(CC) $(CFLAGS) -o $@ -c $<
-
+# Most xxx_user program still depend on old bpf_load.c
 $(OBJECT_LOADBPF): bpf_load.c bpf_load.h
 	$(CC) $(CFLAGS) -o $@ -c $<
 
-# ISSUE: The libbpf.a library creates a kernel source dependency, for
-# include files from tools/include/
-#$(OBJECT_BPF_LIBBPF): %.o: %.c
-#	$(CC) $(CFLAGS) -o $@ -c $<
-#
-# TODO: Instead call make -C tools/lib/bpf
-#libbpf.a: $(OBJECT_BPF_LIBBPF) $(OBJECT_BPF_SYSCALLS)
-#	$(RM) $@; $(AR) rcs $@ $^
-
 LIBBPF_SOURCES  = $(TOOLS_PATH)/lib/bpf/*.c
 
+# New ELF-loaded avail in libbpf (in bpf/libbpf.c)
 $(LIBBPF): $(LIBBPF_SOURCES) $(TOOLS_PATH)/lib/bpf/Makefile
 	make -C $(TOOLS_PATH)/lib/bpf/ all
 

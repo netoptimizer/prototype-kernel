@@ -23,7 +23,6 @@ OBJECTS = $(OBJECT_NLATTR) $(OBJECT_BTF) $(OBJECT_BPF_SYSCALLS) $(OBJECT_LIBBPF)
 
 TOOLS_PATH = ../../../tools
 
-
 # We maintain some of the kernel include files to build easier
 CFLAGS_LIBBPF += -I$(TOOLS_PATH)/include
 #
@@ -34,7 +33,6 @@ CFLAGS_LIBBPF += -I$(TOOLS_PATH)/perf
 CFLAGS_LIBBPF += -I../../../kernel-usr-include/
 #
 CFLAGS_LIBBPF += -I/usr/include/
-#
 
 # The kernels directories, where include files are located:
 #CFLAGS_LIBBPF += -I$(KERNEL)/tools/include
