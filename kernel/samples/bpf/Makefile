@@ -190,7 +190,7 @@ $(OBJECT_LOADBPF): bpf_load.c bpf_load.h
 
 LIBBPF_SOURCES  = $(TOOLS_PATH)/lib/bpf/*.c
 
-$(LIBBPF): $(LIBBPF_SOURCES)
+$(LIBBPF): $(LIBBPF_SOURCES) $(TOOLS_PATH)/lib/bpf/Makefile
 	make -C $(TOOLS_PATH)/lib/bpf/ all
 
 # Compiling of eBPF restricted-C code with LLVM
@@ -201,7 +201,7 @@ $(LIBBPF): $(LIBBPF_SOURCES)
 # Use -Wno-address-of-packed-member as eBPF verifier enforces
 # unaligned access checks where necessary
 #
-$(KERN_OBJECTS): %.o: %.c bpf_helpers.h
+$(KERN_OBJECTS): %.o: %.c bpf_helpers.h Makefile
 	$(CLANG) -S $(NOSTDINC_FLAGS) $(LINUXINCLUDE) $(EXTRA_CFLAGS) \
 	    -D__KERNEL__ -D__ASM_SYSREG_H \
 	    -D__BPF_TRACING__ \
