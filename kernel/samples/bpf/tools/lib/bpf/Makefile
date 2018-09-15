@@ -21,7 +21,11 @@ OBJECT_BPF_SYSCALLS = bpf.o
 OBJECT_LIBBPF       = libbpf.o
 OBJECTS = $(OBJECT_NLATTR) $(OBJECT_BTF) $(OBJECT_BPF_SYSCALLS) $(OBJECT_LIBBPF)
 
+CC = gcc
+
 TOOLS_PATH = ../../../tools
+
+CFLAGS_LIBBPF += -fPIC
 
 # We maintain some of the kernel include files to build easier
 CFLAGS_LIBBPF += -I$(TOOLS_PATH)/include
@@ -50,8 +54,8 @@ clean:
 	rm -f $(OBJECTS) libbpf.a
 
 # LIBBPF OBJECTS
-$(OBJECTS): %.o: %.c
+$(OBJECTS): %.o: %.c  Makefile
 	$(CC) $(CFLAGS_LIBBPF) -o $@ -c $<
 
 libbpf.a: $(OBJECTS) Makefile
-	$(RM) $@; $(AR) rcs $@ $^
+	$(RM) $@; $(AR) rcs $@  $(OBJECTS)

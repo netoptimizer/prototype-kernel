@@ -14,7 +14,7 @@ TARGETS += xdp_monitor
 TARGETS += xdp_redirect_err
 
 # Linking with libbpf ?
-# TARGETS += xdp_tcpdump
+TARGETS += xdp_tcpdump
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
 # it is unnecessary to link "user" binary with bpf_load.c.  TODO, if
@@ -70,6 +70,9 @@ CFLAGS := -g -O2 -Wall
 #
 CFLAGS += -I./kernel-usr-include/
 ##CFLAGS += -I$(KERNEL)/usr/include
+#
+# Interacting with libbpf
+CFLAGS += -I$(TOOLS_PATH)/lib
 
 LDFLAGS= -lelf
 
@@ -201,7 +204,7 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h Makefile
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
-	$(CC) $(CFLAGS) $(OBJECTS) $(LIBBPF) $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF)
 
 $(CMDLINE_TOOLS): %: %.c $(OBJECTS) $(LIBBPF) Makefile $(COMMON_H) bpf_util.h
-	$(CC) -g $(CFLAGS) $(OBJECTS) $(LIBBPF) $(LDFLAGS) -o $@ $<
+	$(CC) -g $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF)
