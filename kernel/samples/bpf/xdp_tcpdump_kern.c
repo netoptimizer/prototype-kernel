@@ -22,6 +22,7 @@ struct my_perf_hdr {
 	u16 cookie;
 	u16 pkt_len;
 } __packed;
+#define COOKIE	0x9ca9
 
 SEC("xdp_tcpdump_to_perf_ring")
 int _xdp_prog0(struct xdp_md *ctx)
@@ -44,7 +45,7 @@ int _xdp_prog0(struct xdp_md *ctx)
 		u64 flags = BPF_F_CURRENT_CPU;
 		u16 sample_size;
 
-		hdr.cookie = 0x9ca9;
+		hdr.cookie = COOKIE;
 		hdr.pkt_len = (u16)(data_end - data);
 		sample_size = hdr.pkt_len;
 		flags |= (u64)sample_size << 32;
