@@ -20,7 +20,6 @@ static const char *__doc__ =
 
 #include <linux/if_link.h>
 
-
 #include <linux/perf_event.h>
 #include "perf-sys.h"
 //#include "trace_helpers.h" // MISSING
@@ -92,7 +91,6 @@ typedef enum bpf_perf_event_ret (*perf_event_print_fn)(void *data, int size);
 
 static int page_size;
 static int page_cnt = 8;
-static struct perf_event_mmap_page *header;
 
 int perf_event_mmap_header(int fd, struct perf_event_mmap_page **header)
 {
@@ -110,18 +108,6 @@ int perf_event_mmap_header(int fd, struct perf_event_mmap_page **header)
 
 	*header = base;
 	return 0;
-}
-
-int perf_event_mmap(int fd)
-{
-	return perf_event_mmap_header(fd, &header);
-}
-
-static int perf_event_poll(int fd)
-{
-	struct pollfd pfd = { .fd = fd, .events = POLLIN };
-
-	return poll(&pfd, 1, 1000);
 }
 
 struct perf_event_sample {
@@ -153,26 +139,6 @@ static enum bpf_perf_event_ret bpf_perf_event_print(void *event, void *priv)
 	}
 
 	return LIBBPF_PERF_EVENT_CONT;
-}
-
-int perf_event_poller(int fd, perf_event_print_fn output_fn)
-{
-	enum bpf_perf_event_ret ret;
-	void *buf = NULL;
-	size_t len = 0;
-
-	for (;;) {
-		perf_event_poll(fd);
-		ret = bpf_perf_event_read_simple(header, page_cnt * page_size,
-						 page_size, &buf, &len,
-						 bpf_perf_event_print,
-						 output_fn);
-		if (ret != LIBBPF_PERF_EVENT_CONT)
-			break;
-	}
-	free(buf);
-
-	return ret;
 }
 
 int perf_event_poller_multi(int *fds, struct perf_event_mmap_page **headers,
