@@ -20,19 +20,23 @@ static const char *__doc__ =
 
 #include <linux/if_link.h>
 
+/* perf related */
 #include <linux/perf_event.h>
 #include "perf-sys.h"
-//#include "trace_helpers.h" // MISSING
 #include <poll.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 
-
 #include "bpf_util.h"
 
-/* These inc are located in tools/lib/ */
+/* libbpf related (located in tools/lib/) */
 #include <bpf/bpf.h>
 #include <bpf/libbpf.h>
+
+/* pcap related */
+#define PCAP_DONT_INCLUDE_PCAP_BPF_H
+#include <pcap/pcap.h>
+#include <pcap/dlt.h>
 
 static int ifindex = -1;
 static char ifname_buf[IF_NAMESIZE];
@@ -41,6 +45,8 @@ static char *ifname;
 #define MAX_CPUS 128
 static int pmu_fds[MAX_CPUS];
 static struct perf_event_mmap_page *headers[MAX_CPUS];
+
+static pcap_dumper_t *global_pcap_dumper;
 
 static __u32 xdp_flags;
 
@@ -55,6 +61,7 @@ static const struct option long_options[] = {
 #define EXIT_FAIL_OPTION	2
 #define EXIT_FAIL_XDP		3
 #define EXIT_FAIL_BPF		4
+#define EXIT_FAIL_PCAP		5
 
 static void exit_sig_handler(int sig)
 {
@@ -63,6 +70,8 @@ static void exit_sig_handler(int sig)
 		ifindex, ifname);
 	if (ifindex > -1)
 		bpf_set_link_xdp_fd(ifindex, -1, xdp_flags);
+	if (global_pcap_dumper)
+		pcap_dump_close(global_pcap_dumper);
 	exit(EXIT_SUCCESS);
 }
 
@@ -116,14 +125,45 @@ struct perf_event_sample {
 	char data[];
 };
 
-static enum bpf_perf_event_ret bpf_perf_event_print(void *event, void *priv)
+/* Header for perf event (meta data place before pkt data) */
+struct my_perf_hdr {
+	__u16 cookie;
+	__u16 pkt_len;
+} __packed;
+#define COOKIE	0x9ca9
+
+static int pcap_dump_xdp_data(pcap_dumper_t *dumper, void *data, int size)
+{
+	struct {
+		/* Top part of data, provide by XDP bpf program */
+		struct my_perf_hdr hdr;
+		__u8  pkt_data[];
+	} *e = data;
+	struct pcap_pkthdr pcap_hdr;
+
+	if (e->hdr.cookie != COOKIE) {
+		fprintf(stderr, "BUG cookie %x sized %d\n",
+			e->hdr.cookie, size);
+		return LIBBPF_PERF_EVENT_ERROR;
+	}
+
+	printf("Pkt len: %-5d bytes event sz:%d\n", e->hdr.pkt_len, size);
+
+	pcap_hdr.caplen = e->hdr.pkt_len;
+	pcap_hdr.len    = e->hdr.pkt_len;
+	pcap_dump((u_char *)dumper, &pcap_hdr, e->pkt_data);
+
+	return LIBBPF_PERF_EVENT_CONT;
+}
+
+static enum bpf_perf_event_ret perf_event_process(void *event, void *priv)
 {
 	struct perf_event_sample *e = event;
-	perf_event_print_fn fn = priv;
+	pcap_dumper_t *dumper = priv;
 	int ret;
 
 	if (e->header.type == PERF_RECORD_SAMPLE) {
-		ret = fn(e->data, e->size);
+		ret = pcap_dump_xdp_data(dumper, e->data, e->size);
 		if (ret != LIBBPF_PERF_EVENT_CONT)
 			return ret;
 	} else if (e->header.type == PERF_RECORD_LOST) {
@@ -141,8 +181,9 @@ static enum bpf_perf_event_ret bpf_perf_event_print(void *event, void *priv)
 	return LIBBPF_PERF_EVENT_CONT;
 }
 
-int perf_event_poller_multi(int *fds, struct perf_event_mmap_page **headers,
-			    int num_fds, perf_event_print_fn output_fn)
+
+int pcap_perf_event_poller(int *fds, struct perf_event_mmap_page **headers,
+			   int num_fds, pcap_dumper_t *pcap_dumper)
 {
 	enum bpf_perf_event_ret ret;
 	struct pollfd *pfds;
@@ -168,8 +209,8 @@ int perf_event_poller_multi(int *fds, struct perf_event_mmap_page **headers,
 			ret = bpf_perf_event_read_simple(headers[i],
 							 page_cnt * page_size,
 							 page_size, &buf, &len,
-							 bpf_perf_event_print,
-							 output_fn);
+							 perf_event_process,
+							 pcap_dumper);
 			if (ret != LIBBPF_PERF_EVENT_CONT)
 				break;
 		}
@@ -178,34 +219,6 @@ int perf_event_poller_multi(int *fds, struct perf_event_mmap_page **headers,
 	free(pfds);
 
 	return ret;
-}
-
-/* Header for perf event (meta data place before pkt data) */
-struct my_perf_hdr {
-	__u16 cookie;
-	__u16 pkt_len;
-} __packed;
-#define COOKIE	0x9ca9
-
-static int handle_perf_event(void *data, int size)
-{
-	struct {
-		struct my_perf_hdr hdr;
-		__u8  pkt_data[];
-	} *e = data;
-	int i;
-
-	if (e->hdr.cookie != COOKIE) {
-		printf("BUG cookie %x sized %d\n", e->hdr.cookie, size);
-		return LIBBPF_PERF_EVENT_ERROR;
-	}
-
-	printf("Pkt len: %-5d bytes. Ethernet hdr: ", e->hdr.pkt_len);
-	for (i = 0; i < 14 && i < e->hdr.pkt_len; i++)
-		printf("%02x ", e->pkt_data[i]);
-	printf("\n");
-
-	return LIBBPF_PERF_EVENT_CONT;
 }
 
 static void setup_bpf_perf_event(int map_fd, int num)
@@ -245,6 +258,9 @@ int main(int argc, char **argv)
 	int map_fd, i;
 	int numcpus;
 	int err;
+
+	pcap_t *pcap_handle = pcap_open_dead(DLT_EN10MB, 1 << 16);
+	pcap_dumper_t *pcap_dumper;
 
 	numcpus = get_nprocs();
 	if (numcpus > MAX_CPUS) {
@@ -311,6 +327,14 @@ int main(int argc, char **argv)
 	}
 	map_fd = bpf_map__fd(perf_ring_map);
 
+	pcap_dumper = pcap_dump_open(pcap_handle, "xdp_tcpdump.pcap");
+	if (!pcap_dumper) {
+		fprintf(stderr, "Failed to open pcap file: %s\n",
+			pcap_geterr(pcap_handle));
+		return EXIT_FAIL_PCAP;
+	}
+	global_pcap_dumper = pcap_dumper;
+
 	if (bpf_set_link_xdp_fd(ifindex, prog_fd, xdp_flags) < 0) {
 		fprintf(stderr, "link set xdp fd failed\n");
 		return EXIT_FAIL_XDP;
@@ -326,8 +350,7 @@ int main(int argc, char **argv)
 		if (perf_event_mmap_header(pmu_fds[i], &headers[i]) < 0)
 			return 1;
 
-	err = perf_event_poller_multi(pmu_fds, headers, numcpus,
-				      handle_perf_event);
+	err = pcap_perf_event_poller(pmu_fds, headers, numcpus,	pcap_dumper);
 	if (err)
 		return EXIT_FAIL_XDP;
 
