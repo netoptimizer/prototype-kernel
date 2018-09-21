@@ -14,7 +14,7 @@ TARGETS += xdp_monitor
 TARGETS += xdp_redirect_err
 
 # Linking with libbpf and libpcap
-TARGETS += xdp_tcpdump
+TARGETS_PCAP += xdp_tcpdump
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
 # it is unnecessary to link "user" binary with bpf_load.c.  TODO, if
@@ -54,9 +54,11 @@ TOOLS_PATH = tools
 #    A library file under tools is compiled and static linked.
 #
 
+TARGETS_ALL = $(TARGETS) $(TARGETS_PCAP)
+
 # Generate file name-scheme based on TARGETS
-KERN_SOURCES = ${TARGETS:=_kern.c}
-USER_SOURCES = ${TARGETS:=_user.c}
+KERN_SOURCES = ${TARGETS_ALL:=_kern.c}
+USER_SOURCES = ${TARGETS_ALL:=_user.c}
 KERN_OBJECTS = ${KERN_SOURCES:.c=.o}
 USER_OBJECTS = ${USER_SOURCES:.c=.o}
 
@@ -110,7 +112,7 @@ LINUXINCLUDE += -include $(KERNEL)/include/linux/kconfig.h
 #LINUXINCLUDE += -I$(KERNEL)/tools/lib
 EXTRA_CFLAGS=-Werror
 
-all: dependencies $(TARGETS) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
+all: dependencies $(TARGETS_ALL) $(KERN_OBJECTS) $(CMDLINE_TOOLS)
 
 .PHONY: dependencies clean verify_cmds verify_llvm_target_bpf $(CLANG) $(LLC)
 
@@ -126,7 +128,7 @@ clean:
 		-o -name 'core' \) \
 		-exec rm -vf '{}' \;
 	rm -f $(OBJECTS)
-	rm -f $(TARGETS)
+	rm -f $(TARGETS_ALL)
 	rm -f $(KERN_OBJECTS)
 	rm -f $(USER_OBJECTS)
 	make -C $(TOOLS_PATH)/lib/bpf clean
@@ -206,8 +208,8 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h Makefile
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
 	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF)
 
-# More specific target for xdp_tcpdump, that links with libpcap
-xdp_tcpdump: %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
+# Targets that links with libpcap
+$(TARGETS_PCAP): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
 	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF) -lpcap
 
 $(CMDLINE_TOOLS): %: %.c $(OBJECTS) $(LIBBPF) Makefile $(COMMON_H) bpf_util.h
