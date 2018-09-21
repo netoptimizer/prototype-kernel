@@ -200,7 +200,7 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h Makefile
 	    -Wno-tautological-compare \
 	    -Wno-unknown-warning-option \
 	    -Wno-address-of-packed-member \
-	    -O2 -emit-llvm -c $<
+	    -O2 -emit-llvm -c $< -o ${@:.o=.ll}
 	$(LLC) -march=bpf -filetype=obj -o $@ ${@:.o=.ll}
 
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
