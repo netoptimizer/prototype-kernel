@@ -147,8 +147,14 @@ static int pcap_dump_xdp_data(pcap_dumper_t *dumper, void *data, int size)
 		return LIBBPF_PERF_EVENT_ERROR;
 	}
 
-	printf("Pkt len: %-5d bytes event sz:%d\n", e->hdr.pkt_len, size);
+	// printf("Pkt len: %-5d bytes event sz:%d\n", e->hdr.pkt_len, size);
 
+	/* TODO: Find fast timestamp method, maybe XDP prog can
+	 * transfer this in my_perf_hdr?  Else the perf-ring infra can
+	 * do some (I think this extra data will be avail at end of
+	 * pkt_data).
+	 */
+	/* pcap_hdr.ts = struct timeval */
 	pcap_hdr.caplen = e->hdr.pkt_len;
 	pcap_hdr.len    = e->hdr.pkt_len;
 	pcap_dump((u_char *)dumper, &pcap_hdr, e->pkt_data);
@@ -227,7 +233,7 @@ static void setup_bpf_perf_event(int map_fd, int num)
 		.sample_type	= PERF_SAMPLE_RAW,
 		.type		= PERF_TYPE_SOFTWARE,
 		.config		= PERF_COUNT_SW_BPF_OUTPUT,
-		.wakeup_events	= 1,/* get an fd notification for every event */
+		.wakeup_events	= 64,/* get an fd notification for X events */
 	};
 	int i;
 
@@ -328,6 +334,7 @@ int main(int argc, char **argv)
 	map_fd = bpf_map__fd(perf_ring_map);
 
 	pcap_dumper = pcap_dump_open(pcap_handle, "xdp_tcpdump.pcap");
+	// TEST: pcap_dumper = pcap_dump_open(pcap_handle, "/dev/null");
 	if (!pcap_dumper) {
 		fprintf(stderr, "Failed to open pcap file: %s\n",
 			pcap_geterr(pcap_handle));
