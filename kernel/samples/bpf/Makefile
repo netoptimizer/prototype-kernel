@@ -13,7 +13,7 @@ TARGETS += napi_monitor
 TARGETS += xdp_monitor
 TARGETS += xdp_redirect_err
 
-# Linking with libbpf ?
+# Linking with libbpf and libpcap
 TARGETS += xdp_tcpdump
 
 # TC bpf targets uses bpf-elf-loader included in tc/iproute2.  Thus,
@@ -205,6 +205,10 @@ $(KERN_OBJECTS): %.o: %.c bpf_helpers.h Makefile
 
 $(TARGETS): %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
 	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF)
+
+# More specific target for xdp_tcpdump, that links with libpcap
+xdp_tcpdump: %: %_user.c $(OBJECTS) $(LIBBPF) Makefile bpf_util.h
+	$(CC) $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF) -lpcap
 
 $(CMDLINE_TOOLS): %: %.c $(OBJECTS) $(LIBBPF) Makefile $(COMMON_H) bpf_util.h
 	$(CC) -g $(CFLAGS) $(OBJECTS) $(LDFLAGS) -o $@ $<  $(LIBBPF)
