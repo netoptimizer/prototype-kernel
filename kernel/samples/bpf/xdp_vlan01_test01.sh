@@ -163,7 +163,16 @@ export FILE=xdp_vlan01_kern.o
 #  (del cmd)
 #  ip netns exec ns1 ip link set $DEVNS1 xdp off
 #
-ip netns exec ns1 ip link set $DEVNS1 xdp object $FILE section xdp_vlan_remove_outer2
+# There is a kernel bug for generic-XDP, that does not allow us to
+# remove a VLAN header, because skb->protocol still contain VLAN
+# ETH_P_8021Q indication, and this cause overwriting of our changes.
+#
+# Until that is fixed, we cannot use "xdp_vlan_remove_outer2"
+#   export XDP_PROG=xdp_vlan_remove_outer2
+#
+# Workaround use "xdp_vlan_change" setting VLAN ID 0
+export XDP_PROG=xdp_vlan_change
+ip netns exec ns1 ip link set $DEVNS1 xdp object $FILE section $XDP_PROG
 
 # In ns1: egress use TC to add back VLAN tag 4011
 #  (del cmd)

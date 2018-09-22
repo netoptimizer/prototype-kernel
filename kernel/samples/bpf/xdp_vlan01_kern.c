@@ -92,7 +92,7 @@ bool parse_eth_frame(struct ethhdr *eth, void *data_end, struct parse_pkt *pkt)
 
 /* Hint, VLANs are choosen to hit network-byte-order issues */
 #define TESTVLAN 4011 /* 0xFAB */
-#define TO_VLAN  4000 /* 0xFA0 (hint 0xOA0 = 160) */
+// #define TO_VLAN  4000 /* 0xFA0 (hint 0xOA0 = 160) */
 
 SEC("xdp_drop_vlan_4011")
 int  xdp_prognum0(struct xdp_md *ctx)
@@ -132,6 +132,9 @@ Load prog with ip tool:
  ip link set $ROOTDEV xdp object xdp_vlan01_kern.o section xdp_drop_vlan_4011
 
 */
+
+/* Changing VLAN to zero, have same effect as removing the VLAN. */
+#define TO_VLAN	0
 
 SEC("xdp_vlan_change")
 int  xdp_prognum1(struct xdp_md *ctx)
