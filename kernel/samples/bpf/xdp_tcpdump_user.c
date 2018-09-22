@@ -233,7 +233,9 @@ static void setup_bpf_perf_event(int map_fd, int num)
 		.sample_type	= PERF_SAMPLE_RAW,
 		.type		= PERF_TYPE_SOFTWARE,
 		.config		= PERF_COUNT_SW_BPF_OUTPUT,
-		.wakeup_events	= 64,/* get an fd notification for X events */
+		.wakeup_events	= 1, /* get an fd notification for X events */
+// Much faster to not wakeup every packet, but need to flush/collect before exit
+//		.wakeup_events	= 64,/* get an fd notification for X events */
 	};
 	int i;
 
