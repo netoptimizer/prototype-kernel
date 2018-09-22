@@ -104,10 +104,6 @@ int  xdp_prognum0(struct xdp_md *ctx)
 	if (!parse_eth_frame(data, data_end, &pkt))
 		return XDP_ABORTED;
 
-	/* Allow ARP-packet through, e.g test with arping */
-	if (pkt.l3_proto == ETH_P_ARP)
-		return XDP_PASS;
-
 	/* Drop specific VLAN ID example */
 	if (pkt.vlan_outer == TESTVLAN)
 		return XDP_ABORTED;
@@ -146,10 +142,6 @@ int  xdp_prognum1(struct xdp_md *ctx)
 
 	if (!parse_eth_frame(data, data_end, &pkt))
 		return XDP_ABORTED;
-
-	/* Allow ARP-packet through, e.g test with arping */
-	if (pkt.l3_proto == ETH_P_ARP)
-		return XDP_PASS;
 
 	/* Change specific VLAN ID */
 	if (pkt.vlan_outer == TESTVLAN) {
