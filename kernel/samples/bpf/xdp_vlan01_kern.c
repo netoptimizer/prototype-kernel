@@ -133,7 +133,7 @@ Load prog with ip tool:
 
 */
 
-/* Changing VLAN to zero, have same effect as removing the VLAN. */
+/* Changing VLAN to zero, have same practical effect as removing the VLAN. */
 #define TO_VLAN	0
 
 SEC("xdp_vlan_change")

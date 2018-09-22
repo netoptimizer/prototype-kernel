@@ -148,6 +148,10 @@ ip netns exec ns2 ip addr add ${IPADDR2}/24 dev $DEVNS2.$VLAN
 ip netns exec ns2 ip link set $DEVNS2 up
 ip netns exec ns2 ip link set $DEVNS2.$VLAN up
 
+# Bringup lo in netns (to avoids confusing people using --interactive)
+ip netns exec ns1 ip link set lo up
+ip netns exec ns2 ip link set lo up
+
 # At this point, the hosts cannot reach each-other,
 # because ns2 are using VLAN tags on the packets.
 
