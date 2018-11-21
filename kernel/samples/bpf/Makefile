@@ -29,6 +29,7 @@ TARGETS += xdp_vlan01
 TARGETS += xdp_redirect_cpu
 
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
+CMDLINE_TOOLS += xdp_5tuple_blacklist_cmdline
 COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 
 # Targets that use the library bpf/libbpf
