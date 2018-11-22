@@ -1,0 +1,9 @@
+# 'source' this script in your shell
+
+export VERSION=gcc-linaro-7.3.1-2018.05-x86_64_aarch64-linux-gnu
+export CROSS_COMPILE_DIR=/home/${USER}/cross-compilers/${VERSION}
+export CROSS_COMPILE="aarch64-linux-gnu-"
+export ARCH=arm64
+
+export PATH=${CROSS_COMPILE_DIR}/bin:${PATH}
+echo "Cross-compiler in PATH: $PATH"
