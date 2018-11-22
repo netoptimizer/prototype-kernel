@@ -8,6 +8,9 @@ export ARCH=arm64
 
 t=/usr/bin/time
 
+# exit script on any errors
+set -e
+
 if [ -n "$1" ]; then
     export HOST=$1
 else
