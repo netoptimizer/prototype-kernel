@@ -17,12 +17,10 @@ else
     fi
 fi
 
-# Target board OS distro e.g. debian
+# Target board for choosing correct DTS/DTB file (arch/arm64/boot/dts/)
 if [ -n "$2" ]; then
-    export TARGET=$2
-    echo "Using disto target: $TARGET"
-else
-    export TARGET=mcbin
+    TARGET=$2
+    echo "Using arch/arm64 DTS target: $TARGET"
 fi
 
 if [ -z "$VER" ]; then
@@ -41,17 +39,18 @@ if [[ ! -e $IMAGE_FILE ]]; then
 	exit 3
 fi
 
-echo "Target ARM64 board: $TARGET"
 if [ "$TARGET" == "mcbin" ]; then
     DTS_FILE=arch/arm64/boot/dts/marvell/armada-8040-mcbin.dtb
-elif [ "$TARGET" == "something-else" ]; then
-    echo "- Add another target: $TARGET"
-    exit 4
+elif [ "$TARGET" == "espressobin" ]; then
+    DTS_FILE=arch/arm64/boot/dts/marvell/armada-3720-espressobin.dtb
 else
-    echo "ERROR - Unknown board target: $TARGET"
-    exit 4
+    echo "Not updating board DTS/DTB"
 fi
-$t rsync -e ssh -av $DTS_FILE root@${HOST}:/boot/
+# If target specified push the DTS/DTB file
+if [ -n "$DTS_FILE" ]; then
+    echo "Update DST/DTB file for target ARM64 board: $TARGET"
+    $t rsync -e ssh -av $DTS_FILE root@${HOST}:/boot/
+fi
 
 echo "-=-=-=- Pushing kernel:[$VER] to host:[$HOST] -=-=-=-"
 
