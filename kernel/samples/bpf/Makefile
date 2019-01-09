@@ -6,6 +6,7 @@
 #
 TARGETS := xdp_ddos01_blacklist
 TARGETS += xdp_5tuple_blacklist
+TARGETS += xdp_stateful
 TARGETS += xdp_ttl
 TARGETS += xdp_bench01_mem_access_cost
 TARGETS += xdp_bench02_drop_pattern
@@ -30,6 +31,7 @@ TARGETS += xdp_redirect_cpu
 
 CMDLINE_TOOLS := xdp_ddos01_blacklist_cmdline
 CMDLINE_TOOLS += xdp_5tuple_blacklist_cmdline
+CMDLINE_TOOLS += xdp_stateful_cmdline
 COMMON_H      =  ${CMDLINE_TOOLS:_cmdline=_common.h}
 
 # Targets that use the library bpf/libbpf
