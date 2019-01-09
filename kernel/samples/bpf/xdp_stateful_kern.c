@@ -266,7 +266,7 @@ u32 parse_ipv4(struct xdp_md *ctx, u64 l3_offset)
 	matched |= lookup_match(&stateful_five_tuple, &key_five_tuple, &action);
 
 	// If matched, Flow tracking based on 5-tuple
-	if (!lookup_flow(&key_five_tuple, tcp_flags))
+	if (matched && !lookup_flow(&key_five_tuple, tcp_flags))
 	{
 		add_flow_entry(key_five_tuple, tcp_flags);
 	}
