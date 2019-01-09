@@ -190,9 +190,11 @@ bool lookup_flow(struct five_tuple *key, u8 tcp_flags)
 bool lookup_match(struct bpf_map_def *map, void *key, u8 *action)
 {
 	u8 *target = bpf_map_lookup_elem(map, key);
-	if (target && *target != *action)
+	if (target)
 	{
-		*action = *target;
+		if (*target != *action)
+			*action = *target;
+
 		return true;
 	}
 
