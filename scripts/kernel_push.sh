@@ -31,7 +31,11 @@ if [ -n "$2" ]; then
     export TARGET=$2
     echo "Using disto target: $TARGET"
 else
-    export TARGET=redhat
+    if ssh root@${HOST} test -e /etc/debian_version; then
+        export TARGET=debian
+    else
+        export TARGET=redhat
+    fi
 fi
 
 
