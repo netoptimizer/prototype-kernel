@@ -52,13 +52,12 @@ fi
 echo "-=-=-=- Pushing kernel:[$VER] to host:[$HOST] -=-=-=-"
 
 pushd $BINARIES_PATH
-$t rsync -e ssh -avuz boot/vmlinuz-${KERNEL} \
-   boot/vmlinux-${KERNEL} \
+$t rsync -e ssh -rptlvuz boot/vmlinuz-${KERNEL} \
    boot/config-${KERNEL} \
    boot/System.map-${KERNEL} \
    boot/Module.symvers-${KERNEL} \
    root@${HOST}:/boot/
-$t rsync -e ssh -avuz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
+$t rsync -e ssh -rptlvuz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
 popd
 
 echo "Executing on remote host: ${HOST}"
