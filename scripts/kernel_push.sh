@@ -57,7 +57,7 @@ $t rsync -e ssh -rptlvuz boot/vmlinuz-${KERNEL} \
    boot/System.map-${KERNEL} \
    boot/Module.symvers-${KERNEL} \
    root@${HOST}:/boot/
-$t rsync -e ssh -rptlvuz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
+$t rsync -e ssh -rcptlvuz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
 popd
 
 echo "Executing on remote host: ${HOST}"
