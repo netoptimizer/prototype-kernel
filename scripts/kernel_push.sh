@@ -31,7 +31,11 @@ if [ -n "$2" ]; then
     export TARGET=$2
     echo "Using disto target: $TARGET"
 else
-    export TARGET=redhat
+    if ssh root@${HOST} test -e /etc/debian_version; then
+        export TARGET=debian
+    else
+        export TARGET=redhat
+    fi
 fi
 
 
@@ -48,12 +52,12 @@ fi
 echo "-=-=-=- Pushing kernel:[$VER] to host:[$HOST] -=-=-=-"
 
 pushd $BINARIES_PATH
-$t rsync -e ssh -avz boot/vmlinuz-${KERNEL} root@${HOST}:/boot/
-$t rsync -e ssh -avz boot/vmlinux-${KERNEL} root@${HOST}:/boot/
-$t rsync -e ssh -avz boot/config-${KERNEL} root@${HOST}:/boot/
-$t rsync -e ssh -avz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
-$t rsync -e ssh -avz boot/System.map-${KERNEL} root@${HOST}:/boot/
-$t rsync -e ssh -avz boot/Module.symvers-${KERNEL} root@${HOST}:/boot/
+$t rsync -e ssh -rptlvuz boot/vmlinuz-${KERNEL} \
+   boot/config-${KERNEL} \
+   boot/System.map-${KERNEL} \
+   boot/Module.symvers-${KERNEL} \
+   root@${HOST}:/boot/
+$t rsync -e ssh -rcptlvuz --delete lib/modules/${KERNEL}  root@${HOST}:/lib/modules/
 popd
 
 echo "Executing on remote host: ${HOST}"
