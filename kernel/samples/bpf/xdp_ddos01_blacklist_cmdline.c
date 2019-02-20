@@ -234,14 +234,14 @@ static void blacklist_print_port(int key, __u32 val, int countfds[])
 
 static void blacklist_list_all_ipv4(int fd)
 {
-	__u32 key = 0, next_key;
+	__u32 key, *prev_key = NULL;
 	__u64 value;
 
-	while (bpf_map_get_next_key(fd, &key, &next_key) == 0) {
+	while (bpf_map_get_next_key(fd, prev_key, &key) == 0) {
 		printf("%s", key ? "," : "" );
-		key = next_key;
 		value = get_key32_value64_percpu(fd, key);
 		blacklist_print_ipv4(key, value);
+		prev_key = &key;
 	}
 	printf("%s", key ? "," : "");
 }
