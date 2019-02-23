@@ -9,7 +9,7 @@ Creating and interacting with maps are described in another document
 here: :doc:`ebpf_maps`.
 
 The different types of maps available, are defined by ``enum
-bpf_map_type`` in include/uapi/linux/bpf.h.  These type definition
+bpf_map_type`` in include/uapi/linux/bpf.h.  These type definitions
 "names" are needed when creating the map. Example of ``bpf_map_type``,
 but remember to `lookup latest`_ available maps in the source code.
 
@@ -38,7 +38,7 @@ Implementation details
 ======================
 
 In-order to understand and follow the descriptions of the different
-map types, in is useful for the reader to understand how a map type is
+map types, it is useful for the reader to understand how a map type is
 implemented by the kernel.
 
 On the kernel side, implementing a map type requires defining some
