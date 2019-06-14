@@ -13,6 +13,9 @@ modules (see blogpost_).
 XDP eBPF samples
 ================
 
+**UPDATE**: See `XDP-tutorial`_ if you want to learn eBPF-coding,
+and not depend on kernel tree.
+
 The Linux kernel tree also contains some `eBPF samples`_ which this
 github repo is also shadowing for easier prototyping, see directory
 `samples/bpf/`_.
@@ -40,3 +43,4 @@ to generate pretty documentation).
 .. _blogpost: http://netoptimizer.blogspot.dk/2014/11/announce-github-repo-prototype-kernel.html
 .. _eBPF samples: https://github.com/torvalds/linux/blob/master/samples/bpf/
 .. _samples/bpf/: kernel/samples/bpf/
+.. _XDP-tutorial: https://github.com/xdp-project/xdp-tutorial
