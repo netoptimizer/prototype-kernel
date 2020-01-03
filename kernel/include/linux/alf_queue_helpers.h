@@ -260,12 +260,17 @@ __helper_alf_enqueue_store_unroll_duff(u32 p_head,  struct alf_queue *q,
 		case 0:
 			do {
 				q->ring[index+3] = ptr[i+3];
+				/* Fall through */
 			case 3:
 				q->ring[index+2] = ptr[i+2];
+				/* Fall through */
 			case 2:
 				q->ring[index+1] = ptr[i+1];
+				/* Fall through */
 			case 1:
 				q->ring[index  ] = ptr[i];
+				/* Fall through */
+
 				//pr_info("i:%d index:%d r:%d iterations:%d\n",
 				//	i, index, r, iterations);
 			} while ((r > 0) ? (i+=r, index+=r, r=0, iterations)
@@ -294,12 +299,17 @@ __helper_alf_dequeue_load_unroll_duff(u32 c_head, struct alf_queue *q,
 		case 0:
 			do {
 				ptr[i+3] = q->ring[index+3];
+				/* Fall through */
 			case 3:
 				ptr[i+2] = q->ring[index+2];
+				/* Fall through */
 			case 2:
 				ptr[i+1] = q->ring[index+1];
+				/* Fall through */
 			case 1:
 				ptr[i]   = q->ring[index  ];
+				/* Fall through */
+
 			} while ((r > 0) ? (i+=r, index+=r, r=0, iterations)
 				 : (i+=4, index+=4)
 				 && i < iterations
