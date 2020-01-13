@@ -5,6 +5,7 @@
 
 #include <linux/module.h>
 #include <linux/time_bench.h>
+#include <linux/mm.h> /* missing in ptr_ring.h on >= v4.16 */
 #include <linux/skb_array.h>
 
 static int verbose=1;

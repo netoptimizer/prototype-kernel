@@ -4,6 +4,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
+#include <linux/mm.h> /* missing in ptr_ring.h on >= v4.16 */
 #include <linux/skb_array.h>
 #include <linux/skbuff.h>
 
