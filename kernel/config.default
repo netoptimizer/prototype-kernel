@@ -32,3 +32,6 @@ CONFIG_SLAB_BULK_API=n
 
 # Testing experimental page allocator bulking my Mel Gorman
 CONFIG_PAGE_BULK_API=n
+
+# New benchmarking modules for testing page_pool
+CONFIG_BENCH_PAGE_POOL=m
