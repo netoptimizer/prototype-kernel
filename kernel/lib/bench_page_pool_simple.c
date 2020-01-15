@@ -66,6 +66,53 @@ static int time_bench_lock(
 	return loops_cnt;
 }
 
+static int time_bench_page_pool01(
+	struct time_bench_record *rec, void *data)
+{
+	uint64_t loops_cnt = 0;
+	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
+	int i, err;
+
+	struct page_pool *pp;
+	struct page *page;
+
+	struct page_pool_params pp_params = {
+		.order = 0,
+		.flags = 0,
+		.pool_size = 1024,
+		.nid = NUMA_NO_NODE,
+		.dev = NULL, /* Only use for DMA mapping */
+		.dma_dir = DMA_BIDIRECTIONAL,
+	};
+
+	pp = page_pool_create(&pp_params);
+	if (IS_ERR(pp)) {
+		err = PTR_ERR(pp);
+		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+		goto out;
+	}
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		page = page_pool_alloc_pages(pp, gfp_mask);
+		if (!page)
+			break;
+		loops_cnt++;
+		barrier(); /* avoid compiler to optimize this loop */
+
+		/* Issue: this module is in_serving_softirq() and
+		 * there for cannot test the fast-path return.
+		 */
+		page_pool_recycle_direct(pp, page);
+	}
+	time_bench_stop(rec, loops_cnt);
+out:
+	page_pool_destroy(pp);
+	return loops_cnt;
+}
+
+
 int run_benchmark_tests(void)
 {
 	uint32_t loops = 10000000;
@@ -78,6 +125,10 @@ int run_benchmark_tests(void)
 			"atomic_inc", NULL, time_bench_atomic_inc);
 	time_bench_loop(loops, 0,
 			"lock", NULL, time_bench_lock);
+
+
+	time_bench_loop(loops, 0,
+			"page_pool01", NULL, time_bench_page_pool01);
 
 
 
