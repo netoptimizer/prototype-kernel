@@ -9,6 +9,8 @@
 
 static int verbose=1;
 
+#include <linux/interrupt.h>
+
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
 static int time_bench_for_loop(
@@ -120,6 +122,30 @@ out:
 	return loops_cnt;
 }
 
+/* Testing page_pool requires running under softirq.
+ *
+ * TODO: Lets see if tasket will be enough.
+ */
+//struct tasklet_struct my_tasklet;
+//time_bench_record data_rec;
+
+static void pp_tasklet_handler(unsigned long data)
+{
+	uint32_t loops = 1000000;
+
+	if (in_serving_softirq())
+		pr_warn("%s(): in_serving_softirq\n", __func__); // SELECTED THIS! :-)
+	else
+		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
+
+	time_bench_loop(loops, 0,
+			"tasklet_page_pool01", NULL, time_bench_page_pool01);
+
+}
+DECLARE_TASKLET(pp_tasklet, pp_tasklet_handler, 0);
+
+
+
 int run_benchmark_tests(void)
 {
 	uint32_t loops = 10000000;
@@ -137,7 +163,7 @@ int run_benchmark_tests(void)
 	time_bench_loop(loops, 0,
 			"page_pool01", NULL, time_bench_page_pool01);
 
-
+	tasklet_schedule(&pp_tasklet);
 
 	return passed_count;
 }
