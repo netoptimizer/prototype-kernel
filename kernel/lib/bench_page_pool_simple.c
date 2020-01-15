@@ -92,6 +92,13 @@ static int time_bench_page_pool01(
 		goto out;
 	}
 
+	local_bh_disable();
+
+	if (in_serving_softirq())
+		pr_warn("in_serving_softirq\n");
+	else
+		pr_warn("Cannot use page_pool fast-path\n");
+
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
@@ -101,17 +108,17 @@ static int time_bench_page_pool01(
 		loops_cnt++;
 		barrier(); /* avoid compiler to optimize this loop */
 
-		/* Issue: this module is in_serving_softirq() and
-		 * there for cannot test the fast-path return.
+		/* Issue: this module is in_serving_softirq() and thus
+		 * cannot test the fast-path return.
 		 */
 		page_pool_recycle_direct(pp, page);
 	}
 	time_bench_stop(rec, loops_cnt);
+	local_bh_enable();
 out:
 	page_pool_destroy(pp);
 	return loops_cnt;
 }
-
 
 int run_benchmark_tests(void)
 {
