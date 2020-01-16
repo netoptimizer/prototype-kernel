@@ -114,10 +114,8 @@ static int time_bench_page_pool01(
 	}
 	pp_fill_ptr_ring(pp, 64);
 
-//	local_bh_disable();
-
 	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq\n", __func__);
+		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
 	else
 		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
 
@@ -136,7 +134,6 @@ static int time_bench_page_pool01(
 		page_pool_recycle_direct(pp, page);
 	}
 	time_bench_stop(rec, loops_cnt);
-//	local_bh_enable();
 out:
 	page_pool_destroy(pp);
 	return loops_cnt;
@@ -168,17 +165,10 @@ static int time_bench_page_pool02(
 		goto out;
 	}
 
-//	local_bh_disable();
-
 	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq\n", __func__);
+		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
 	else
-		pr_warn("Cannot use page_pool fast-path\n");
-
-/*
-  Q: Will the cached pages only be 1 page?
-  Q: Will that hurt performance when going through ptr_ring?
-*/
+		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
 
 	/* Q: Will performance improve if we create some more pages in ptr_ring? */
 	pp_fill_ptr_ring(pp, 64);
@@ -198,26 +188,22 @@ static int time_bench_page_pool02(
 		page_pool_put_page(pp, page, false);
 	}
 	time_bench_stop(rec, loops_cnt);
-//	local_bh_enable();
 out:
 	page_pool_destroy(pp);
 	return loops_cnt;
 }
 
-
 /* Testing page_pool requires running under softirq.
  *
- * TODO: Lets see if tasket will be enough.
+ * Running under a taslket satisfy this, as tasklets are built on top of
+ * softirq.
  */
-//struct tasklet_struct my_tasklet;
-//time_bench_record data_rec;
-
 static void pp_tasklet_handler(unsigned long data)
 {
 	uint32_t loops = 1000000;
 
 	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq\n", __func__); // SELECTED THIS! :-)
+		pr_warn("%s(): in_serving_softirq fast-path\n", __func__); // True
 	else
 		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
 
@@ -228,9 +214,16 @@ static void pp_tasklet_handler(unsigned long data)
 			"tasklet_page_pool02", NULL, time_bench_page_pool02);
 
 }
-DECLARE_TASKLET(pp_tasklet, pp_tasklet_handler, 0);
+DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler, 0);
 
-int run_benchmark_tests(void)
+static void run_tasklet_tests(void)
+{
+	tasklet_enable(&pp_tasklet);
+	/* "Async" schedule tasklet, which runs on the CPU that schedule it */
+	tasklet_schedule(&pp_tasklet);
+}
+
+static int run_benchmark_tests(void)
 {
 	uint32_t loops = 10000000;
 	int passed_count = 0;
@@ -243,11 +236,11 @@ int run_benchmark_tests(void)
 	time_bench_loop(loops, 0,
 			"lock", NULL, time_bench_lock);
 
-
+	/* This test cannot activate correct code path, due to no-softirq ctx */
 	time_bench_loop(loops, 0,
-			"page_pool01", NULL, time_bench_page_pool01);
-
-	tasklet_schedule(&pp_tasklet);
+			"no-softirq-page_pool01", NULL, time_bench_page_pool01);
+	time_bench_loop(loops, 0,
+			"no-softirq-page_pool02", NULL, time_bench_page_pool02);
 
 	return passed_count;
 }
@@ -257,17 +250,19 @@ static int __init bench_page_pool_simple_module_init(void)
 	if (verbose)
 		pr_info("Loaded\n");
 
-	if (run_benchmark_tests() < 0) {
-		return -ECANCELED;
-	}
+	run_benchmark_tests();
+	run_tasklet_tests();
 
-	//return 0;
-	return -EAGAIN; // Trick to not fully load module
+	return 0;
+	// tasklet_kill(&pp_tasklet);
+	// return -EAGAIN; // Trick to not fully load module
 }
 module_init(bench_page_pool_simple_module_init);
 
 static void __exit bench_page_pool_simple_module_exit(void)
 {
+	tasklet_kill(&pp_tasklet);
+
 	if (verbose)
 		pr_info("Unloaded\n");
 }
