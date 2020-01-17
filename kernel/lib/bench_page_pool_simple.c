@@ -24,8 +24,10 @@ enum benchmark_bit {
 	bit_run_bench_baseline,
 	bit_run_bench_no_softirq01,
 	bit_run_bench_no_softirq02,
+	bit_run_bench_no_softirq03,
 	bit_run_bench_tasklet01,
 	bit_run_bench_tasklet02,
+	bit_run_bench_tasklet03,
 };
 #define bit(b)	(1 << (b))
 #define enabled(b)	 ((run_flags & (bit(b))))
@@ -214,6 +216,61 @@ out:
 	return loops_cnt;
 }
 
+static int time_bench_page_pool03(
+	struct time_bench_record *rec, void *data)
+{
+	uint64_t loops_cnt = 0;
+	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
+	int i, err;
+
+	struct page_pool *pp;
+	struct page *page;
+
+	struct page_pool_params pp_params = {
+		.order = 0,
+		.flags = 0,
+		.pool_size = 1024,
+		.nid = NUMA_NO_NODE,
+		.dev = NULL, /* Only use for DMA mapping */
+		.dma_dir = DMA_BIDIRECTIONAL,
+	};
+
+	pp = page_pool_create(&pp_params);
+	if (IS_ERR(pp)) {
+		err = PTR_ERR(pp);
+		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+		goto out;
+	}
+	pp_fill_ptr_ring(pp, 64);
+
+	if (in_serving_softirq())
+		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
+	else
+		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		page = page_pool_alloc_pages(pp, gfp_mask);
+		if (!page)
+			break;
+		loops_cnt++;
+		barrier(); /* avoid compiler to optimize this loop */
+
+		/* Test if not pages are recycled, but instead
+		 * returned back into systems page allocator
+		 */
+		page_pool_release_page(pp, page);
+		put_page(page);
+	}
+	time_bench_stop(rec, loops_cnt);
+out:
+	page_pool_destroy(pp);
+	return loops_cnt;
+}
+
+
+
 /* Testing page_pool requires running under softirq.
  *
  * Running under a taslket satisfy this, as tasklets are built on top of
@@ -235,6 +292,10 @@ static void pp_tasklet_handler(unsigned long data)
 	if (enabled(bit_run_bench_tasklet02))
 		time_bench_loop(loops, 0,
 				"tasklet_page_pool02", NULL, time_bench_page_pool02);
+
+	if (enabled(bit_run_bench_tasklet03))
+		time_bench_loop(loops, 0,
+				"tasklet_page_pool03", NULL, time_bench_page_pool03);
 
 }
 DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler, 0);
@@ -268,6 +329,9 @@ static int run_benchmark_tests(void)
 	if (enabled(bit_run_bench_no_softirq02))
 		time_bench_loop(loops, 0,
 				"no-softirq-page_pool02", NULL, time_bench_page_pool02);
+	if (enabled(bit_run_bench_no_softirq03))
+		time_bench_loop(loops, 0,
+				"no-softirq-page_pool03", NULL, time_bench_page_pool03);
 
 	return passed_count;
 }
