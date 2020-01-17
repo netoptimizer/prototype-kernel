@@ -7,9 +7,28 @@
 #include <linux/time_bench.h>
 #include <net/page_pool.h>
 
+#include <linux/interrupt.h>
+
 static int verbose=1;
 
-#include <linux/interrupt.h>
+/* Makes tests selectable. Useful for perf-record to analyze a single test.
+ * Hint: Bash shells support writing binary number like: $((2#101010)
+ *
+ * # modprobe bench_page_pool_simple run_flags=$((2#100))
+ */
+static unsigned long run_flags = 0xFFFFFFFF;
+module_param(run_flags, ulong, 0);
+MODULE_PARM_DESC(run_flags, "Limit which bench test that runs");
+/* Count the bit number from the enum */
+enum benchmark_bit {
+	bit_run_bench_baseline,
+	bit_run_bench_no_softirq01,
+	bit_run_bench_no_softirq02,
+	bit_run_bench_tasklet01,
+	bit_run_bench_tasklet02,
+};
+#define bit(b)	(1 << (b))
+#define enabled(b)	 ((run_flags & (bit(b))))
 
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
@@ -49,6 +68,10 @@ static int time_bench_atomic_inc(
 	return loops_cnt;
 }
 
+/* The ptr_ping in page_pool uses a spinlock. We need to know the minimum
+ * overhead of taking+releasing a spinlock, to know the cycles that can be saved
+ * by e.g. amortizing this via bulking.
+ */
 static int time_bench_lock(
 	struct time_bench_record *rec, void *data)
 {
@@ -164,14 +187,12 @@ static int time_bench_page_pool02(
 		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
 		goto out;
 	}
+	pp_fill_ptr_ring(pp, 64);
 
 	if (in_serving_softirq())
 		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
 	else
 		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
-
-	/* Q: Will performance improve if we create some more pages in ptr_ring? */
-	pp_fill_ptr_ring(pp, 64);
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -207,11 +228,13 @@ static void pp_tasklet_handler(unsigned long data)
 	else
 		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
 
-	time_bench_loop(loops, 0,
-			"tasklet_page_pool01", NULL, time_bench_page_pool01);
+	if (enabled(bit_run_bench_tasklet01))
+		time_bench_loop(loops, 0,
+				"tasklet_page_pool01", NULL, time_bench_page_pool01);
 
-	time_bench_loop(loops, 0,
-			"tasklet_page_pool02", NULL, time_bench_page_pool02);
+	if (enabled(bit_run_bench_tasklet02))
+		time_bench_loop(loops, 0,
+				"tasklet_page_pool02", NULL, time_bench_page_pool02);
 
 }
 DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler, 0);
@@ -229,18 +252,22 @@ static int run_benchmark_tests(void)
 	int passed_count = 0;
 
 	/* Baseline tests */
-	time_bench_loop(loops*10, 0,
-			"for_loop", NULL, time_bench_for_loop);
-	time_bench_loop(loops*10, 0,
-			"atomic_inc", NULL, time_bench_atomic_inc);
-	time_bench_loop(loops, 0,
-			"lock", NULL, time_bench_lock);
+	if (enabled(bit_run_bench_baseline)) {
+		time_bench_loop(loops*10, 0,
+				"for_loop", NULL, time_bench_for_loop);
+		time_bench_loop(loops*10, 0,
+				"atomic_inc", NULL, time_bench_atomic_inc);
+		time_bench_loop(loops, 0,
+				"lock", NULL, time_bench_lock);
+	}
 
 	/* This test cannot activate correct code path, due to no-softirq ctx */
-	time_bench_loop(loops, 0,
-			"no-softirq-page_pool01", NULL, time_bench_page_pool01);
-	time_bench_loop(loops, 0,
-			"no-softirq-page_pool02", NULL, time_bench_page_pool02);
+	if (enabled(bit_run_bench_no_softirq01))
+		time_bench_loop(loops, 0,
+				"no-softirq-page_pool01", NULL, time_bench_page_pool01);
+	if (enabled(bit_run_bench_no_softirq02))
+		time_bench_loop(loops, 0,
+				"no-softirq-page_pool02", NULL, time_bench_page_pool02);
 
 	return passed_count;
 }
