@@ -4,6 +4,7 @@
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 #include <linux/module.h>
+#include <linux/mutex.h>
 #include <linux/time_bench.h>
 #include <net/page_pool.h>
 
@@ -12,6 +13,8 @@
 
 static int verbose=1;
 #define MY_POOL_SIZE	1024
+
+DEFINE_MUTEX(wait_for_tasklet);
 
 /* Makes tests selectable. Useful for perf-record to analyze a single test.
  * Hint: Bash shells support writing binary number like: $((2#101010)
@@ -303,6 +306,7 @@ static void pp_tasklet_handler(unsigned long data)
 		time_bench_loop(nr_loops, 0,
 				"tasklet_page_pool03", NULL, time_bench_page_pool03);
 
+	mutex_unlock(&wait_for_tasklet); /* Module __init waiting on unlock */
 }
 DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler, 0);
 
@@ -354,13 +358,14 @@ static int __init bench_page_pool_simple_module_init(void)
 	}
 
 	run_benchmark_tests();
-	run_tasklet_tests();
 
-	/* Killing tasklet force us wait until it is done. Problem is it will be
-	 * spinning while waiting for the tasklet to complete.
-	 */
-	tasklet_kill(&pp_tasklet);
+	mutex_lock(&wait_for_tasklet);
+	run_tasklet_tests();
+	/* Sleep on mutex, waiting for tasklet to release */
+	mutex_lock(&wait_for_tasklet);
+
 	return 0;
+	// tasklet_kill(&pp_tasklet);
 	// return -EAGAIN; // Trick to not fully load module
 }
 module_init(bench_page_pool_simple_module_init);
