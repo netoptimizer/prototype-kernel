@@ -29,8 +29,10 @@ enum benchmark_bit {
 	bit_run_bench_tasklet02,
 	bit_run_bench_tasklet03,
 };
-#define bit(b)	(1 << (b))
-#define enabled(b)	 ((run_flags & (bit(b))))
+#define bit(b)		(1 << (b))
+#define enabled(b)	((run_flags & (bit(b))))
+
+#define MY_POOL_SIZE	1024
 
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
@@ -125,7 +127,7 @@ static int time_bench_page_pool01(
 	struct page_pool_params pp_params = {
 		.order = 0,
 		.flags = 0,
-		.pool_size = 1024,
+		.pool_size = MY_POOL_SIZE,
 		.nid = NUMA_NO_NODE,
 		.dev = NULL, /* Only use for DMA mapping */
 		.dma_dir = DMA_BIDIRECTIONAL,
@@ -177,7 +179,7 @@ static int time_bench_page_pool02(
 	struct page_pool_params pp_params = {
 		.order = 0,
 		.flags = 0,
-		.pool_size = 1024,
+		.pool_size = MY_POOL_SIZE,
 		.nid = NUMA_NO_NODE,
 		.dev = NULL, /* Only use for DMA mapping */
 		.dma_dir = DMA_BIDIRECTIONAL,
@@ -229,7 +231,7 @@ static int time_bench_page_pool03(
 	struct page_pool_params pp_params = {
 		.order = 0,
 		.flags = 0,
-		.pool_size = 1024,
+		.pool_size = MY_POOL_SIZE,
 		.nid = NUMA_NO_NODE,
 		.dev = NULL, /* Only use for DMA mapping */
 		.dma_dir = DMA_BIDIRECTIONAL,
@@ -268,7 +270,6 @@ out:
 	page_pool_destroy(pp);
 	return loops_cnt;
 }
-
 
 
 /* Testing page_pool requires running under softirq.
