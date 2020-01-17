@@ -1,5 +1,9 @@
 /*
  * Benchmark module for page_pool.
+ *
+ * The complication for benchmarking page_pool is that it depends on running
+ * under softirq, and will choose a slower path if check in_serving_softirq
+ * fails.  This module uses tasklet's to workaround this.
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -122,8 +126,17 @@ static void pp_fill_ptr_ring(struct page_pool *pp, int elems)
 	kfree(array);
 }
 
-static int time_bench_page_pool01(
-	struct time_bench_record *rec, void *data)
+enum test_type {
+	type_fast_path,
+	type_ptr_ring,
+	type_page_allocator
+};
+
+/* Depends on compile optimizing this function */
+static __always_inline
+int time_bench_page_pool(
+	struct time_bench_record *rec, void *data,
+	enum test_type type, const char *func)
 {
 	uint64_t loops_cnt = 0;
 	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
@@ -144,29 +157,46 @@ static int time_bench_page_pool01(
 	pp = page_pool_create(&pp_params);
 	if (IS_ERR(pp)) {
 		err = PTR_ERR(pp);
-		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+		pr_warn("%s: Error(%d) creating page_pool\n", func, err);
 		goto out;
 	}
 	pp_fill_ptr_ring(pp, 64);
 
 	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
+		pr_warn("%s(): in_serving_softirq fast-path\n", func);
 	else
-		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
+		pr_warn("%s(): Cannot use page_pool fast-path\n", func);
 
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
+		/* Common fast-path alloc, that depend on in_serving_softirq() */
 		page = page_pool_alloc_pages(pp, gfp_mask);
 		if (!page)
 			break;
 		loops_cnt++;
 		barrier(); /* avoid compiler to optimize this loop */
 
-		/* Issue: this module is in_serving_softirq() and thus
-		 * cannot test the fast-path return.
+		/* The benchmarks purpose it to test different return paths.
+		 * Compiler should inline optimize other function calls out
 		 */
-		page_pool_recycle_direct(pp, page);
+		if (type == type_fast_path) {
+			/* Fast-path recycling e.g. XDP_DROP use-case */
+			page_pool_recycle_direct(pp, page);
+
+		} else if (type == type_ptr_ring ) {
+			/* Normal return path */
+			page_pool_put_page(pp, page, false);
+
+		} else if (type == type_page_allocator ) {
+			/* Test if not pages are recycled, but instead
+			 * returned back into systems page allocator
+			 */
+			page_pool_release_page(pp, page);
+			put_page(page);
+		} else {
+			BUILD_BUG();
+		}
 	}
 	time_bench_stop(rec, loops_cnt);
 out:
@@ -174,111 +204,23 @@ out:
 	return loops_cnt;
 }
 
-static int time_bench_page_pool02(
+int time_bench_page_pool01_fast_path(
 	struct time_bench_record *rec, void *data)
 {
-	uint64_t loops_cnt = 0;
-	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
-	int i, err;
-
-	struct page_pool *pp;
-	struct page *page;
-
-	struct page_pool_params pp_params = {
-		.order = 0,
-		.flags = 0,
-		.pool_size = MY_POOL_SIZE,
-		.nid = NUMA_NO_NODE,
-		.dev = NULL, /* Only use for DMA mapping */
-		.dma_dir = DMA_BIDIRECTIONAL,
-	};
-
-	pp = page_pool_create(&pp_params);
-	if (IS_ERR(pp)) {
-		err = PTR_ERR(pp);
-		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
-		goto out;
-	}
-	pp_fill_ptr_ring(pp, 64);
-
-	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
-	else
-		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		page = page_pool_alloc_pages(pp, gfp_mask);
-		if (!page)
-			break;
-		loops_cnt++;
-		barrier(); /* avoid compiler to optimize this loop */
-
-		/* Issue: this module is in_serving_softirq() and thus
-		 * cannot test the fast-path return.
-		 */
-		page_pool_put_page(pp, page, false);
-	}
-	time_bench_stop(rec, loops_cnt);
-out:
-	page_pool_destroy(pp);
-	return loops_cnt;
+	return time_bench_page_pool(rec, data, type_fast_path, __func__);
 }
 
-static int time_bench_page_pool03(
+int time_bench_page_pool02_ptr_ring(
 	struct time_bench_record *rec, void *data)
 {
-	uint64_t loops_cnt = 0;
-	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
-	int i, err;
-
-	struct page_pool *pp;
-	struct page *page;
-
-	struct page_pool_params pp_params = {
-		.order = 0,
-		.flags = 0,
-		.pool_size = MY_POOL_SIZE,
-		.nid = NUMA_NO_NODE,
-		.dev = NULL, /* Only use for DMA mapping */
-		.dma_dir = DMA_BIDIRECTIONAL,
-	};
-
-	pp = page_pool_create(&pp_params);
-	if (IS_ERR(pp)) {
-		err = PTR_ERR(pp);
-		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
-		goto out;
-	}
-	pp_fill_ptr_ring(pp, 64);
-
-	if (in_serving_softirq())
-		pr_warn("%s(): in_serving_softirq fast-path\n", __func__);
-	else
-		pr_warn("%s(): Cannot use page_pool fast-path\n", __func__);
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		page = page_pool_alloc_pages(pp, gfp_mask);
-		if (!page)
-			break;
-		loops_cnt++;
-		barrier(); /* avoid compiler to optimize this loop */
-
-		/* Test if not pages are recycled, but instead
-		 * returned back into systems page allocator
-		 */
-		page_pool_release_page(pp, page);
-		put_page(page);
-	}
-	time_bench_stop(rec, loops_cnt);
-out:
-	page_pool_destroy(pp);
-	return loops_cnt;
+	return time_bench_page_pool(rec, data, type_ptr_ring, __func__);
 }
 
+int time_bench_page_pool03_slow(
+	struct time_bench_record *rec, void *data)
+{
+	return time_bench_page_pool(rec, data, type_page_allocator, __func__);
+}
 
 /* Testing page_pool requires running under softirq.
  *
@@ -296,15 +238,18 @@ static void pp_tasklet_handler(unsigned long data)
 
 	if (enabled(bit_run_bench_tasklet01))
 		time_bench_loop(nr_loops, 0,
-				"tasklet_page_pool01", NULL, time_bench_page_pool01);
+				"tasklet_page_pool01_fast_path", NULL,
+				time_bench_page_pool01_fast_path);
 
 	if (enabled(bit_run_bench_tasklet02))
 		time_bench_loop(nr_loops, 0,
-				"tasklet_page_pool02", NULL, time_bench_page_pool02);
+				"tasklet_page_pool02_ptr_ring", NULL,
+				time_bench_page_pool02_ptr_ring);
 
 	if (enabled(bit_run_bench_tasklet03))
 		time_bench_loop(nr_loops, 0,
-				"tasklet_page_pool03", NULL, time_bench_page_pool03);
+				"tasklet_page_pool03_slow", NULL,
+				time_bench_page_pool03_slow);
 
 	mutex_unlock(&wait_for_tasklet); /* Module __init waiting on unlock */
 }
@@ -335,13 +280,16 @@ static int run_benchmark_tests(void)
 	/* This test cannot activate correct code path, due to no-softirq ctx */
 	if (enabled(bit_run_bench_no_softirq01))
 		time_bench_loop(nr_loops, 0,
-				"no-softirq-page_pool01", NULL, time_bench_page_pool01);
+				"no-softirq-page_pool01", NULL,
+				time_bench_page_pool01_fast_path);
 	if (enabled(bit_run_bench_no_softirq02))
 		time_bench_loop(nr_loops, 0,
-				"no-softirq-page_pool02", NULL, time_bench_page_pool02);
+				"no-softirq-page_pool02", NULL,
+				time_bench_page_pool02_ptr_ring);
 	if (enabled(bit_run_bench_no_softirq03))
 		time_bench_loop(nr_loops, 0,
-				"no-softirq-page_pool03", NULL, time_bench_page_pool03);
+				"no-softirq-page_pool03",
+				NULL, time_bench_page_pool03_slow);
 
 	return passed_count;
 }
