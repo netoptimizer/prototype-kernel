@@ -56,6 +56,162 @@ static int verbose=1;
  *
  */
 
+bool init_cpu_queue(struct ptr_ring *queue, int q_size, int prefill,
+		    struct page_pool *pp)
+{
+	gfp_t gfp_mask = (GFP_KERNEL);
+	struct page *page;
+	int result, i;
+
+	result = ptr_ring_init(queue, q_size, GFP_KERNEL);
+	if (result < 0) {
+		pr_err("%s() err creating queue size:%d\n", __func__, q_size);
+		return false;
+	}
+
+	/*
+	 *  Prefill with objects, in-order to keep enough distance
+	 *  between producer and consumer, so the benchmark does not
+	 *  run dry of objects to dequeue.
+	 */
+	for (i = 0; i < prefill; i++) {
+		page = page_pool_alloc_pages(pp, gfp_mask);
+		if (!page) {
+			pr_err("%s() alloc cannot prefill:%d sz:%d\n",
+			       __func__, prefill, q_size);
+			return false;
+		}
+		if (ptr_ring_produce(queue, page) < 0) {
+			pr_err("%s() queue cannot prefill:%d sz:%d\n",
+			       __func__, prefill, q_size);
+			return false;
+		}
+	}
+	return true;
+}
+
+int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
+		 int step, void *data,
+		 int (*func)(struct time_bench_record *record, void *data)
+	)
+{
+	struct time_bench_sync sync;
+	struct time_bench_cpu *cpu_tasks;
+	size_t size;
+
+	/* Allocate records for every CPU */
+	size = sizeof(*cpu_tasks) * num_possible_cpus();
+	cpu_tasks = kzalloc(size, GFP_KERNEL);
+
+	time_bench_run_concurrent(nr_loops, step, data,
+				  cpumask, &sync, cpu_tasks, func);
+	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
+
+	kfree(cpu_tasks);
+	return 1;
+}
+
+struct datarec {
+	struct page_pool *pp;
+	int nr_cpus;
+	struct ptr_ring *cpu_queues;
+};
+
+static int time_example(
+	struct time_bench_record *rec, void *data)
+{
+	struct datarec *d = data;
+	uint64_t loops_cnt = 0;
+	int i;
+
+	pr_info("%s(): ran on CPU:%d expect nr_cpus:%d\n",
+		__func__, smp_processor_id(), d->nr_cpus);
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		barrier();
+		loops_cnt++;
+	}
+	time_bench_stop(rec, loops_cnt);
+
+	return loops_cnt;
+}
+
+static void empty_ptr_ring(struct page_pool *pp, struct ptr_ring *ring)
+{
+	struct page *page;
+
+	while ((page = ptr_ring_consume_bh(ring))) {
+		page_pool_put_page(pp, page, false);
+	}
+}
+
+void noinline run_bench_XXX(
+	uint32_t nr_loops, int q_size, int prefill)
+{
+	struct ptr_ring *cpu_queues;
+	struct page_pool *pp;
+	cpumask_t cpumask;
+	struct datarec d;
+	int nr_cpus;
+	int err, i;
+
+	struct page_pool_params pp_params = {
+		.order = 0,
+		.flags = 0,
+		.pool_size = MY_POOL_SIZE,
+		.nid = NUMA_NO_NODE,
+		.dev = NULL, /* Only use for DMA mapping */
+		.dma_dir = DMA_BIDIRECTIONAL,
+	};
+
+	pp = page_pool_create(&pp_params);
+	if (IS_ERR(pp)) {
+		err = PTR_ERR(pp);
+		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+		return;
+	}
+//ZZZ	pp_fill_ptr_ring(pp, 64);
+
+	/* Restrict the CPUs to run on
+	 */
+	cpumask_clear(&cpumask);
+	cpumask_set_cpu(0, &cpumask);
+	cpumask_set_cpu(1, &cpumask);
+	nr_cpus = 2;
+
+	cpu_queues = kzalloc(sizeof(*cpu_queues) * nr_cpus, GFP_KERNEL);
+
+	for (i = 0; i < nr_cpus; i++) {
+		if (!init_cpu_queue(&cpu_queues[i], q_size, prefill, pp))
+			goto fail;
+	}
+
+	d.nr_cpus = 2;
+	d.pp = pp;
+	d.cpu_queues = cpu_queues;
+	run_parallel("TEST",
+		     nr_loops, &cpumask, 0, &d,
+		     time_example);
+
+fail:
+	for (i = 0; i < nr_cpus; i++) {
+		empty_ptr_ring(pp, &cpu_queues[i]);
+		ptr_ring_cleanup(&cpu_queues[i], NULL);
+		kfree(cpu_queues);
+	}
+	page_pool_destroy(pp);
+}
+
+int run_benchmarks(void)
+{
+	uint32_t nr_loops = loops;
+
+	run_bench_XXX(nr_loops, 256, 0);
+
+	return 1;
+}
 
 static int __init bench_page_pool_cross_cpu_module_init(void)
 {
@@ -68,6 +224,7 @@ static int __init bench_page_pool_cross_cpu_module_init(void)
 		return -ECHRNG;
 	}
 
+	run_benchmarks();
 	return 0;
 }
 module_init(bench_page_pool_cross_cpu_module_init);
