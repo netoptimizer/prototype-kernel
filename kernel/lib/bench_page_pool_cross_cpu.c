@@ -296,14 +296,13 @@ static void empty_ptr_ring(struct page_pool *pp, struct ptr_ring *ring)
 	}
 }
 
-void noinline run_bench_pp_2cpus(
-	uint32_t nr_loops, int q_size, int prefill)
+void noinline run_bench_pp_cpus(
+	int nr_cpus, uint32_t nr_loops, int q_size, int prefill)
 {
 	struct ptr_ring *cpu_queues;
 	struct page_pool *pp;
 	cpumask_t cpumask;
 	struct datarec d;
-	int nr_cpus;
 	int i;
 
 	tasklet_init(&d.pp_tasklet, pp_tasklet_simulate_rx_napi,
@@ -316,11 +315,12 @@ void noinline run_bench_pp_2cpus(
 	/* Restrict the CPUs to run on
 	 */
 	cpumask_clear(&cpumask);
-	cpumask_set_cpu(0, &cpumask);
-	cpumask_set_cpu(1, &cpumask);
-	d.tasklet_cpu = 2;
-	cpumask_set_cpu(2, &cpumask);
-	nr_cpus = 2;
+	for (i = 0; i < nr_cpus; i++) {
+		cpumask_set_cpu(i, &cpumask);
+	}
+	/* Extra CPU for tasklet */
+	cpumask_set_cpu(i, &cpumask);
+	d.tasklet_cpu = i;
 
 	cpu_queues = kzalloc(sizeof(*cpu_queues) * nr_cpus, GFP_KERNEL);
 
@@ -340,7 +340,7 @@ void noinline run_bench_pp_2cpus(
 	/* tasklet schedule happens in time_pp_put_page_recycle() */
 
 	run_parallel("page_pool_cross_cpu",
-		     nr_loops, &cpumask, 0, &d,
+		     nr_loops, &cpumask, nr_cpus, &d,
 		     time_pp_put_page_recycle);
 
 //	mutex_lock(&d.wait_for_tasklet); /* Block waiting for tasklet */
@@ -358,7 +358,9 @@ int run_benchmarks(void)
 {
 	uint32_t nr_loops = loops;
 
-	run_bench_pp_2cpus(nr_loops, 1024, 0);
+	//run_bench_pp_cpus(1, nr_loops, 1024, 0);
+	run_bench_pp_cpus(2, nr_loops, 1024, 0);
+	//run_bench_pp_cpus(3, nr_loops, 1024, 0);
 
 	return 1;
 }
