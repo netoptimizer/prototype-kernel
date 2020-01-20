@@ -90,6 +90,40 @@ bool init_cpu_queue(struct ptr_ring *queue, int q_size, int prefill,
 	return true;
 }
 
+struct page_pool *pp_create(int pool_size)
+{
+	struct page_pool *pp;
+	int err;
+
+	struct page_pool_params pp_params = {
+		.order = 0,
+		.flags = 0,
+		.pool_size = pool_size,
+		.nid = NUMA_NO_NODE,
+		.dev = NULL, /* Only use for DMA mapping */
+		.dma_dir = DMA_BIDIRECTIONAL,
+	};
+
+	pp = page_pool_create(&pp_params);
+	if (IS_ERR(pp)) {
+		err = PTR_ERR(pp);
+		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+		return NULL;
+	}
+	return pp;
+}
+
+struct datarec {
+	struct page_pool *pp;
+	int nr_cpus;
+	struct ptr_ring *cpu_queues;
+	// struct completion ?
+	// Or just call tasklet_kill(&pp_tasklet) ?
+};
+
+
+
+
 int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 		 int step, void *data,
 		 int (*func)(struct time_bench_record *record, void *data)
@@ -99,23 +133,25 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 	struct time_bench_cpu *cpu_tasks;
 	size_t size;
 
+	// struct datarec *d = data; // Do have access to datarec here
+
 	/* Allocate records for every CPU */
 	size = sizeof(*cpu_tasks) * num_possible_cpus();
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
+
+	// Idea: Start tasklet here?
+	// We could piggy back on sync->start_event
 
 	time_bench_run_concurrent(nr_loops, step, data,
 				  cpumask, &sync, cpu_tasks, func);
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);
+
+	// Should we add tasklet shutdown+sync here?
+	// Use tasklet_kill() or sync on mutex or struct completion ???
 	return 1;
 }
-
-struct datarec {
-	struct page_pool *pp;
-	int nr_cpus;
-	struct ptr_ring *cpu_queues;
-};
 
 static int time_example(
 	struct time_bench_record *rec, void *data)
@@ -155,24 +191,11 @@ void noinline run_bench_XXX(
 	cpumask_t cpumask;
 	struct datarec d;
 	int nr_cpus;
-	int err, i;
+	int i;
 
-	struct page_pool_params pp_params = {
-		.order = 0,
-		.flags = 0,
-		.pool_size = MY_POOL_SIZE,
-		.nid = NUMA_NO_NODE,
-		.dev = NULL, /* Only use for DMA mapping */
-		.dma_dir = DMA_BIDIRECTIONAL,
-	};
-
-	pp = page_pool_create(&pp_params);
-	if (IS_ERR(pp)) {
-		err = PTR_ERR(pp);
-		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
+	pp = pp_create(MY_POOL_SIZE);
+	if (!pp)
 		return;
-	}
-//ZZZ	pp_fill_ptr_ring(pp, 64);
 
 	/* Restrict the CPUs to run on
 	 */
@@ -194,6 +217,13 @@ void noinline run_bench_XXX(
 	run_parallel("TEST",
 		     nr_loops, &cpumask, 0, &d,
 		     time_example);
+	/* Remote CPU kthread have been taken down after call in
+	 * run_parallel() time_bench_run_concurrent(), BUT the tasklet
+	 * simulating softirq is not part of that sync....  Thus, we
+	 * have to create extra tasklet sync step before we can
+	 * release pp and cpu_queues.  Perhaps hide this in
+	 * run_parallel() call.
+	 */
 
 fail:
 	for (i = 0; i < nr_cpus; i++) {
