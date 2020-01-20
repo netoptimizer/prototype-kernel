@@ -303,7 +303,7 @@ void noinline run_bench_pp_cpus(
 	struct page_pool *pp;
 	cpumask_t cpumask;
 	struct datarec d;
-	int i;
+	int i, j;
 
 	tasklet_init(&d.pp_tasklet, pp_tasklet_simulate_rx_napi,
 		     (unsigned long)&d);
@@ -346,9 +346,9 @@ void noinline run_bench_pp_cpus(
 //	mutex_lock(&d.wait_for_tasklet); /* Block waiting for tasklet */
 	tasklet_kill(&d.pp_tasklet);
 fail:
-	for (i = 0; i < nr_cpus; i++) {
-		empty_ptr_ring(pp, &cpu_queues[i]);
-		ptr_ring_cleanup(&cpu_queues[i], NULL);
+	for (j = 0; j < i; j++) {
+		empty_ptr_ring(pp, &cpu_queues[j]);
+		ptr_ring_cleanup(&cpu_queues[j], NULL);
 	}
 	kfree(cpu_queues);
 	page_pool_destroy(pp);
