@@ -91,7 +91,26 @@ bool init_cpu_queue(struct ptr_ring *queue, int q_size, int prefill,
 	return true;
 }
 
-struct page_pool *pp_create(int pool_size)
+/* Helper for filling some page's into page_pool's internal ptr_ring */
+static void pp_prefill(struct page_pool *pp, int elems)
+{
+	gfp_t gfp_mask = GFP_KERNEL;
+	struct page **array;
+	int i;
+
+	array = kzalloc(sizeof(struct page*) * elems, gfp_mask);
+
+	for (i = 0; i < elems; i++) {
+		array[i] = page_pool_alloc_pages(pp, gfp_mask);
+	}
+	for (i = 0; i < elems; i++) {
+		page_pool_put_page(pp, array[i], false);
+	}
+
+	kfree(array);
+}
+
+struct page_pool *pp_create(int pool_size, unsigned int prefill)
 {
 	struct page_pool *pp;
 	int err;
@@ -111,6 +130,8 @@ struct page_pool *pp_create(int pool_size)
 		pr_warn("%s: Error(%d) creating page_pool\n", __func__, err);
 		return NULL;
 	}
+	pp_prefill(pp, prefill);
+
 	return pp;
 }
 
@@ -288,7 +309,7 @@ void noinline run_bench_pp_2cpus(
 	tasklet_init(&d.pp_tasklet, pp_tasklet_simulate_rx_napi,
 		     (unsigned long)&d);
 
-	pp = pp_create(MY_POOL_SIZE);
+	pp = pp_create(MY_POOL_SIZE, 256 /*prefill*/ );
 	if (!pp)
 		return;
 
