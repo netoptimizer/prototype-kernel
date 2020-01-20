@@ -15,7 +15,8 @@
 #include <linux/limits.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
-static unsigned long loops = 10000000;
+//static unsigned long loops = 10000000;
+static unsigned long loops = 10000;
 module_param(loops, ulong, 0);
 MODULE_PARM_DESC(loops, "Specify loops bench will run");
 
@@ -116,22 +117,112 @@ struct page_pool *pp_create(int pool_size)
 struct datarec {
 	struct page_pool *pp;
 	int nr_cpus;
+	unsigned int nr_loops;
 	struct ptr_ring *cpu_queues;
 	// struct completion ?
 	// Or just call tasklet_kill(&pp_tasklet) ?
+	struct mutex wait_for_tasklet;
 };
 
 
 static void pp_tasklet_simulate_rx_napi(unsigned long data)
 {
+	gfp_t gfp_mask = GFP_ATOMIC; /* GFP_ATOMIC is not really needed */
 	struct datarec *d = (struct datarec *)data;
+	struct page_pool *pp = d->pp;
 	int cpu = smp_processor_id();
+	u64 nr_produce, cnt = 0;
+	u64 max_attempts, full = 0;
+	struct page *page;
+	struct ptr_ring *queue;
+	u32 queue_id;
 
-	if (in_serving_softirq())
-		pr_warn("%s(%d): in_serving_softirq fast-path\n", __func__, cpu);
-	else
-		pr_warn("%s(%d): Cannot use page_pool fast-path\n", __func__, cpu);
+	/* How many pages does bench loops expect to get */
+	nr_produce = d->nr_cpus * d->nr_loops;
+	max_attempts = nr_produce * 100;
 
+	if (verbose)
+		pr_info("%s(): started on CPU:%d (nr:%llu)\n",
+			__func__, cpu, nr_produce);
+
+	while (cnt < nr_produce && --max_attempts) {
+
+		page = page_pool_alloc_pages(pp, gfp_mask);
+		if (!page) {
+			pr_err("%s(): out-of-pages\n", __func__);
+			continue;
+			// TODO: How to break loop and stop kthreads?
+		}
+
+		queue_id = cnt % d->nr_cpus;
+		queue = &(d->cpu_queues[queue_id]);
+		if (ptr_ring_produce(queue, page) < 0) {
+			full++;
+			//pr_info("%s(): queue(%d) full(%llu)\n",
+			//	__func__, queue_id, full);
+			page_pool_recycle_direct(pp, page);
+			cond_resched();
+			continue;
+		}
+		cnt++;
+	}
+
+	if (max_attempts == 0) {
+		pr_err("%s(%d): FAIL (cnt:%llu), queue full(%llu) too many times\n",
+		       __func__, cpu, cnt, full);
+	} else {
+		pr_info("%s(cpu:%d): done (cnt:%llu) queue full(%llu)\n",
+			__func__, cpu, cnt, full);
+	}
+
+	mutex_unlock(&d->wait_for_tasklet); /* run_parallel waiting on unlock */
+}
+
+static int time_pp_put_page_recycle(
+	struct time_bench_record *rec, void *data)
+{
+	int cpu = smp_processor_id();
+	struct datarec *d = data;
+	uint64_t retry_cnt = 0;
+	uint64_t loops_cnt = 0;
+	struct ptr_ring *queue;
+	struct page *page;
+	int i;
+
+	if (verbose)
+		pr_info("%s(): run on CPU:%d expect nr_cpus:%d\n",
+			__func__, cpu, d->nr_cpus);
+
+	queue = &d->cpu_queues[cpu];
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+
+	retry:
+		page = ptr_ring_consume(queue);
+		if (page == NULL) { /* Empty queue */
+			retry_cnt++;
+			if (retry_cnt > rec->loops) {
+				pr_err("%s(): abort on retries\n", __func__);
+				break;
+			}
+			goto retry;
+		}
+
+		/* Issue: If page_pool ptr_ring is full, page will be
+		 * returned to page-allocator. Can we determine if it
+		 * happens?!?
+		 */
+		page_pool_put_page(d->pp, page, false);
+		loops_cnt++;
+	}
+	time_bench_stop(rec, loops_cnt);
+
+	pr_info("%s(cpu:%d): recycled(%llu) page, retry(%llu) times\n",
+		__func__, cpu, loops_cnt, retry_cnt);
+
+	return loops_cnt;
 }
 
 int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
@@ -145,7 +236,7 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 	struct time_bench_cpu *cpu_tasks;
 	size_t size;
 
-	// struct datarec *d = data; // Do have access to datarec here
+	struct datarec *d = data;
 //	tasklet_init(&pp_tasklet, pp_tasklet_simulate_rx_napi, (unsigned long)data);
 
 	/* Allocate records for every CPU, even if CPU are limited in cpumask */
@@ -153,6 +244,7 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
 	/* Start tasklet here */
+	mutex_lock(&d->wait_for_tasklet);
 	tasklet_enable(&pp_tasklet);
 	/* XXX: Runs on the CPU that schedule it, how to control this? taskset?*/
 	tasklet_schedule(&pp_tasklet);
@@ -160,6 +252,7 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 	time_bench_run_concurrent(nr_loops, step, data,
 				  cpumask, &sync, cpu_tasks, func);
 	/* After here remote CPU kthread's have been shutdown */
+	mutex_lock(&d->wait_for_tasklet); /* Block waiting for tasklet */
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);
@@ -168,27 +261,6 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 	// Use tasklet_kill() or sync on mutex or struct completion ???
 	tasklet_kill(&pp_tasklet); // hmm.. what if already tasklet finished?
 	return 1;
-}
-
-static int time_example(
-	struct time_bench_record *rec, void *data)
-{
-	struct datarec *d = data;
-	uint64_t loops_cnt = 0;
-	int i;
-
-	pr_info("%s(): ran on CPU:%d expect nr_cpus:%d\n",
-		__func__, smp_processor_id(), d->nr_cpus);
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		barrier();
-		loops_cnt++;
-	}
-	time_bench_stop(rec, loops_cnt);
-
-	return loops_cnt;
 }
 
 static void empty_ptr_ring(struct page_pool *pp, struct ptr_ring *ring)
@@ -231,9 +303,11 @@ void noinline run_bench_pp_2cpus(
 	d.pp = pp;
 	d.nr_cpus = nr_cpus;
 	d.cpu_queues = cpu_queues;
+	d.nr_loops = nr_loops;
+	mutex_init(&d.wait_for_tasklet);
 	run_parallel("TEST",
 		     nr_loops, &cpumask, 0, &d,
-		     time_example);
+		     time_pp_put_page_recycle);
 	/* Remote CPU kthread have been taken down after call in
 	 * run_parallel() time_bench_run_concurrent(), BUT the tasklet
 	 * simulating softirq is not part of that sync....  Thus, we
