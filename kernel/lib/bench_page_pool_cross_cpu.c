@@ -119,9 +119,9 @@ struct datarec {
 	int nr_cpus;
 	unsigned int nr_loops;
 	struct ptr_ring *cpu_queues;
-	// struct completion ?
-	// Or just call tasklet_kill(&pp_tasklet) ?
 	struct mutex wait_for_tasklet;
+	int tasklet_cpu;
+	struct tasklet_struct pp_tasklet;
 };
 
 
@@ -138,8 +138,8 @@ static void pp_tasklet_simulate_rx_napi(unsigned long data)
 	u32 queue_id;
 
 	/* How many pages does bench loops expect to get */
-	nr_produce = d->nr_cpus * d->nr_loops;
-	max_attempts = nr_produce * 100;
+	nr_produce = (d->nr_cpus * d->nr_loops) + d->nr_cpus;
+	max_attempts = nr_produce * 1000;
 
 	if (verbose)
 		pr_info("%s(): started on CPU:%d (nr:%llu)\n",
@@ -156,12 +156,9 @@ static void pp_tasklet_simulate_rx_napi(unsigned long data)
 
 		queue_id = cnt % d->nr_cpus;
 		queue = &(d->cpu_queues[queue_id]);
-		if (ptr_ring_produce(queue, page) < 0) {
+		if (__ptr_ring_produce(queue, page) < 0) {
 			full++;
-			//pr_info("%s(): queue(%d) full(%llu)\n",
-			//	__func__, queue_id, full);
 			page_pool_recycle_direct(pp, page);
-			cond_resched();
 			continue;
 		}
 		cnt++;
@@ -175,7 +172,7 @@ static void pp_tasklet_simulate_rx_napi(unsigned long data)
 			__func__, cpu, cnt, full);
 	}
 
-	mutex_unlock(&d->wait_for_tasklet); /* run_parallel waiting on unlock */
+	mutex_unlock(&d->wait_for_tasklet); /* others are waiting on unlock */
 }
 
 static int time_pp_put_page_recycle(
@@ -185,6 +182,7 @@ static int time_pp_put_page_recycle(
 	struct datarec *d = data;
 	uint64_t retry_cnt = 0;
 	uint64_t loops_cnt = 0;
+	uint64_t wait_cnt = 0;
 	struct ptr_ring *queue;
 	struct page *page;
 	int i;
@@ -193,7 +191,27 @@ static int time_pp_put_page_recycle(
 		pr_info("%s(): run on CPU:%d expect nr_cpus:%d\n",
 			__func__, cpu, d->nr_cpus);
 
+	/* Schedule tasklet on one of the CPUs */
+	if (d->tasklet_cpu == cpu) {
+		u64 nr_produce = (d->nr_cpus * d->nr_loops) + d->nr_cpus;
+		time_bench_start(rec);
+		tasklet_schedule(&d->pp_tasklet);
+		mutex_lock(&d->wait_for_tasklet); /* Block waiting for tasklet */
+		time_bench_stop(rec, nr_produce);
+		return nr_produce;
+		/* Returns to kthread_should_stop while loop */
+	}
+
 	queue = &d->cpu_queues[cpu];
+
+	/* Spin waiting for first page */
+	while (!(page = ptr_ring_consume(queue))) {
+		if ((++wait_cnt % 1000000) == 0 ) {
+			pr_info("%s(cpu:%d): waiting(%llu) on first page\n",
+				__func__, cpu, wait_cnt);
+		}
+	}
+	page_pool_put_page(d->pp, page, false);
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -203,8 +221,9 @@ static int time_pp_put_page_recycle(
 		page = ptr_ring_consume(queue);
 		if (page == NULL) { /* Empty queue */
 			retry_cnt++;
-			if (retry_cnt > rec->loops) {
-				pr_err("%s(): abort on retries\n", __func__);
+			if (retry_cnt > (rec->loops*100)) {
+				pr_err("%s(cpu:%d): abort on retries\n",
+				       __func__, cpu);
 				break;
 			}
 			goto retry;
@@ -230,36 +249,20 @@ int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 		 int (*func)(struct time_bench_record *record, void *data)
 	)
 {
-	DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_simulate_rx_napi,
-				 (unsigned long)data);
 	struct time_bench_sync sync;
 	struct time_bench_cpu *cpu_tasks;
 	size_t size;
-
-	struct datarec *d = data;
-//	tasklet_init(&pp_tasklet, pp_tasklet_simulate_rx_napi, (unsigned long)data);
 
 	/* Allocate records for every CPU, even if CPU are limited in cpumask */
 	size = sizeof(*cpu_tasks) * num_possible_cpus();
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
-	/* Start tasklet here */
-	mutex_lock(&d->wait_for_tasklet);
-	tasklet_enable(&pp_tasklet);
-	/* XXX: Runs on the CPU that schedule it, how to control this? taskset?*/
-	tasklet_schedule(&pp_tasklet);
-
 	time_bench_run_concurrent(nr_loops, step, data,
 				  cpumask, &sync, cpu_tasks, func);
 	/* After here remote CPU kthread's have been shutdown */
-	mutex_lock(&d->wait_for_tasklet); /* Block waiting for tasklet */
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);
-
-	// Should we add tasklet shutdown+sync here?
-	// Use tasklet_kill() or sync on mutex or struct completion ???
-	tasklet_kill(&pp_tasklet); // hmm.. what if already tasklet finished?
 	return 1;
 }
 
@@ -282,6 +285,9 @@ void noinline run_bench_pp_2cpus(
 	int nr_cpus;
 	int i;
 
+	tasklet_init(&d.pp_tasklet, pp_tasklet_simulate_rx_napi,
+		     (unsigned long)&d);
+
 	pp = pp_create(MY_POOL_SIZE);
 	if (!pp)
 		return;
@@ -291,6 +297,8 @@ void noinline run_bench_pp_2cpus(
 	cpumask_clear(&cpumask);
 	cpumask_set_cpu(0, &cpumask);
 	cpumask_set_cpu(1, &cpumask);
+	d.tasklet_cpu = 2;
+	cpumask_set_cpu(2, &cpumask);
 	nr_cpus = 2;
 
 	cpu_queues = kzalloc(sizeof(*cpu_queues) * nr_cpus, GFP_KERNEL);
@@ -305,17 +313,17 @@ void noinline run_bench_pp_2cpus(
 	d.cpu_queues = cpu_queues;
 	d.nr_loops = nr_loops;
 	mutex_init(&d.wait_for_tasklet);
-	run_parallel("TEST",
+
+	mutex_lock(&d.wait_for_tasklet);
+	//tasklet_enable(&d.pp_tasklet);
+	/* tasklet schedule happens in time_pp_put_page_recycle() */
+
+	run_parallel("page_pool_cross_cpu",
 		     nr_loops, &cpumask, 0, &d,
 		     time_pp_put_page_recycle);
-	/* Remote CPU kthread have been taken down after call in
-	 * run_parallel() time_bench_run_concurrent(), BUT the tasklet
-	 * simulating softirq is not part of that sync....  Thus, we
-	 * have to create extra tasklet sync step before we can
-	 * release pp and cpu_queues.  Perhaps hide this in
-	 * run_parallel() call.
-	 */
 
+//	mutex_lock(&d.wait_for_tasklet); /* Block waiting for tasklet */
+	tasklet_kill(&d.pp_tasklet);
 fail:
 	for (i = 0; i < nr_cpus; i++) {
 		empty_ptr_ring(pp, &cpu_queues[i]);
