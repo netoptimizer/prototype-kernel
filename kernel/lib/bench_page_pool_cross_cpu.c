@@ -15,13 +15,13 @@
 #include <linux/limits.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
-//static unsigned long loops = 10000000;
-static unsigned long loops = 10000;
+static unsigned long loops = 1000000;
 module_param(loops, ulong, 0);
 MODULE_PARM_DESC(loops, "Specify loops bench will run");
 
 static int verbose=1;
-#define MY_POOL_SIZE	1024
+//#define MY_POOL_SIZE	4096
+#define MY_POOL_SIZE	32000
 
 /*
  * Benchmark idea:
@@ -259,7 +259,7 @@ static int time_pp_put_page_recycle(
 	}
 	time_bench_stop(rec, loops_cnt);
 
-	pr_info("%s(cpu:%d): recycled(%llu) page, retry(%llu) times\n",
+	pr_info("%s(cpu:%d): recycled:%llu pages, empty:%llu times\n",
 		__func__, cpu, loops_cnt, retry_cnt);
 
 	return loops_cnt;
@@ -358,7 +358,7 @@ int run_benchmarks(void)
 {
 	uint32_t nr_loops = loops;
 
-	run_bench_pp_2cpus(nr_loops, 256, 0);
+	run_bench_pp_2cpus(nr_loops, 1024, 0);
 
 	return 1;
 }
