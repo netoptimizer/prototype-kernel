@@ -122,34 +122,51 @@ struct datarec {
 };
 
 
+static void pp_tasklet_simulate_rx_napi(unsigned long data)
+{
+	struct datarec *d = (struct datarec *)data;
+	int cpu = smp_processor_id();
 
+	if (in_serving_softirq())
+		pr_warn("%s(%d): in_serving_softirq fast-path\n", __func__, cpu);
+	else
+		pr_warn("%s(%d): Cannot use page_pool fast-path\n", __func__, cpu);
+
+}
 
 int run_parallel(const char *desc, uint32_t nr_loops, const cpumask_t *cpumask,
 		 int step, void *data,
 		 int (*func)(struct time_bench_record *record, void *data)
 	)
 {
+	DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_simulate_rx_napi,
+				 (unsigned long)data);
 	struct time_bench_sync sync;
 	struct time_bench_cpu *cpu_tasks;
 	size_t size;
 
 	// struct datarec *d = data; // Do have access to datarec here
+//	tasklet_init(&pp_tasklet, pp_tasklet_simulate_rx_napi, (unsigned long)data);
 
-	/* Allocate records for every CPU */
+	/* Allocate records for every CPU, even if CPU are limited in cpumask */
 	size = sizeof(*cpu_tasks) * num_possible_cpus();
 	cpu_tasks = kzalloc(size, GFP_KERNEL);
 
-	// Idea: Start tasklet here?
-	// We could piggy back on sync->start_event
+	/* Start tasklet here */
+	tasklet_enable(&pp_tasklet);
+	/* XXX: Runs on the CPU that schedule it, how to control this? taskset?*/
+	tasklet_schedule(&pp_tasklet);
 
 	time_bench_run_concurrent(nr_loops, step, data,
 				  cpumask, &sync, cpu_tasks, func);
+	/* After here remote CPU kthread's have been shutdown */
 	time_bench_print_stats_cpumask(desc, cpu_tasks, cpumask);
 
 	kfree(cpu_tasks);
 
 	// Should we add tasklet shutdown+sync here?
 	// Use tasklet_kill() or sync on mutex or struct completion ???
+	tasklet_kill(&pp_tasklet); // hmm.. what if already tasklet finished?
 	return 1;
 }
 
@@ -183,7 +200,7 @@ static void empty_ptr_ring(struct page_pool *pp, struct ptr_ring *ring)
 	}
 }
 
-void noinline run_bench_XXX(
+void noinline run_bench_pp_2cpus(
 	uint32_t nr_loops, int q_size, int prefill)
 {
 	struct ptr_ring *cpu_queues;
@@ -211,8 +228,8 @@ void noinline run_bench_XXX(
 			goto fail;
 	}
 
-	d.nr_cpus = 2;
 	d.pp = pp;
+	d.nr_cpus = nr_cpus;
 	d.cpu_queues = cpu_queues;
 	run_parallel("TEST",
 		     nr_loops, &cpumask, 0, &d,
@@ -238,7 +255,7 @@ int run_benchmarks(void)
 {
 	uint32_t nr_loops = loops;
 
-	run_bench_XXX(nr_loops, 256, 0);
+	run_bench_pp_2cpus(nr_loops, 256, 0);
 
 	return 1;
 }

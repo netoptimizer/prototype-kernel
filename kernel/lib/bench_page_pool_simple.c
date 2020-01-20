@@ -224,7 +224,7 @@ int time_bench_page_pool03_slow(
 
 /* Testing page_pool requires running under softirq.
  *
- * Running under a taslket satisfy this, as tasklets are built on top of
+ * Running under a tasklet satisfy this, as tasklets are built on top of
  * softirq.
  */
 static void pp_tasklet_handler(unsigned long data)
