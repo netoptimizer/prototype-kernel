@@ -295,8 +295,12 @@ static int invoke_test_on_cpu_func(void *private)
 
 	/* End test */
 	atomic_dec(&sync->nr_tests_running);
-	set_current_state(TASK_UNINTERRUPTIBLE);
-	schedule();
+	/*  Wait for kthread_stop() telling us to stop */
+	while (!kthread_should_stop()) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule();
+	}
+	__set_current_state(TASK_RUNNING);
 	return 0;
 }
 
