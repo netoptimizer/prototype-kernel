@@ -199,8 +199,8 @@ fail:
 	for (i = 0; i < nr_cpus; i++) {
 		empty_ptr_ring(pp, &cpu_queues[i]);
 		ptr_ring_cleanup(&cpu_queues[i], NULL);
-		kfree(cpu_queues);
 	}
+	kfree(cpu_queues);
 	page_pool_destroy(pp);
 }
 
