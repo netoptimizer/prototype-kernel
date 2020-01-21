@@ -13,6 +13,7 @@
 
 #include <linux/interrupt.h>
 #include <linux/limits.h>
+#include <linux/delay.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
 static unsigned long loops = 1000000;
@@ -236,6 +237,8 @@ static int time_pp_put_page_recycle(
 				__func__, cpu, wait_cnt);
 		}
 	}
+	ndelay(400); /* Small delay to get more objects in queue */
+	//udelay(2);
 	page_pool_put_page(d->pp, page, false);
 
 	time_bench_start(rec);
@@ -258,6 +261,7 @@ static int time_pp_put_page_recycle(
 		 * returned to page-allocator. Can we determine if it
 		 * happens?!?
 		 */
+//		ndelay(10);
 		page_pool_put_page(d->pp, page, false);
 		loops_cnt++;
 	}
