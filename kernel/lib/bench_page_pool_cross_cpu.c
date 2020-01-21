@@ -28,6 +28,8 @@ static int verbose=1;
 //#define MY_POOL_SIZE	4096
 #define MY_POOL_SIZE	32000
 
+#define SPSC_QUEUE_SZ	1024
+
 /*
  * Benchmark idea:
  *
@@ -161,10 +163,12 @@ static void pp_tasklet_simulate_rx_napi(unsigned long data)
 	u64 max_attempts, full = 0;
 	struct page *page;
 	struct ptr_ring *queue;
-	u32 queue_id;
+	u32 queue_id, queue_rr = 0;
 
 	/* How many pages does bench loops expect to get */
-	nr_produce = (d->nr_cpus * d->nr_loops) + d->nr_cpus;
+	nr_produce = (d->nr_cpus * d->nr_loops);
+	/* Add queue size that gets full once consumer stops */
+	nr_produce += (SPSC_QUEUE_SZ * d->nr_cpus);
 	max_attempts = nr_produce * 1000;
 
 	if (verbose)
@@ -180,7 +184,7 @@ static void pp_tasklet_simulate_rx_napi(unsigned long data)
 			// TODO: How to break loop and stop kthreads?
 		}
 
-		queue_id = cnt % d->nr_cpus;
+		queue_id = queue_rr++ % d->nr_cpus;
 		queue = &(d->cpu_queues[queue_id]);
 		if (__ptr_ring_produce(queue, page) < 0) {
 			full++;
@@ -366,7 +370,7 @@ int run_benchmarks(void)
 {
 	uint32_t nr_loops = loops;
 
-	run_bench_pp_cpus(returning_cpus, nr_loops, 1024, 0);
+	run_bench_pp_cpus(returning_cpus, nr_loops, SPSC_QUEUE_SZ, 0);
 
 	return 1;
 }
