@@ -19,6 +19,10 @@ static unsigned long loops = 1000000;
 module_param(loops, ulong, 0);
 MODULE_PARM_DESC(loops, "Specify loops bench will run");
 
+static unsigned int returning_cpus = 2;
+module_param(returning_cpus, uint, 0);
+MODULE_PARM_DESC(returning_cpus, "Concurrent CPUs returning pages");
+
 static int verbose=1;
 //#define MY_POOL_SIZE	4096
 #define MY_POOL_SIZE	32000
@@ -358,9 +362,7 @@ int run_benchmarks(void)
 {
 	uint32_t nr_loops = loops;
 
-	//run_bench_pp_cpus(1, nr_loops, 1024, 0);
-	run_bench_pp_cpus(2, nr_loops, 1024, 0);
-	//run_bench_pp_cpus(3, nr_loops, 1024, 0);
+	run_bench_pp_cpus(returning_cpus, nr_loops, 1024, 0);
 
 	return 1;
 }
