@@ -26,8 +26,8 @@ struct time_bench_record
 	uint64_t invoked_cnt; 	/* Returned actual invocations */
 	uint64_t tsc_start;
 	uint64_t tsc_stop;
-	struct timespec ts_start;
-	struct timespec ts_stop;
+	struct timespec64 ts_start;
+	struct timespec64 ts_stop;
 	/** PMU counters for instruction and cycles
 	 * instructions counter including pipelined instructions */
 	uint64_t pmc_inst_start;
@@ -154,6 +154,13 @@ inline uint64_t rdtsc(void)
  * use: getnstimeofday()
  *  getnstimeofday(&rec->ts_start);
  *  getnstimeofday(&rec->ts_stop);
+ *
+ * API changed see: Documentation/core-api/timekeeping.rst
+ *  https://www.kernel.org/doc/html/latest/core-api/timekeeping.html#c.getnstimeofday
+ *
+ * We should instead use: ktime_get_real_ts64() is a direct
+ *  replacement, but consider using monotonic time (ktime_get_ts64())
+ *  and/or a ktime_t based interface (ktime_get()/ktime_get_real()).
  */
 
 
@@ -234,7 +241,8 @@ void time_bench_print_stats_cpumask(const char *desc,
 //FIXME: use rec->flags to select measurement, should be MACRO
 static __always_inline void
 time_bench_start(struct time_bench_record *rec) {
-	getnstimeofday(&rec->ts_start);
+	//getnstimeofday(&rec->ts_start);
+	ktime_get_real_ts64(&rec->ts_start);
 	if (rec->flags & TIME_BENCH_PMU) {
 		rec->pmc_inst_start = pmc_inst();
 		rec->pmc_clk_start  = pmc_clk();
@@ -249,7 +257,8 @@ time_bench_stop(struct time_bench_record *rec, uint64_t invoked_cnt) {
 		rec->pmc_inst_stop = pmc_inst();
 		rec->pmc_clk_stop  = pmc_clk();
 	}
-	getnstimeofday(&rec->ts_stop);
+	//getnstimeofday(&rec->ts_stop);
+	ktime_get_real_ts64(&rec->ts_stop);
 	rec->invoked_cnt = invoked_cnt;
 }
 
