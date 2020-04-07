@@ -14,6 +14,7 @@
 #include <linux/interrupt.h>
 #include <linux/limits.h>
 #include <linux/delay.h>
+#include <linux/version.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
 static unsigned long loops = 1000000;
@@ -29,6 +30,22 @@ static int verbose=1;
 #define MY_POOL_SIZE	32000
 
 #define SPSC_QUEUE_SZ	1024
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+static inline
+void _page_pool_put_page(struct page_pool *pool, struct page *page,
+			 bool allow_direct)
+{
+	page_pool_put_page(pool, page, -1, allow_direct);
+}
+#else
+static inline
+void _page_pool_put_page(struct page_pool *pool, struct page *page,
+			 bool allow_direct)
+{
+	page_pool_put_page(pool, page, allow_direct);
+}
+#endif
 
 /*
  * Benchmark idea:
@@ -111,7 +128,7 @@ static void pp_prefill(struct page_pool *pp, int elems)
 		array[i] = page_pool_alloc_pages(pp, gfp_mask);
 	}
 	for (i = 0; i < elems; i++) {
-		page_pool_put_page(pp, array[i], false);
+		_page_pool_put_page(pp, array[i], false);
 	}
 
 	kfree(array);
@@ -243,7 +260,7 @@ static int time_pp_put_page_recycle(
 	}
 	ndelay(400); /* Small delay to get more objects in queue */
 	//udelay(2);
-	page_pool_put_page(d->pp, page, false);
+	_page_pool_put_page(d->pp, page, false);
 
 	time_bench_start(rec);
 	/** Loop to measure **/
@@ -266,7 +283,7 @@ static int time_pp_put_page_recycle(
 		 * happens?!?
 		 */
 //		ndelay(10);
-		page_pool_put_page(d->pp, page, false);
+		_page_pool_put_page(d->pp, page, false);
 		loops_cnt++;
 	}
 	time_bench_stop(rec, loops_cnt);
@@ -304,7 +321,7 @@ static void empty_ptr_ring(struct page_pool *pp, struct ptr_ring *ring)
 	struct page *page;
 
 	while ((page = ptr_ring_consume_bh(ring))) {
-		page_pool_put_page(pp, page, false);
+		_page_pool_put_page(pp, page, false);
 	}
 }
 

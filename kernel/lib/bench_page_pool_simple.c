@@ -14,9 +14,26 @@
 
 #include <linux/interrupt.h>
 #include <linux/limits.h>
+#include <linux/version.h>
 
 static int verbose=1;
 #define MY_POOL_SIZE	1024
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(5, 6, 0)
+static inline
+void _page_pool_put_page(struct page_pool *pool, struct page *page,
+			 bool allow_direct)
+{
+	page_pool_put_page(pool, page, -1, allow_direct);
+}
+#else
+static inline
+void _page_pool_put_page(struct page_pool *pool, struct page *page,
+			 bool allow_direct)
+{
+	page_pool_put_page(pool, page, allow_direct);
+}
+#endif
 
 DEFINE_MUTEX(wait_for_tasklet);
 
@@ -120,7 +137,7 @@ static void pp_fill_ptr_ring(struct page_pool *pp, int elems)
 		array[i] = page_pool_alloc_pages(pp, gfp_mask);
 	}
 	for (i = 0; i < elems; i++) {
-		page_pool_put_page(pp, array[i], false);
+		_page_pool_put_page(pp, array[i], false);
 	}
 
 	kfree(array);
@@ -186,7 +203,7 @@ int time_bench_page_pool(
 
 		} else if (type == type_ptr_ring ) {
 			/* Normal return path */
-			page_pool_put_page(pp, page, false);
+			_page_pool_put_page(pp, page, false);
 
 		} else if (type == type_page_allocator ) {
 			/* Test if not pages are recycled, but instead
