@@ -24,7 +24,7 @@ CONFIG_SLAB_TESTS=m
 # If developing on SLAB BULK API then enable modules using this API by
 # setting CONFIG_SLAB_BULK_API=m
 #
-CONFIG_SLAB_BULK_API=n
+CONFIG_SLAB_BULK_API=m
 
 # Testing some of MST's skb_array code
 # (Compile issues on newer kernels)
