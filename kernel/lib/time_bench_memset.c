@@ -576,7 +576,7 @@ static int time_memset_mmx_256(struct time_bench_record *rec, void *data)
 #undef  CONST_CLEAR_SIZE
 }
 
-static int time_memset_avx2(struct time_bench_record *rec, void *data)
+static int time_memset_avx2_256(struct time_bench_record *rec, void *data)
 {
 #define CONST_CLEAR_SIZE 256
 	int i, j;
@@ -854,8 +854,8 @@ int run_timing_tests(void)
 			NULL,   time_memset_variable_step);
 	time_bench_loop(loops, 0, "memset_MMX_256",
 			NULL, time_memset_mmx_256);
-	time_bench_loop(loops, 0, "memset_AVX2",
-			NULL, time_memset_avx2);
+	time_bench_loop(loops, 0, "memset_AVX2_256",
+			NULL, time_memset_avx2_256);
 	time_bench_loop(loops, 0, "memset_MOVQ_256",
 			NULL, time_memset_movq_256);
 	time_bench_loop(loops, 0, "alternative_MOVQ_256",
