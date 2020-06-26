@@ -31,6 +31,7 @@
 #include <linux/time_bench.h>
 #include <linux/spinlock.h>
 #include <linux/mm.h>
+#include <asm/fpu/api.h>
 
 // #include <asm/mmx.h> // mmx_clear_page -> fast_clear_page
 
@@ -42,6 +43,13 @@ extern void kernel_fpu_end(void);
 
 #define GLOBAL_BUF_SIZE 8192
 static char global_buf[GLOBAL_BUF_SIZE];
+
+#define YMM_BYTES		(XSAVE_YMM_SIZE / BITS_PER_BYTE)
+#define BYTES_TO_YMM(x)		((x) / YMM_BYTES)
+#define TIME_MEMSET_AVX2_ZERO(reg)					\
+	asm volatile("vpxor %ymm" #reg ", %ymm" #reg ", %ymm" #reg)
+#define TIME_MEMSET_AVX2_STORE(loc, reg)				\
+	asm volatile("vmovdqa %%ymm" #reg ", %0" : "=m" (loc))
 
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
@@ -568,6 +576,33 @@ static int time_memset_mmx_256(struct time_bench_record *rec, void *data)
 #undef  CONST_CLEAR_SIZE
 }
 
+static int time_memset_avx2(struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE 256
+	int i, j;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+
+	for (i = 0; i < rec->loops; i++) {
+		kernel_fpu_begin();
+		TIME_MEMSET_AVX2_ZERO(0);
+
+		loops_cnt++;
+		barrier();
+		for (j = 0; j < BYTES_TO_YMM(CONST_CLEAR_SIZE); j++)
+			TIME_MEMSET_AVX2_STORE(global_buf[YMM_BYTES * j], 0);
+		barrier();
+
+		kernel_fpu_end();
+	}
+
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+
 static void fast_clear_movq_192(void *page)
 {
 	int i;
@@ -819,6 +854,8 @@ int run_timing_tests(void)
 			NULL,   time_memset_variable_step);
 	time_bench_loop(loops, 0, "memset_MMX_256",
 			NULL, time_memset_mmx_256);
+	time_bench_loop(loops, 0, "memset_AVX2",
+			NULL, time_memset_avx2);
 	time_bench_loop(loops, 0, "memset_MOVQ_256",
 			NULL, time_memset_movq_256);
 	time_bench_loop(loops, 0, "alternative_MOVQ_256",
