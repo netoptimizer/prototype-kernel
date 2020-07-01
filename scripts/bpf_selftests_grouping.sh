@@ -70,7 +70,7 @@ group[8]=global_data
 #echo "Elements in array" ${#group[@]}
 #elems=${#group[@]}
 
-VERBOSE=yes
+#VERBOSE=yes
 function info() {
     if [[ -n "$VERBOSE" ]]; then
 	echo "# $@"
@@ -106,7 +106,7 @@ function run_bpf_test_progs_test()
     OUTFILE=${OUTDIR}/test_progs__${name}.output
 
     # Run test name (this can be a pattern that match more tests)
-##   $su ./${TESTPROG} -t $pattern $exclude 2>&1  > $OUTFILE
+    $su ./${TESTPROG} -t $pattern $exclude 2>&1  > $OUTFILE
     result=$?
 
     check_result $name $result
@@ -116,15 +116,8 @@ function run_bpf_test_progs_test()
 info "Run all tests in group array"
 for pattern in "${group[@]}"; do
     #./${TESTPROG} --list -t $pattern
-    echo "run_bpf_test_progs_test $pattern"
+    run_bpf_test_progs_test $pattern
 done
-
-# Create exclude list, for running remaining tests
-#for pattern in "${group[@]}"; do
-#    str=${str}${seperator}${pattern}
-#    seperator=","
-#done
-#exclude_str=$str
 
 function comma_seperated_string()
 {
@@ -141,7 +134,6 @@ exclude_str=$(comma_seperated_string ${group[@]})
 if [[ -n $exclude_str ]]; then
     exclude="--name-blacklist=$exclude_str"
 fi
-echo "Exclude-these patterns: $exclude"
 
 # Get list of programs that have NOT been run as part of group selection
 testnames=$(./${TESTPROG} --list $exclude)
