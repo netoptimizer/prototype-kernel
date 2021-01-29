@@ -33,6 +33,8 @@
 #include <linux/mm.h>
 #include <asm/fpu/api.h>
 
+#include <linux/skbuff.h>
+
 // #include <asm/mmx.h> // mmx_clear_page -> fast_clear_page
 
 static int verbose=1;
@@ -127,6 +129,53 @@ static int time_memset_128(
 		barrier();
 	}
 	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+#undef  CONST_CLEAR_SIZE
+}
+
+static int time_memset_skb_tail(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	preempt_disable();
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		memset(&global_buf, 0, offsetof(struct sk_buff, tail));
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	preempt_enable();
+	pr_info("SKB: offsetof-tail:%lu\n", offsetof(struct sk_buff, tail));
+
+	return loops_cnt;
+}
+
+static int time_memset_skb_tail_roundup(
+	struct time_bench_record *rec, void *data)
+{
+#define CONST_CLEAR_SIZE roundup(offsetof(struct sk_buff, tail), SMP_CACHE_BYTES)
+
+	int i;
+	uint64_t loops_cnt = 0;
+
+	preempt_disable();
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		loops_cnt++;
+		barrier();
+		memset(&global_buf, 0, CONST_CLEAR_SIZE);
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	preempt_enable();
+	pr_info("SKB: ROUNDUP(offsetof-tail: %lu)\n", CONST_CLEAR_SIZE);
+
 	return loops_cnt;
 #undef  CONST_CLEAR_SIZE
 }
@@ -824,6 +873,11 @@ int run_timing_tests(void)
 			NULL,   time_memset_variable_step);
 	time_bench_loop(loops, 0, "memset_MOVQ_192",
 			NULL, time_memset_movq_192);
+
+	time_bench_loop(loops, 0, "memset_skb_tail",
+			NULL, time_memset_skb_tail);
+	time_bench_loop(loops, 0, "memset_skb_tail_roundup",
+			NULL, time_memset_skb_tail_roundup);
 
 	time_bench_loop(loops, 0, "memset_199",
 			NULL, time_memset_199);
