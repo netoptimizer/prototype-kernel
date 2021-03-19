@@ -28,7 +28,8 @@ MODULE_PARM_DESC(run_flags, "Hack way to limit bench to run");
 /* Count the bit number from the enum */
 enum benchmark_bit {
 	bit_run_bench_order0_compare,
-	bit_run_bench_page_bulking,
+	bit_run_bench_page_bulking_list,
+	bit_run_bench_page_bulking_array,
 };
 #define bit(b)	(1 << (b))
 #define run_or_return(b) do { if (!(run_flags & (bit(b)))) return; } while (0)
@@ -65,12 +66,11 @@ static int time_single_page_alloc_put(
 
 #define MAX_BULK 32768
 
-static int time_bulk_page_alloc_free(
+static int time_bulk_page_alloc_free_list(
 	struct time_bench_record *rec, void *data)
 {
 	gfp_t gfp = (GFP_ATOMIC | ___GFP_NORETRY);
 	uint64_t loops_cnt = 0;
-	int order=0;
 	int i;
 
 	/* Bulk size setup from "step" */
@@ -94,14 +94,76 @@ static int time_bulk_page_alloc_free(
 		unsigned long n;
 		INIT_LIST_HEAD(&list);
 
-		n = alloc_pages_bulk(gfp, order, bulk, &list);
+		//n = alloc_pages_bulk(gfp, order, bulk, &list);
+		n = alloc_pages_bulk_list(gfp, bulk, &list);
 
-		if (verbose && (n < bulk))
+		if (verbose && unlikely(n < bulk))
 			net_warn_ratelimited(
 				"%s(): got less pages: %lu/%lu\n",
 				__func__, n, bulk);
 		barrier();
 		free_pages_bulk(&list);
+
+		/* NOTICE THIS COUNTS (bulk) alloc+free together */
+		loops_cnt+= n;
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+#define ARRAY_SZ	128
+// struct page *array[ARRAY_SZ];
+
+static int time_bulk_page_alloc_free_array(
+	struct time_bench_record *rec, void *data)
+{
+	gfp_t gfp = (GFP_ATOMIC | ___GFP_NORETRY);
+	uint64_t loops_cnt = 0;
+	int i;
+	struct page *array[ARRAY_SZ] = {}; /* Zero array */
+
+	/* Bulk size setup from "step" */
+	size_t bulk = rec->step;
+
+	if (bulk > ARRAY_SZ) {
+		pr_warn("%s() bulk(%lu) request too big cap at %d\n",
+			__func__, bulk, (ARRAY_SZ - 1));
+		bulk = ARRAY_SZ;
+	}
+	/* loop count is limited to 32-bit due to div_u64_rem() use */
+	if (((uint64_t)rec->loops * bulk *2) >= ((1ULL<<32)-1)) {
+		pr_err("Loop cnt too big will overflow 32-bit\n");
+		return 0;
+	}
+
+	/* Zero array as bulk alloc API depend on it */
+	for (i = 0; i < bulk; i++)
+		array[i] = NULL;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		unsigned long n;
+		int j;
+
+		n = alloc_pages_bulk_array(gfp, bulk, array);
+
+		if (verbose && unlikely(n < bulk))
+			net_warn_ratelimited(
+				"%s(): got less pages: %lu/%lu\n",
+				__func__, n, bulk);
+		barrier();
+//		free_pages_bulk(&list);
+		for (j = 0; j < n; j++) {
+			struct page *page = array[j];
+
+			put_page(page);
+			/* Could use __free_pages() as it will be closer to what
+			 * free_pages_bulk() does (__free_pages_ok)
+			 */
+			//__free_pages(page, 0);/* avoid __page_cache_release() */
+			array[j] = NULL; /* Important to clear */
+		}
 
 		/* NOTICE THIS COUNTS (bulk) alloc+free together */
 		loops_cnt+= n;
@@ -121,15 +183,28 @@ void noinline run_bench_order0_compare(uint32_t loops)
 
 void noinline run_bench_page_bulking(uint32_t loops, int bulk)
 {
-	run_or_return(bit_run_bench_page_bulking);
+	run_or_return(bit_run_bench_page_bulking_list);
 	/*
 	 * Adjust loops here, according to bulk value, as each test
 	 * should run approx same amount of time.  time_bench_loop()
 	 * will complain if adjusting inside test func.
 	 */
 	loops = loops / bulk;
-	time_bench_loop(loops, bulk, "time_bulk_page_alloc_free",
-			NULL,         time_bulk_page_alloc_free);
+	time_bench_loop(loops, bulk, "time_bulk_page_alloc_free_list",
+			NULL,         time_bulk_page_alloc_free_list);
+}
+
+void noinline run_bench_page_bulking_array(uint32_t loops, int bulk)
+{
+	run_or_return(bit_run_bench_page_bulking_array);
+	/*
+	 * Adjust loops here, according to bulk value, as each test
+	 * should run approx same amount of time.  time_bench_loop()
+	 * will complain if adjusting inside test func.
+	 */
+	loops = loops / bulk;
+	time_bench_loop(loops, bulk, "time_bulk_page_alloc_free_array",
+			NULL,         time_bulk_page_alloc_free_array);
 }
 
 
@@ -146,7 +221,18 @@ int run_timing_tests(void)
 	run_bench_page_bulking(loops, 32);
 	run_bench_page_bulking(loops, 64);
 	run_bench_page_bulking(loops,128);
-	run_bench_page_bulking(loops,256);
+//	run_bench_page_bulking(loops,256);
+
+	run_bench_page_bulking_array(loops,   1);
+	run_bench_page_bulking_array(loops,   2);
+	run_bench_page_bulking_array(loops,   3);
+	run_bench_page_bulking_array(loops,   4);
+	run_bench_page_bulking_array(loops,   8);
+	run_bench_page_bulking_array(loops,  16);
+	run_bench_page_bulking_array(loops,  32);
+	run_bench_page_bulking_array(loops,  64);
+	run_bench_page_bulking_array(loops, 128);
+
 	return 0;
 }
 
