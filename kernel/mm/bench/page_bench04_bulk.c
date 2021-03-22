@@ -64,6 +64,19 @@ static int time_single_page_alloc_put(
 	return i;
 }
 
+/* Open coded as Mel removed free_pages_bulk */
+static inline
+void my_free_pages_bulk(struct list_head *list)
+{
+	struct page *page, *next;
+
+	list_for_each_entry_safe(page, next, list, lru) {
+		list_del(&page->lru);
+		//put_page(page);
+		__free_pages(page, 0); /* avoid __page_cache_release() */
+	}
+}
+
 #define MAX_BULK 32768
 
 static int time_bulk_page_alloc_free_list(
@@ -102,7 +115,7 @@ static int time_bulk_page_alloc_free_list(
 				"%s(): got less pages: %lu/%lu\n",
 				__func__, n, bulk);
 		barrier();
-		free_pages_bulk(&list);
+		my_free_pages_bulk(&list);
 
 		/* NOTICE THIS COUNTS (bulk) alloc+free together */
 		loops_cnt+= n;
