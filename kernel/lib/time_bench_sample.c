@@ -206,6 +206,29 @@ static int time_preempt(
 	return loops_cnt;
 }
 
+static DEFINE_PER_CPU(struct page *, per_cpu_data);
+
+static int time_this_cpu_cmpxchg(
+	struct time_bench_record *rec, void *data)
+{
+	int i;
+	uint64_t loops_cnt = 0;
+
+	struct page *page=(void*)1, *oldpage=(void*)2;
+        barrier();
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		if (this_cpu_cmpxchg(per_cpu_data, oldpage, page) == oldpage)
+			break;
+		loops_cnt++;
+		barrier();
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 static void noinline measured_function(volatile int *var)
 {
 	(*var) = 1;
@@ -324,6 +347,9 @@ int run_timing_tests(void)
 	 */
 	time_bench_loop(loops, 0, "preempt_disable_enable",
 			NULL, time_preempt);
+
+	time_bench_loop(loops, 0, "this_cpu_cmpxchg",
+			NULL, time_this_cpu_cmpxchg);
 
 	/*  2.145 ns cost for a local function call */
 	time_bench_loop(loops, 0, "funcion_call_cost",
