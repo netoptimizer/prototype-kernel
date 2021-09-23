@@ -270,7 +270,11 @@ static void pp_tasklet_handler(unsigned long data)
 
 	mutex_unlock(&wait_for_tasklet); /* Module __init waiting on unlock */
 }
+#if LINUX_VERSION_CODE <= KERNEL_VERSION(5, 9, 0)
 DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler, 0);
+#else
+DECLARE_TASKLET_DISABLED(pp_tasklet, pp_tasklet_handler);
+#endif
 
 static void run_tasklet_tests(void)
 {
