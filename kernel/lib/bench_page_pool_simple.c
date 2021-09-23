@@ -244,7 +244,7 @@ int time_bench_page_pool03_slow(
  * Running under a tasklet satisfy this, as tasklets are built on top of
  * softirq.
  */
-static void pp_tasklet_handler(unsigned long data)
+static void pp_tasklet_handler(struct tasklet_struct *t)
 {
 	uint32_t nr_loops = loops;
 
