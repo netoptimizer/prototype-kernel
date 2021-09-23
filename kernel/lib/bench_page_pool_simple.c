@@ -112,6 +112,8 @@ static int time_bench_lock(
 	spinlock_t lock;
 	int i;
 
+	spin_lock_init(&lock);
+
 	time_bench_start(rec);
 	/** Loop to measure **/
 	for (i = 0; i < rec->loops; i++) {
