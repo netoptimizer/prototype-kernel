@@ -534,12 +534,11 @@ void destructor_put_page(void *ptr)
 		pr_err("ERROR: %s() pages with zero refcnt on queue!\n",
 		       __func__);
 
-	if (put_page_testzero(page)) {
-		__put_page(page);
-	} else {
+	if (page_ref_count(page) > 1) {
 		pr_err("ERROR: %s() pages with elevated refcnt:%d not freed!\n",
 		       __func__, page_ref_count(page));
 	}
+	put_page(page);
 }
 
 void noinline run_bench_cross_cpu_page_alloc_put(
