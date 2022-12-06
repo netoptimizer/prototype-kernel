@@ -46,6 +46,11 @@ extern void kernel_fpu_end(void);
 #define GLOBAL_BUF_SIZE 8192
 static char global_buf[GLOBAL_BUF_SIZE];
 
+#ifndef XSAVE_YMM_SIZE
+#warning "Defining XSAVE_YMM_SIZE locally"
+#define XSAVE_YMM_SIZE	256
+#endif
+
 #define YMM_BYTES		(XSAVE_YMM_SIZE / BITS_PER_BYTE)
 #define BYTES_TO_YMM(x)		((x) / YMM_BYTES)
 #define TIME_MEMSET_AVX2_ZERO(reg)					\
