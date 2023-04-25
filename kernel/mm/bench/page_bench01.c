@@ -12,7 +12,7 @@
 
 static int verbose=1;
 
-static uint32_t loops = 100000;
+static uint32_t loops = 1000000;
 module_param(loops, uint, 0);
 MODULE_PARM_DESC(loops, "Iteration loops");
 
@@ -146,19 +146,32 @@ static int time_alloc_pages_with_fallback(
 	return i;
 }
 
+/* More loop iteration needed below costly order */
+#define _PAGE_ALLOC_COSTLY_ORDER 3
+
 int run_timing_tests(void)
 {
 	int i;
 
-	time_bench_loop(loops, 0, "single_page_alloc_free",
+	time_bench_loop(loops*10, 0, "single_page_alloc_free",
 			NULL, time_single_page_alloc_free);
 
 	for (i = 0; i < 10; i++) {
-		time_bench_loop(loops, i, "alloc_pages_order_step", NULL,
+		uint32_t _loops = loops;
+
+		if (i <= _PAGE_ALLOC_COSTLY_ORDER)
+			_loops = loops * 10;
+
+		time_bench_loop(_loops, i, "alloc_pages_order_step", NULL,
 				time_alloc_pages);
 	}
 	for (i = 0; i < 5; i++) {
-		time_bench_loop(loops, i, "put_order_step", NULL,
+		uint32_t _loops = loops;
+
+		if (i <= _PAGE_ALLOC_COSTLY_ORDER)
+			_loops = loops * 10;
+
+		time_bench_loop(_loops, i, "put_order_step", NULL,
 				time_alloc_put_pages);
 	}
 
