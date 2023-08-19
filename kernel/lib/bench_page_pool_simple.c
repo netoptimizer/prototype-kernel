@@ -211,8 +211,14 @@ int time_bench_page_pool(
 			/* Test if not pages are recycled, but instead
 			 * returned back into systems page allocator
 			 */
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0)
 			page_pool_release_page(pp, page);
 			put_page(page);
+#else
+			get_page(page); /* cause no-recycling */
+			_page_pool_put_page(pp, page, false);
+			put_page(page);
+#endif
 		} else {
 			BUILD_BUG();
 		}
