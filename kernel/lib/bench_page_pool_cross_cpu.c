@@ -9,12 +9,17 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/time_bench.h>
+
+#include <linux/version.h>
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 5, 0)
 #include <net/page_pool.h>
+#else
+#include <net/page_pool/helpers.h>
+#endif
 
 #include <linux/interrupt.h>
 #include <linux/limits.h>
 #include <linux/delay.h>
-#include <linux/version.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
 static unsigned long loops = 1000000;
