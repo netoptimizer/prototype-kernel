@@ -1,5 +1,8 @@
 /*
  * Benchmark module for traits - related to XDP-hints
+ *
+ * NOTICE: Compiling this depend kernel changes under-development
+ *  https://github.com/arthurfabre/linux/tree/afabre/traits-002-bounds-inline
  */
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
@@ -47,7 +50,6 @@ static int time_bench_for_loop(
 	return loops_cnt;
 }
 
-
 static int time_bench_atomic_inc(
 	struct time_bench_record *rec, void *data)
 {
@@ -68,6 +70,49 @@ static int time_bench_atomic_inc(
 	return loops_cnt;
 }
 
+static void noinline measured_function(volatile int *var)
+{
+	(*var) = 1;
+}
+static int time_func(
+	struct time_bench_record *rec, void *data)
+{
+	int i, tmp;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		measured_function(&tmp);
+		loops_cnt++;
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
+struct func_ptr_ops {
+	void (*func)(volatile int *var);
+	unsigned int (*func2)(unsigned int count);
+};
+static struct func_ptr_ops my_func_ptr __read_mostly = {
+	.func  = measured_function,
+};
+static int time_func_ptr(
+	struct time_bench_record *rec, void *data)
+{
+	int i, tmp;
+	uint64_t loops_cnt = 0;
+
+	time_bench_start(rec);
+	/** Loop to measure **/
+	for (i = 0; i < rec->loops; i++) {
+		my_func_ptr.func(&tmp);
+		loops_cnt++;
+	}
+	time_bench_stop(rec, loops_cnt);
+	return loops_cnt;
+}
+
 static int run_benchmark_tests(void)
 {
 	uint32_t nr_loops = loops;
@@ -78,7 +123,17 @@ static int run_benchmark_tests(void)
 				"for_loop", NULL, time_bench_for_loop);
 		time_bench_loop(nr_loops*10, 0,
 				"atomic_inc", NULL, time_bench_atomic_inc);
+
+		/*  cost for a local function call */
+		time_bench_loop(loops, 0, "function_call_cost",
+				NULL, time_func);
+
+		/*  cost for a function pointer invocation */
+		time_bench_loop(loops, 0, "func_ptr_call_cost",
+				NULL, time_func_ptr);
 	}
+
+
 
 	return 0;
 }
