@@ -99,6 +99,13 @@ static int time_alloc_put_pages(
 	return i;
 }
 
+/* Workaround for kernel v6.8
+ *  5e0a760b4441 ("mm, treewide: rename MAX_ORDER to MAX_PAGE_ORDER")
+ */
+#ifndef MAX_ORDER
+#define MAX_ORDER MAX_PAGE_ORDER
+#endif
+
 static int time_alloc_pages_with_fallback(
 	struct time_bench_record *rec, void *data)
 {
