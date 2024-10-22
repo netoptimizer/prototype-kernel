@@ -36,6 +36,10 @@ static unsigned long loops = 10000000;
 module_param(loops, ulong, 0);
 MODULE_PARM_DESC(loops, "Specify loops bench will run");
 
+static unsigned long stay_loaded = 0;
+module_param(stay_loaded, ulong, 0);
+MODULE_PARM_DESC(stay_loaded, "For perf report keep module loaded");
+
 /* Timing at the nanosec level, we need to know the overhead
  * introduced by the for loop itself */
 static int time_bench_for_loop(
@@ -225,8 +229,10 @@ static int __init bench_traits_simple_module_init(void)
 
 	run_benchmark_tests();
 
-	// return 0;
-	return -EAGAIN; // Trick to not fully load module
+	if (stay_loaded)
+		return 0;
+	else
+		return -EAGAIN; // Trick to not fully load module
 }
 module_init(bench_traits_simple_module_init);
 
