@@ -54,26 +54,6 @@ static int time_bench_for_loop(
 	return loops_cnt;
 }
 
-static int time_bench_atomic_inc(
-	struct time_bench_record *rec, void *data)
-{
-	uint64_t loops_cnt = 0;
-	atomic_t cnt;
-	int i;
-
-	atomic_set(&cnt, 0);
-
-	time_bench_start(rec);
-	/** Loop to measure **/
-	for (i = 0; i < rec->loops; i++) {
-		atomic_inc(&cnt);
-		barrier(); /* avoid compiler to optimize this loop */
-	}
-	loops_cnt = atomic_read(&cnt);
-	time_bench_stop(rec, loops_cnt);
-	return loops_cnt;
-}
-
 static void noinline measured_function(volatile int *var)
 {
 	(*var) = 1;
@@ -209,8 +189,6 @@ static int run_benchmark_tests(void)
 	if (enabled(bit_run_bench_baseline)) {
 		time_bench_loop(nr_loops*10, 0,
 				"for_loop", NULL, time_bench_for_loop);
-		time_bench_loop(nr_loops*10, 0,
-				"atomic_inc", NULL, time_bench_atomic_inc);
 
 		/*  cost for a local function call */
 		time_bench_loop(loops, 0, "function_call_cost",
