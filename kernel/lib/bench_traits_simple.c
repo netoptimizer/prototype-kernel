@@ -25,6 +25,8 @@ MODULE_PARM_DESC(run_flags, "Limit which bench test that runs");
 /* Count the bit number from the enum */
 enum benchmark_bit {
 	bit_run_bench_baseline,
+	bit_run_bench_func,
+	bit_run_bench_func_ptr,
 	bit_run_bench_trait_set,
 	bit_run_bench_trait_get,
 };
@@ -190,18 +192,21 @@ static int run_benchmark_tests(void)
 	uint32_t nr_loops = loops;
 
 	/* Baseline tests */
-	if (enabled(bit_run_bench_baseline)) {
+	if (enabled(bit_run_bench_baseline))
 		time_bench_loop(nr_loops*10, 0,
 				"for_loop", NULL, time_bench_for_loop);
 
-		/*  cost for a local function call */
+	/* cost for a local function call */
+	if (enabled(bit_run_bench_func))
 		time_bench_loop(loops, 0, "function_call_cost",
 				NULL, time_func);
 
-		/*  cost for a function pointer invocation */
+	/* cost for a function pointer invocation (indirect call)
+	 *  - likely side-channel mitigation overhead
+	 */
+	if (enabled(bit_run_bench_func_ptr))
 		time_bench_loop(loops, 0, "func_ptr_call_cost",
 				NULL, time_func_ptr);
-	}
 
 	if (enabled(bit_run_bench_trait_set)) {
 		time_bench_loop(loops, 0, "trait_set",
