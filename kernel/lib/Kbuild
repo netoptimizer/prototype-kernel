@@ -31,3 +31,5 @@ obj-$(CONFIG_SKB_ARRAY_TESTS) += skb_array_parallel01.o
 
 obj-$(CONFIG_BENCH_PAGE_POOL) += bench_page_pool_simple.o
 obj-$(CONFIG_BENCH_PAGE_POOL) += bench_page_pool_cross_cpu.o
+
+obj-$(CONFIG_BENCH_TRAITS) += bench_traits_simple.o

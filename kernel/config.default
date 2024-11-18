@@ -35,3 +35,6 @@ CONFIG_PAGE_BULK_API=n
 
 # New benchmarking modules for testing page_pool
 CONFIG_BENCH_PAGE_POOL=m
+
+# Features under development
+# CONFIG_BENCH_TRAITS=m
