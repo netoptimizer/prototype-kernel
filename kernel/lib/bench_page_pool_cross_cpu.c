@@ -20,6 +20,7 @@
 #include <linux/interrupt.h>
 #include <linux/limits.h>
 #include <linux/delay.h>
+#include <linux/ptr_ring.h>
 
 /* notice time_bench is limited to U32_MAX nr loops */
 static unsigned long loops = 1000000;
